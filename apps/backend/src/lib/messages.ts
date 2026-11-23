@@ -349,6 +349,7 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "La page n'a pas pu être chargée.": "The page couldn't be loaded.",
   "Les pages look ne sont pas disponibles.": "Look pages aren't available.",
   "Ce résultat ne peut pas être partagé pour l'instant.": "This result can't be shared right now.",
+  "Cette pièce ne peut pas être partagée.": "This piece can't be shared.",
   "Vous avez déjà 30 pages partagées : arrêtez-en une dans Réglages → Vos données.": "You already have 30 shared pages: stop one in Settings → Your data.",
   "Vous avez créé beaucoup de liens en peu de temps. Réessayez dans une heure.": "You've created a lot of links in a short time. Please try again in an hour.",
   "Les liens de partage sont très demandés aujourd'hui. Réessayez demain.": "Share links are in high demand today. Please try again tomorrow.",
