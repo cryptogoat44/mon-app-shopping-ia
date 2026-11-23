@@ -122,6 +122,15 @@ describe("la réponse est revérifiée dans l'app : tout écart donne « introuv
     expect(JSON.stringify(look)).not.toMatch(/alice|tiktok|mes mots/);
     expect(Object.keys(look).sort()).toEqual(["expiresOn", "offers", "piece", "searchedOn", "v", "verdict"]);
   });
+
+  it("refusé (assemblage avec la seconde main de luxe) : luxuryResale ne passe jamais, ni en tête, ni dans la pièce, ni dans une offre", () => {
+    const luxuryResale = { house: "Dior", words: "Dior Saddle", sites: [{ name: "Vestiaire Collective", url: "https://fr.vestiairecollective.com/search/?q=Dior%20Saddle" }] };
+    const offers = page().offers as Record<string, unknown>[];
+    const look = parsePublicLook(page({ luxuryResale, piece: { name: "Robe", brand: null, image: null, luxuryResale }, offers: offers.map((offer) => ({ ...offer, luxuryResale })) }), PREFIX)!;
+    expect(look).not.toBeNull();
+    expect(JSON.stringify(look)).not.toMatch(/luxuryResale|vestiaire|Saddle/i);
+    expect(Object.keys(look.piece).sort()).toEqual(["brand", "image", "name"]);
+  });
 });
 
 describe("ce que montre la page : prix datés, stock daté, verdict daté, « Lien affilié »", () => {

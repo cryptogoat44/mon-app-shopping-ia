@@ -491,6 +491,68 @@ describe("rien de personnel : la page est construite depuis une liste fixe", () 
     expect(Object.keys(res.json()).sort()).toEqual(PUBLIC_KEYS);
   });
 
+  // Assemblage (lots « seconde main de luxe » et « page look ») : l'entrée
+  // « Seconde main de luxe » (luxuryResale, sa maison, ses mots et ses liens
+  // vers les sites de revente) ne passe jamais sur la page publique.
+  it("refusé : la seconde main de luxe d'une pièce de luxe n'est ni copiée dans la page ni servie au visiteur", async () => {
+    const fake = seeded();
+    const rows = fake.table("product_matches");
+    const shared = rows.find((row) => row.id === SHARED)!;
+    shared.merchant_url = "https://www.dior.com/fr_fr/sac-lady-p1.html";
+    shared.merchant_name = "Dior";
+    shared.product_name = "Sac Lady Dior moyen modèle";
+    rows.find((row) => row.id === "e0000000-0000-4000-8000-000000000011")!.product_name = "Dior Sac Lady noir";
+    // La même recherche relue comme l'écran Résultat : l'entrée y est bien.
+    const reread = toProductSearch(
+      parseSearchRow(fake.table("product_searches").find((row) => row.id === SEARCH)!)!,
+      parseMatchRows(rows.filter((row) => row.search_id === SEARCH))!,
+      new Map([["e0000000-0000-4000-8000-000000000011", AFFILIATE]]),
+      new Map(),
+      false,
+      { luxuryResale: true }
+    );
+    expect(reread.luxuryResale?.house).toBe("Dior");
+    const resaleUrl = reread.luxuryResale!.sites[0]!.url;
+    const target = await looksApp(fake.db);
+    const { res, body } = await share(target);
+    expect(res.statusCode).toBe(201);
+    const stored = JSON.stringify(fake.table("shared_looks")[0]!.content);
+    const page = await visit(target, tokenOf(body.url));
+    expect(page.statusCode).toBe(200);
+    for (const text of [stored, page.body]) {
+      expect(text).not.toMatch(/luxuryResale|luxury_resale|vestiaire|"house"|"sites"|"words"/i);
+      expect(text).not.toContain(resaleUrl);
+    }
+    expect(Object.keys(page.json()).sort()).toEqual(PUBLIC_KEYS);
+    // Même si la recherche donnée à buildLookContent porte l'entrée : rien n'est copié.
+    const content = buildLookContent(reread, SHARED)!;
+    expect(Object.keys(content).sort()).toEqual(["offers", "piece", "searchedOn", "v", "verdict"]);
+    expect(JSON.stringify(content)).not.toMatch(/luxuryResale|vestiaire/i);
+  });
+
+  it("refusé : une page enregistrée qui contiendrait luxuryResale (en tête, dans la pièce, dans une offre) ne la sert jamais", async () => {
+    const fake = seeded();
+    const luxuryResale = { house: "Dior", words: "Dior Saddle", sites: [{ name: "Vestiaire Collective", url: "https://fr.vestiairecollective.com/search/?q=Dior%20Saddle" }] };
+    const token = storedLook(fake, {
+      content: {
+        v: 1,
+        searchedOn: "2026-11-20",
+        luxuryResale,
+        piece: { name: "Sac Saddle", brand: "Dior", luxuryResale },
+        verdict: null,
+        offers: [{ shop: "Dior", url: "https://www.dior.com/sac", affiliate: false, price: 2900, currency: "EUR", mark: null, inStock: null, section: "shared", luxuryResale }],
+      },
+    });
+    const target = await looksApp(fake.db);
+    const res = await visit(target, token);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).not.toMatch(/luxuryResale|vestiaire|"house"|"sites"|"words"/i);
+    const page = res.json() as PublicLook;
+    expect(Object.keys(page).sort()).toEqual(PUBLIC_KEYS);
+    expect(Object.keys(page.piece).sort()).toEqual(["brand", "image", "name"]);
+    for (const offer of page.offers) expect(Object.keys(offer).sort()).toEqual(OFFER_KEYS);
+  });
+
   it("refusé : une page illisible (version inconnue, lien javascript:, section inconnue) répond comme une page inconnue", async () => {
     const fake = seeded();
     const base = { v: 1, searchedOn: "2026-11-20", piece: { name: "Robe", brand: null }, verdict: null };
