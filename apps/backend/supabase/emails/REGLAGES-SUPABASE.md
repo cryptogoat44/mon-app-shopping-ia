@@ -25,6 +25,7 @@ Supabase → projet **spotto-prod** → **Authentication** → **Emails** → on
 - **Enable custom SMTP** doit être activé, avec un service d'envoi (Brevo, Resend, Postmark, SendGrid…). Sans lui, Supabase n'envoie qu'environ 2 e-mails par heure, et seulement aux membres de l'équipe du projet : « mot de passe oublié » ne marche pour personne d'autre.
 - **Sender email** : idéalement une adresse sur votre propre nom de domaine (une adresse Gmail envoyée par un service tiers finit souvent en courrier indésirable). **Sender name** : `Spotto`.
 - Si c'est l'essai SendGrid du 9 septembre, il s'arrête le **8 novembre** : à remplacer avant.
+- **Choix du 23 novembre 2026 : Gmail**, en attendant un nom de domaine. Une adresse Gmail dédiée à Spotto (validation en deux étapes activée) et un « mot de passe d'application » Google : **Host** `smtp.gmail.com`, **Port** `465` (ou `587`), **Username** et **Sender email** : cette adresse Gmail, **Password** : le mot de passe d'application (jamais écrit dans un fichier). Gmail limite l'envoi à environ 500 e-mails par jour pour un compte gratuit. La politique de confidentialité cite Gmail (prestataires et transferts) : si vous changez de service d'envoi, elle est à changer aussi.
 
 ## 3. Les réglages à contrôler
 
