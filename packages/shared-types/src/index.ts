@@ -293,6 +293,11 @@ export interface ProductMatch {
    * pas. Envoyé seulement quand il est vrai ; absent (ancien serveur, autres
    * sections) = non. Une app plus ancienne l'ignore. */
   demoted?: true;
+  /** Stock affiché (lot « stock visible », migration 0056) : ce que Google
+   * disait au moment de la recherche — true « En stock », false « Épuisée ».
+   * Absent : inconnu (Google n'a rien dit, recherche d'avant 0056, base
+   * sans 0056, ancien serveur). Une app plus ancienne l'ignore. */
+  inStock?: boolean;
 }
 
 /** Mentions d'une offre, calculées par le serveur (apps/backend/src/lib/shopTrust.ts) :
@@ -358,6 +363,33 @@ export interface ProductSearch {
    * Absents ailleurs, et d'un ancien serveur. */
   wishlistMatchIds?: string[];
   vaultMatchIds?: string[];
+  /** Le verdict (lot « verdict », migration facultative 0055) : la phrase de
+   * tête de l'écran Résultat, calculée par le serveur à chaque relecture à
+   * partir des propositions réellement montrées (apps/backend/src/lib/verdict.ts).
+   * Absent quand on ne sait pas : base sans 0055, recherche d'avant 0055,
+   * boutiques encore attendues ou en échec, historique, ancien serveur.
+   * Une app plus ancienne l'ignore. */
+  verdict?: SearchVerdict;
+}
+
+/** Niveaux du verdict, du plus affirmé au plus modeste :
+ * - identified : au moins deux boutiques connues ou sites officiels de marque,
+ *   distincts (places de marché et revente exclues), nomment dans leur titre
+ *   la marque ET le modèle de la pièce ;
+ * - close : une seule de ces boutiques le fait ;
+ * - lookalikes : rien de tel (marque seule, boutiques inconnues seulement,
+ *   pièce sans marque, IA coupée, aucun accord). */
+export const VERDICT_LEVELS = ["identified", "close", "lookalikes"] as const;
+export type VerdictLevel = (typeof VERDICT_LEVELS)[number];
+
+export interface SearchVerdict {
+  level: VerdictLevel;
+  /** « identified » seulement : le nombre de boutiques distinctes qui s'accordent (2 au moins). */
+  shopCount?: number;
+  /** « identified » seulement, et seulement quand au moins deux de ces
+   * boutiques affichaient un prix, tous dans la même devise (code ISO, jamais
+   * converti) : le plus bas et le plus haut, au moment de la recherche. */
+  priceRange?: { min: number; max: number; currency: string };
 }
 
 /** Complément d'une recherche (voie C, lot c). */
@@ -1929,6 +1961,30 @@ export interface WishAlertStatesList {
   items: WishAlertState[];
 }
 
+/** Une nouveauté montrée en tête de vos Envies (lot « alertes visibles ») :
+ * une alerte des 30 derniers jours, encore vraie aujourd'hui. `id` : celui de
+ * l'alerte (l'app note sur l'appareil, par compte, celles déjà vues).
+ * `seenOn` : le jour où le prix ou le stock a été vu (« AAAA-MM-JJ », heure de
+ * Paris). Baisse de prix : `price` est le prix vu, `threshold` votre seuil
+ * d'aujourd'hui (jamais un « ancien prix »), dans `currency` ; retour en stock : les trois à
+ * null. `merchantName` : la boutique de l'Envie. */
+export interface WishAlertNews {
+  id: string;
+  wishlistItemId: string;
+  kind: "price_drop" | "restock";
+  title: string;
+  merchantName: string | null;
+  price: number | null;
+  threshold: number | null;
+  currency: string | null;
+  seenOn: string;
+}
+
+/** GET /api/alerts/news : vos nouveautés (vide sans les alertes sur le serveur). */
+export interface WishAlertNewsList {
+  items: WishAlertNews[];
+}
+
 /** Plus haut seuil accepté pour une baisse de prix. */
 export const MAX_TARGET_PRICE = 99_999_999.99;
 
@@ -2348,6 +2404,8 @@ export type TryonErrorCode =
   | "tryon_attest_required"
   | "tryon_item_not_found"
   | "tryon_item_not_eligible"
+  /** La pièce ne se porte pas sur le corps (chaussure, sac, bijou…) : refusée avant toute dépense. */
+  | "tryon_item_not_wearable"
   | "tryon_photo_invalid"
   | "tryon_in_progress"
   | "tryon_quota_exhausted"

@@ -1,4 +1,4 @@
-import type { ComplementStatus, MatchFeedbackReason, MatchOrigin, OfferMark, TextSearchStatus } from "@monapp/shared-types";
+import type { ComplementStatus, MatchFeedbackReason, MatchOrigin, OfferMark, SearchVerdict, TextSearchStatus } from "@monapp/shared-types";
 import type { CapacityFailReason } from "../lib/spot-capacity";
 
 export interface Piece {
@@ -44,6 +44,10 @@ export interface Piece {
    * douteuse, sans mention). Jamais affiché : la grande carte prise dans
    * cette section ne la choisit pas (lib/price-first.ts). Absent : non. */
   demoted?: true;
+  /** Stock affiché (lot « stock visible ») : ce que Google disait au moment
+   * de la recherche — true « En stock », false « Épuisée » (components/stock-note.tsx).
+   * Absent : inconnu, rien n'est affiché. */
+  inStock?: boolean;
 }
 
 export type SpotStatus = "success" | "failed";
@@ -86,6 +90,10 @@ export interface SpotResult {
   /** Résultat relu sur le serveur seulement : propositions déjà gardées
    * (Envies) ou achetées (Vault) par la personne (lib/owned-marks.ts). */
   owned?: { kept: string[]; bought: string[] };
+  /** Le verdict (lot « verdict ») : la phrase de tête, décidée par le serveur
+   * d'après les titres des boutiques (lib/verdict.ts). Absent : rien
+   * d'affiché (ancien serveur, base sans 0055, boutiques attendues ou en échec). */
+  verdict?: SearchVerdict;
 }
 
 /** Complément des propositions de la recherche visuelle (voie C, lot c) :

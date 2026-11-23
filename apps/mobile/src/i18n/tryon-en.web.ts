@@ -139,6 +139,9 @@ export const tryonEn: TryonCatalog = {
     tryon_pose_not_detected: "Your figure couldn't be detected in this photo. Try another one, following these tips:",
     tryon_moderation_blocked: "This try-on was refused by the service's moderation: some pieces, such as swimwear or lingerie, can't be tried on. Choose another piece or another photo: this try-on wasn't counted.",
     tryon_image_unreadable: "One of the images couldn't be read. Try another photo or another piece: this try-on wasn't counted.",
+    // Try-on guard: a piece that isn't worn on the body, refused before anything is spent.
+    tryon_item_not_wearable:
+      "Try-on only works for clothes: shoes, bags, jewellery, watches, glasses, hats, belts and other accessories can't be tried on. This try-on wasn't counted.",
   },
   fallback: {
     offline: "You seem to be offline. Check your internet connection, then try again.",

@@ -92,3 +92,24 @@ export function lightSort<T extends { productName: string }>(
   for (const item of items) tiers[titleTier(item.productName, reference)].push(item);
   return { items: [...tiers[0], ...tiers[1], ...tiers[2]], tierCounts: [tiers[0].length, tiers[1].length, tiers[2].length] };
 }
+
+/** Palier du verdict (lot « verdict », migration 0055), plus strict que
+ * titleTier, et noté sur la ligne de chaque proposition de « Cette pièce dans
+ * d'autres boutiques » (product_matches.title_tier) :
+ * - 0 : la marque ET le modèle sont donnés, et tous leurs mots sont dans le titre ;
+ * - 1 : la marque est donnée et tous ses mots sont dans le titre (modèle
+ *   absent du titre, ou non donné) ;
+ * - 2 : tout le reste.
+ * Différences voulues avec titleTier (prudence : un faux « Pièce identifiée »
+ * est le pire des cas) : un modèle non donné ne fait jamais un palier 0 (la
+ * marque seule ne dit pas « la même pièce ») ; le modèle seul, sans la marque
+ * (marque vide, faite de petits mots comme « On », ou absente du titre), ne
+ * compte pas (palier 2). Ni la marque ni le modèle ne sont gardés : seulement
+ * ce nombre. */
+export function verdictTier(title: string, reference: LightSortReference): TitleTier {
+  const tokens = titleTokens(title);
+  const brand = referenceTokens(reference.brand);
+  const model = referenceTokens(reference.model);
+  if (!allTokensPresent(brand, tokens)) return 2;
+  return allTokensPresent(model, tokens) ? 0 : 1;
+}

@@ -8,7 +8,10 @@
 // le monde, fonction éteinte comprise. Mêmes règles ici, écrites à la main
 // et testées, comme les autres lecteurs de l'app (lib/collections.ts…).
 // Fichier .web : jamais dans l'app iPhone (règle 2.5.19 d'Apple). Logique
-// pure, testée (tests/tryon-flow.test.ts). Imports de types seulement.
+// pure, testée (tests/tryon-flow.test.ts). Imports de types seulement, plus
+// la liste des mots du garde-fou (packages/shared-types/pieces-portees.json,
+// la même que celle du serveur), importée ici seulement.
+import words from "@monapp/shared-types/pieces-portees.json";
 import type {
   TryonAgeGate,
   TryonConsentReadResponse,
@@ -18,6 +21,7 @@ import type {
   TryonReportRequest,
   TryonRunResponse,
   TryonStatus,
+  VaultCategory,
 } from "@monapp/shared-types";
 
 /** Fonction coupée : la seule forme permise d'un statut éteint. */
@@ -131,6 +135,76 @@ export interface PieceForTryon {
   matchId: string | null;
   imageUrls: readonly (string | null | undefined)[];
   buyUrl: string | null;
+  /** Nom de la pièce (garde-fou : une chaussure, un sac… n'a pas de bouton). */
+  title?: string | null;
+  /** Catégorie choisie dans le Vault, quand la fiche la connaît. */
+  category?: VaultCategory | null;
+}
+
+// ---- Garde-fou : seulement les pièces qui se portent sur le corps ----
+// Même règle que le serveur (apps/backend/src/lib/tryon/wornPiece.ts), qui
+// refuse de toute façon ces pièces avant toute dépense : ici, le bouton
+// n'est simplement pas proposé quand le site le sait déjà.
+
+/** Catégories du Vault qui ne se portent pas sur le corps. */
+const NOT_WORN_CATEGORIES: ReadonlySet<VaultCategory> = new Set(["shoes", "bags", "watches", "accessories", "home"]);
+
+/** Les mots d'un nom : minuscules, sans accents ; apostrophes et tirets séparent. */
+function wordsOf(text: string): string[] {
+  return (
+    text
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .match(/[a-z0-9]+/g) ?? []
+  );
+}
+
+/** Le mot du nom est-il ce mot, tel quel ou au pluriel ? */
+function sameWord(nameWord: string, word: string): boolean {
+  return nameWord === word || nameWord === `${word}s` || nameWord === `${word}es` || nameWord === `${word}x`;
+}
+
+/** Une de ces expressions commence-t-elle au mot `start` du nom ? */
+function startsAt(name: readonly string[], start: number, expressions: readonly (readonly string[])[]): boolean {
+  return expressions.some((expression) => expression.every((word, offset) => start + offset < name.length && sameWord(name[start + offset]!, word)));
+}
+
+/** Le nom contient-il une de ces expressions (un ou plusieurs mots, à la suite) ? */
+function mentions(name: readonly string[], expressions: readonly (readonly string[])[]): boolean {
+  return name.some((_, start) => startsAt(name, start, expressions));
+}
+
+const GARMENTS = words.vetements.map(wordsOf);
+const NOT_WORN = words.nonPortees.map(wordsOf);
+// Mots de vêtement seulement avant tout mot de pièce non portée, et pas
+// suivis d'un tel mot (« Zara Body col bijou », « Petit haut col bijou ») :
+// sinon, ce sont des adjectifs (« Baskets hautes », « Cross body bag »).
+const HEAD_GARMENTS = (words.vetementsEnTete ?? []).map(wordsOf);
+// Expressions toujours refusées, même avec un mot de vêtement (« Body chain »).
+const ALWAYS_NOT_WORN = (words.nonPorteesToujours ?? []).map(wordsOf);
+
+/** Le nom dit-il un vêtement : un mot de vêtement n'importe où, ou un mot
+ * « en tête » (« haut », « body ») placé avant tout mot de pièce non portée
+ * et pas suivi d'un tel mot (sinon il qualifie la pièce : « Sac haut de
+ * gamme », « Cross body bag ») ? */
+function namesGarment(name: readonly string[]): boolean {
+  if (mentions(name, GARMENTS)) return true;
+  for (let index = 0; index < name.length; index++) {
+    if (startsAt(name, index, NOT_WORN)) return false;
+    if (HEAD_GARMENTS.some((expression) => expression.length === 1 && sameWord(name[index]!, expression[0]!)) && !startsAt(name, index + 1, NOT_WORN)) return true;
+  }
+  return false;
+}
+
+/** Faux seulement quand le site sait que la pièce ne se porte pas sur le
+ * corps : sa catégorie du Vault (chaussures, sacs, montres, accessoires,
+ * maison), ou son nom (même règle que le serveur) ; dans le doute, vrai. */
+export function isWornPiece(title: string | null | undefined, category: VaultCategory | null = null): boolean {
+  if (category !== null && NOT_WORN_CATEGORIES.has(category)) return false;
+  const name = wordsOf(title ?? "");
+  if (mentions(name, ALWAYS_NOT_WORN)) return false;
+  return !mentions(name, NOT_WORN) || namesGarment(name);
 }
 
 function urlWithProtocol(value: unknown, protocols: readonly string[]): boolean {
@@ -146,10 +220,12 @@ function urlWithProtocol(value: unknown, protocols: readonly string[]): boolean 
 /** Identifiant à envoyer pour cette pièce, ou null si elle ne s'y prête pas :
  * une proposition du Spotter (identifiant du serveur), une image en https et
  * un lien d'achat. Une envie reçue d'un ami ou une photo personnelle du Vault
- * n'ont pas de proposition d'origine : pas de bouton. Le serveur décide en
+ * n'ont pas de proposition d'origine : pas de bouton. Une pièce qui ne se
+ * porte pas sur le corps (isWornPiece) non plus. Le serveur décide en
  * dernier (la proposition doit venir d'une recherche de la personne). */
 export function tryonItemId(piece: PieceForTryon): string | null {
   if (!isGuid(piece.matchId)) return null;
+  if (!isWornPiece(piece.title, piece.category ?? null)) return null;
   if (!piece.imageUrls.some((url) => urlWithProtocol(url, ["https:"]))) return null;
   if (!urlWithProtocol(piece.buyUrl, ["https:", "http:"])) return null;
   return piece.matchId;

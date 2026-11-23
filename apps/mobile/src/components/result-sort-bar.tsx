@@ -68,6 +68,48 @@ export function ResultSortBar({ view, onChange, summary }: { view: ResultView; o
   );
 }
 
+/** « En stock seulement » (lot « stock visible ») : sur sa propre ligne, juste
+ * sous « Avec prix seulement » et aligné sur lui (place sur un écran de
+ * 320 points et en grand texte). Retire les offres que Google disait
+ * épuisées au moment de la recherche ; garde celles au stock inconnu (le
+ * libellé lu par VoiceOver le dit). Même interrupteur, mêmes zones tactiles. */
+export function InStockOnlyToggle({ view, onChange }: { view: ResultView; onChange: (view: ResultView) => void }) {
+  const checked = view.inStockOnly === true;
+  return (
+    <View style={styles.stockLine}>
+      <Pressable
+        accessibilityRole="switch"
+        accessibilityState={{ checked }}
+        aria-checked={checked}
+        accessibilityLabel={t.result.inStockOnly}
+        accessibilityHint={t.result.inStockOnlyHint}
+        onPress={() => onChange({ ...view, inStockOnly: !checked })}
+        style={[styles.filter, checked ? styles.filterActive : null]}
+        testID="in-stock-only"
+      >
+        <Text style={[styles.filterLabel, checked ? styles.filterLabelActive : null]} numberOfLines={1}>
+          {checked ? "✓ " : ""}
+          {t.result.inStockOnly}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+/** « En stock seulement » choisi et plus aucune proposition à montrer (avec
+ * ou sans « Avec prix seulement ») : le dire, et proposer de retirer les
+ * filtres, plutôt qu'une page vide. */
+export function FiltersEmpty({ onShowAll }: { onShowAll: () => void }) {
+  return (
+    <View style={styles.empty} testID="filters-empty">
+      <Text style={styles.emptyText}>{t.result.filtersEmpty}</Text>
+      <Pressable style={styles.emptyButton} onPress={onShowAll} accessibilityRole="button">
+        <Text style={styles.emptyButtonLabel}>{t.result.showAllWithoutFilters}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 /** « Avec prix seulement » et aucune proposition avec prix (pour l'instant :
  * les boutiques peuvent encore en apporter) : le dire, et proposer de tout
  * afficher, plutôt qu'une page vide. */
@@ -97,6 +139,8 @@ const styles = themedStyles(() => ({
   segmentLabel: { fontSize: font.caption, color: color.encre, textAlign: "center" },
   segmentLabelActive: { color: color.blanc, fontWeight: "600" },
   line: { flexDirection: "row", alignItems: "center", gap: space.sm, marginTop: space.sm },
+  // Sous la barre (sa marge du bas : space.md) : rapprochée de « Avec prix seulement ».
+  stockLine: { flexDirection: "row", justifyContent: "flex-end", marginTop: -space.sm, marginBottom: space.md },
   summary: { flex: 1, fontSize: font.caption, color: color.encre, fontWeight: "600" },
   filter: {
     minHeight: size.touchTarget,

@@ -54,9 +54,12 @@ import { askShoppingQuery } from "../src/services/shoppingQueryAi.js";
 import { reserveSearch, releaseReservation, searchCapacityBeforeComplementAi } from "../src/lib/searchCapacity.js";
 import { aiQuotaFor } from "../src/lib/aiQuota.js";
 import { assertNoUserImage } from "../src/lib/aiSwitches.js";
-import { resetVoieCSchemaProbe } from "../src/lib/voieC.js";
+import { LENS_CACHE_PAYLOAD, resetVoieCSchemaProbe, type LensAnswer } from "../src/lib/voieC.js";
+import { readCache } from "../src/lib/searchCache.js";
 import { COMPLEMENT_PENDING_MAX_MS, COMPLEMENT_RUNNING_MAX_MS, resetDeferredSchemaProbe } from "../src/lib/deferredComplement.js";
 import { brandShopColumnReady, resetBrandShopColumnProbe } from "../src/lib/brandShopColumn.js";
+import { resetStockColumnProbe, stockColumnReady } from "../src/lib/stockColumn.js";
+import { resetVerdictColumnProbe, verdictColumnReady } from "../src/lib/verdictColumn.js";
 import type { LensMeasure } from "../src/services/lensMeasure.js";
 import type { TextSearchResponse } from "../src/services/searchProvider.js";
 
@@ -981,5 +984,245 @@ describe("part du mois atteinte : chaque app reçoit un refus qu'elle comprend",
       expect(searchRow(id).text_requested_at ?? null, query).toBeNull();
     }
     expect(shoppingMock).not.toHaveBeenCalled();
+  });
+});
+
+// Stock affiché (lot « stock visible », migration 0056) : le « en stock » ou
+// « épuisée » que Google Lens annonce est rangé sur la ligne de la
+// proposition, puis renvoyé à l'app (inStock), seulement une fois la colonne
+// vue (lib/stockColumn.ts). Ajouté ici pour reprendre la même fausse base.
+describe("stock affiché (0056) : rangé avec la proposition Lens, renvoyé à l'app", () => {
+  beforeEach(() => {
+    resetStockColumnProbe();
+    // 1ʳᵉ en stock, 2ᵉ épuisée, 3ᵉ sans rien dit par Google (inconnu).
+    lensMock.mockResolvedValue({
+      matches: [{ ...LENS[0]!, inStock: true }, { ...LENS[1]!, inStock: false }, structuredClone(LENS[2]!)],
+      measure: LENS_MEASURE,
+      addedRanks: [],
+      statusCode: 200,
+    });
+  });
+
+  const lensRows = (id: string) => matchRows(id).filter((row) => row.origin === "lens").sort((a, b) => Number(a.rank) - Number(b.rank));
+  const lensStock = (body: { matches: { origin?: string; inStock?: boolean }[] }) =>
+    body.matches.filter((match) => match.origin === undefined).map((match) => ("inStock" in match ? match.inStock : "inconnu"));
+
+  it("permis : avec 0056, oui, non ou rien sur chaque ligne Lens, et la même chose dans la réponse du lancement comme à la relecture ; rien sur les boutiques", async () => {
+    const target = await buildApp();
+    const id = preparedSearch();
+    const res = await launch(target, id);
+    expect(res.statusCode).toBe(200);
+    expect(lensRows(id).map((row) => ("in_stock" in row ? row.in_stock : "absent"))).toEqual([true, false, "absent"]);
+    expect(matchRows(id).filter((row) => row.origin === "shopping").some((row) => "in_stock" in row)).toBe(false);
+    const reread = (await target.inject({ method: "GET", url: `/api/searches/${id}` })).json();
+    for (const body of [res.json(), reread]) {
+      expect(lensStock(body)).toEqual([true, false, "inconnu"]);
+      expect(body.matches.filter((match: { origin?: string }) => match.origin === "shopping").some((match: object) => "inStock" in match)).toBe(false);
+    }
+    expect(logs.join("\n")).not.toContain("Stock non noté");
+  });
+
+  it("refusé : base sans 0056, aucun stock écrit ni renvoyé (une insertion qui le nommerait serait refusée) ; la recherche aboutit comme avant, et le journal le dit sans contenu", async () => {
+    db.missingColumns.add("in_stock");
+    const target = await buildApp();
+    const id = preparedSearch();
+    const res = await launch(target, id);
+    expect(res.statusCode).toBe(200);
+    expect(searchRow(id)).toMatchObject({ status: "completed" });
+    expect(lensRows(id)).toHaveLength(3);
+    expect(matchRows(id).some((row) => "in_stock" in row)).toBe(false);
+    expect(lensStock(res.json())).toEqual(["inconnu", "inconnu", "inconnu"]);
+    const warnings = logs.map((line) => JSON.parse(line) as Record<string, unknown>).filter((line) => String(line.msg).startsWith("Stock non noté"));
+    expect(warnings).toEqual([expect.objectContaining({ code: "42703" })]);
+    expect(JSON.stringify(warnings)).not.toMatch(/lens-exemple|Nuage/);
+  });
+
+  it("permis : la sonde a vu la colonne, puis l'insertion avec le stock est refusée (colonne retirée depuis) — refaite une fois sans lui : les propositions sont rangées", async () => {
+    const target = await buildApp();
+    expect(await stockColumnReady(target)).toBe(true);
+    db.missingColumns.add("in_stock");
+    const id = preparedSearch();
+    const res = await launch(target, id);
+    expect(res.statusCode).toBe(200);
+    const lensInserts = db.matchInserts.filter((list) => list.every((row) => row.origin === undefined));
+    expect(lensInserts.map((list) => list.some((row) => "in_stock" in row))).toEqual([true, false]);
+    expect(lensRows(id)).toHaveLength(3);
+    expect(lensStock(res.json())).toEqual(["inconnu", "inconnu", "inconnu"]);
+    expect(logs.filter((line) => line.includes("Stock non noté : insertion refusée avec le stock, refaite sans lui"))).toHaveLength(1);
+  });
+
+  // Le cache de 24 h n'a pas de compte : sa réponse a pu être donnée à un autre membre, jusqu'à 24 h plus tôt.
+  it("refusé : réponse de Lens rejouée par le cache de 24 h — aucun stock écrit ni renvoyé (« au moment de la recherche » serait faux)", async () => {
+    const answer: LensAnswer = { matches: [{ ...LENS[0]!, inStock: true }, { ...LENS[1]!, inStock: false }, structuredClone(LENS[2]!)], measure: LENS_MEASURE, addedRanks: [] };
+    vi.mocked(readCache).mockImplementation((async (_db: unknown, _key: string, schema: unknown) => (schema === LENS_CACHE_PAYLOAD ? answer : null)) as typeof readCache);
+    try {
+      const target = await buildApp();
+      const id = preparedSearch();
+      const res = await launch(target, id);
+      expect(res.statusCode).toBe(200);
+      expect(lensMock).not.toHaveBeenCalled();
+      expect(lensRows(id)).toHaveLength(3);
+      expect(matchRows(id).some((row) => "in_stock" in row)).toBe(false);
+      expect(lensStock(res.json())).toEqual(["inconnu", "inconnu", "inconnu"]);
+      const reread = (await target.inject({ method: "GET", url: `/api/searches/${id}` })).json();
+      expect(lensStock(reread)).toEqual(["inconnu", "inconnu", "inconnu"]);
+    } finally {
+      vi.mocked(readCache).mockImplementation(async () => null);
+    }
+  });
+
+  it("permis : sans cache, la même réponse vient d'un vrai appel à Lens — son stock est écrit", async () => {
+    const target = await buildApp();
+    const id = preparedSearch();
+    expect((await launch(target, id)).statusCode).toBe(200);
+    expect(lensMock).toHaveBeenCalledTimes(1);
+    expect(lensRows(id).map((row) => ("in_stock" in row ? row.in_stock : "absent"))).toEqual([true, false, "absent"]);
+  });
+
+  it("refusé : Google ne dit rien du stock — ni sonde ni colonne nommée, une seule insertion, aucune reprise", async () => {
+    lensMock.mockResolvedValue({ matches: structuredClone(LENS), measure: LENS_MEASURE, addedRanks: [], statusCode: 200 });
+    db.missingColumns.add("in_stock");
+    const target = await buildApp();
+    const id = preparedSearch();
+    const res = await launch(target, id);
+    expect(res.statusCode).toBe(200);
+    const lensInserts = db.matchInserts.filter((list) => list.every((row) => row.origin === undefined));
+    expect(lensInserts).toHaveLength(1);
+    expect(lensInserts[0]!.some((row) => "in_stock" in row)).toBe(false);
+    expect(logs.join("\n")).not.toContain("Stock non noté");
+  });
+});
+
+// Le verdict (lot « verdict », migration 0055) : le palier du titre de chaque
+// offre des boutiques est noté à l'enregistrement, et la phrase se calcule à
+// chaque relecture. Elle arrive avec les boutiques, par les trois chemins :
+// le lancement des apps déjà installées (tout en une fois), les boutiques
+// ensuite, la relecture. Les règles, cas par cas : verdict.test.ts.
+describe("verdict (0055) : le palier noté avec les boutiques, la phrase renvoyée quand elles arrivent", () => {
+  beforeEach(() => resetVerdictColumnProbe());
+  afterEach(() => resetVerdictColumnProbe());
+
+  // Deux enseignes connues (liste du fondateur) nomment la marque et le modèle, une boutique inconnue la marque seule.
+  const KNOWN_SHOPPING: TextSearchResponse = {
+    items: [
+      { ...shoppingItem(1, "Exemplor veste Nuage 07", "https://www.zalando.fr/1"), extracted_price: 89, price: "89,00 €" },
+      { ...shoppingItem(2, "Veste Exemplor Nuage 07 bleue", "https://www.asos.com/2"), extracted_price: 59, price: "59,00 €" },
+      shoppingItem(3, "Veste Exemplor bleue", "https://boutique-c.fr/3"),
+    ],
+    received: 3,
+    statusCode: 200,
+  };
+  const IDENTIFIED = { level: "identified", shopCount: 2, priceRange: { min: 59, max: 89, currency: "EUR" } };
+  const shoppingTiers = (id: string) =>
+    matchRows(id)
+      .filter((row) => row.origin === "shopping")
+      .sort((a, b) => Number(a.rank) - Number(b.rank))
+      .map((row) => ("title_tier" in row ? row.title_tier : "absent"));
+  const reread = async (target: FastifyInstance, id: string) => (await target.inject({ method: "GET", url: `/api/searches/${id}` })).json();
+
+  it("permis : apps déjà installées — le lancement renvoie le verdict avec les boutiques, la relecture le même ; seul un nombre est noté par ligne des boutiques, rien sur Lens", async () => {
+    shoppingMock.mockResolvedValue(KNOWN_SHOPPING);
+    const target = await buildApp();
+    const id = preparedSearch();
+    const res = await launch(target, id);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().verdict).toEqual(IDENTIFIED);
+    expect((await reread(target, id)).verdict).toEqual(IDENTIFIED);
+    expect(shoppingTiers(id)).toEqual([0, 0, 1]);
+    expect(matchRows(id).filter((row) => row.origin === "lens").some((row) => "title_tier" in row)).toBe(false);
+    // Ni la marque, ni le modèle, ni la requête sur les lignes.
+    expect(matchRows(id).every((row) => row.brand === null)).toBe(true);
+    expect(JSON.stringify(db.rows("product_searches"))).not.toMatch(/Exemplor|Nuage/);
+  });
+
+  it("permis : boutiques ensuite — aucun verdict au lancement (boutiques attendues), puis le verdict avec les boutiques, et à la relecture", async () => {
+    // Une seule enseigne connue nomme la marque et le modèle, une boutique inconnue aussi : « close ».
+    shoppingMock.mockResolvedValue({
+      items: [shoppingItem(1, "Exemplor veste Nuage 07", "https://boutique-a.fr/1"), shoppingItem(2, "Veste Exemplor Nuage 07", "https://www.zalando.fr/2")],
+      received: 2,
+      statusCode: 200,
+    });
+    const target = await buildApp();
+    const id = preparedSearch();
+    const first = await launch(target, id, { complement: "deferred" });
+    expect(first.statusCode).toBe(200);
+    expect(first.json().complement.pending).toBe(true);
+    expect("verdict" in first.json()).toBe(false);
+    expect("verdict" in (await reread(target, id))).toBe(false);
+    const later = await complement(target, id);
+    expect(later.json().complement.status).toBe("shown");
+    expect(later.json().verdict).toEqual({ level: "close" });
+    expect((await reread(target, id)).verdict).toEqual({ level: "close" });
+  });
+
+  it("refusé : seule une boutique inconnue nomme la marque et le modèle (boutiques par défaut) — « lookalikes », jamais « close »", async () => {
+    const target = await buildApp();
+    const id = preparedSearch();
+    const res = await launch(target, id);
+    expect(res.json().complement.status).toBe("shown");
+    expect(shoppingTiers(id)).toEqual([0, 2]);
+    expect(res.json().verdict).toEqual({ level: "lookalikes" });
+    expect((await reread(target, id)).verdict).toEqual({ level: "lookalikes" });
+  });
+
+  it("permis : pièce sans marque reconnue (l'IA ne propose aucune requête) — « lookalikes », sans aucune recherche dans les boutiques", async () => {
+    aiMock.mockResolvedValue({ kind: "no_query", reason: "brand_not_shared", usage: { inputTokens: 900, outputTokens: 5 } });
+    const target = await buildApp();
+    const id = preparedSearch();
+    const res = await launch(target, id);
+    expect(res.json().complement.status).toBe("no_query");
+    expect(res.json().verdict).toEqual({ level: "lookalikes" });
+    expect(shoppingMock).not.toHaveBeenCalled();
+  });
+
+  it("refusé : étape des boutiques sans issue (plafond atteint) — aucun verdict, ni au lancement, ni à la relecture", async () => {
+    capacityMock.mockResolvedValue({ allowed: false, limit: "day", resumesOn: null });
+    const target = await buildApp();
+    const id = preparedSearch();
+    const res = await launch(target, id);
+    expect(res.json().complement.status).toBe("no_capacity");
+    expect("verdict" in res.json()).toBe(false);
+    expect("verdict" in (await reread(target, id))).toBe(false);
+  });
+
+  it("refusé : base sans 0055 — aucun palier écrit (une insertion qui le nommerait serait refusée), aucun verdict ; les boutiques sont rangées quand même, et le journal le dit sans contenu", async () => {
+    db.missingColumns.add("title_tier");
+    shoppingMock.mockResolvedValue(KNOWN_SHOPPING);
+    const target = await buildApp();
+    const id = preparedSearch();
+    const res = await launch(target, id);
+    expect(res.json().complement.status).toBe("shown");
+    expect(shoppingTiers(id)).toEqual(["absent", "absent", "absent"]);
+    expect("verdict" in res.json()).toBe(false);
+    expect("verdict" in (await reread(target, id))).toBe(false);
+    const warnings = logs.map((line) => JSON.parse(line) as Record<string, unknown>).filter((line) => String(line.msg).startsWith("Verdict non noté"));
+    expect(warnings).toEqual([expect.objectContaining({ code: "42703" })]);
+    expect(JSON.stringify(warnings)).not.toMatch(/zalando|asos|exemplor|nuage/i);
+  });
+
+  it("permis : la sonde a vu la colonne, puis l'insertion avec le palier est refusée (colonne retirée depuis) — refaite une fois sans lui : les boutiques sont rangées, sans verdict", async () => {
+    shoppingMock.mockResolvedValue(KNOWN_SHOPPING);
+    const target = await buildApp();
+    expect(await verdictColumnReady(target)).toBe(true);
+    db.missingColumns.add("title_tier");
+    const id = preparedSearch();
+    const res = await launch(target, id);
+    expect(res.json().complement.status).toBe("shown");
+    const shoppingInserts = db.matchInserts.filter((list) => list.every((row) => row.origin === "shopping"));
+    expect(shoppingInserts.map((list) => list.some((row) => "title_tier" in row))).toEqual([true, false]);
+    expect(shoppingTiers(id)).toEqual(["absent", "absent", "absent"]);
+    expect("verdict" in res.json()).toBe(false);
+    expect(logs.filter((line) => line.includes("Verdict non noté : insertion refusée, refaite sans le palier"))).toHaveLength(1);
+  });
+
+  it("refusé : un autre refus de la base (contrainte) n'est pas repris pour le palier seul — un seul essai, comme avant", async () => {
+    db.refuseInsert = (table, rows) => table === "product_matches" && rows.every((row) => row.origin === "shopping");
+    const target = await buildApp();
+    const id = preparedSearch();
+    const res = await launch(target, id);
+    expect(res.json().complement.status).toBe("shopping_failed");
+    const shoppingInserts = db.matchInserts.filter((list) => list.every((row) => row.origin === "shopping"));
+    expect(shoppingInserts.map((list) => list.some((row) => "title_tier" in row))).toEqual([true]);
+    expect("verdict" in res.json()).toBe(false);
   });
 });

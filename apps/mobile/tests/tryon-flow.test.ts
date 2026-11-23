@@ -35,6 +35,7 @@ import {
   checkBirthDate,
   isGuid,
   isJpegDataUri,
+  isWornPiece,
   readAgeGateResponse,
   readConsentReadResponse,
   readConsentResponse,
@@ -171,6 +172,84 @@ describe("pièce essayable : une proposition du Spotter, une image en https, un 
   });
 });
 
+describe("garde-fou : pas de bouton « Essayer » pour une pièce qui ne se porte pas sur le corps, quand le site le sait déjà", () => {
+  const piece = { matchId: ITEM, imageUrls: ["https://boutique.exemple.test/hd.jpg"], buyUrl: "https://boutique.exemple.test/p/1" };
+
+  it("refusé : chaussures, sacs, bijoux, montres, lunettes, chapeaux, ceintures, accessoires, maison, d'après le nom (FR et EN)", () => {
+    for (const title of ["Baskets en cuir blanc", "Sac à main matelassé", "Leather Chelsea Boots", "Boucles d'oreilles dorées", "Montre acier", "Aviator sunglasses", "Chapeau de paille", "Ceinture en cuir", "Porte-clés", "Scented candle"]) {
+      expect(isWornPiece(title), title).toBe(false);
+      expect(tryonItemId({ ...piece, title }), title).toBeNull();
+      expect(entryItemId(ON, { ...piece, title }), title).toBeNull();
+    }
+  });
+
+  it("refusé : catégorie du Vault chaussures, sacs, montres, accessoires ou maison, quel que soit le nom", () => {
+    for (const category of ["shoes", "bags", "watches", "accessories", "home"] as const) {
+      expect(tryonItemId({ ...piece, title: "Nouveauté", category }), category).toBeNull();
+    }
+  });
+
+  it("permis : un vêtement (même nommé avec un accessoire), un nom vide ou inconnu, une catégorie vêtement ou autre", () => {
+    for (const title of ["Veste en jean", "Robe avec ceinture", "Wool coat", "", "Nouvelle collection", null, undefined]) {
+      expect(isWornPiece(title), String(title)).toBe(true);
+      expect(tryonItemId({ ...piece, title }), String(title)).toBe(ITEM);
+    }
+    expect(tryonItemId({ ...piece, title: "Veste", category: "clothing" })).toBe(ITEM);
+    expect(tryonItemId({ ...piece, title: "Veste", category: "other" })).toBe(ITEM);
+    expect(tryonItemId({ ...piece, title: "Veste", category: null })).toBe(ITEM);
+  });
+
+  it("permis : vêtements courants nommés avec une coupe, une encolure ou un détail d'accessoire ; refusé : l'accessoire seul", () => {
+    for (const title of ["Jean droit avec ceinture", "Jean ceinturé", "Haut col bijou", "Body col bijou", "Combishort ceinturé", "Capri pant with belt"]) {
+      expect(isWornPiece(title), title).toBe(true);
+      expect(tryonItemId({ ...piece, title }), title).toBe(ITEM);
+    }
+    for (const title of ["Ceinture tressée", "Collier bijou"]) {
+      expect(isWornPiece(title), title).toBe(false);
+      expect(tryonItemId({ ...piece, title }), title).toBeNull();
+    }
+  });
+
+  it("« haut » et « body » ne disent un vêtement qu'en premier mot ; « body chain » : refusé ; « Haut col bijou » : permis", () => {
+    for (const title of ["Baskets hautes", "Bottes hautes en cuir", "Cross body bag", "Body chain dorée", "Sac haut de gamme"]) {
+      expect(isWornPiece(title), title).toBe(false);
+      expect(tryonItemId({ ...piece, title }), title).toBeNull();
+      expect(entryItemId(ON, { ...piece, title }), title).toBeNull();
+    }
+    for (const title of ["Haut col bijou", "Body col bijou", "Jean taille haute"]) {
+      expect(isWornPiece(title), title).toBe(true);
+      expect(tryonItemId({ ...piece, title }), title).toBe(ITEM);
+    }
+  });
+
+  it("« haut » et « body » après une marque ou un adjectif : permis ; suivis d'une pièce non portée : refusé", () => {
+    for (const title of ["Zara Body col bijou", "H&M - Haut col bijou en maille", "Petit haut col bijou", "Mango haut à ceinture"]) {
+      expect(isWornPiece(title), title).toBe(true);
+      expect(tryonItemId({ ...piece, title }), title).toBe(ITEM);
+    }
+    for (const title of ["Zara body bag", "Petit sac haut de gamme", "Mango baskets hautes"]) {
+      expect(isWornPiece(title), title).toBe(false);
+      expect(tryonItemId({ ...piece, title }), title).toBeNull();
+      expect(entryItemId(ON, { ...piece, title }), title).toBeNull();
+    }
+  });
+
+  it("refus du serveur (le site ne le savait pas) : une phrase claire, en français et en anglais ; l'étape reste, aucun essai à relire", () => {
+    const refusal = server("tryon_item_not_wearable", "Message du serveur.");
+    setActiveLocale("fr");
+    expect(failureView(refusal, ON, "fr").message).toBe(
+      "L'essayage ne fonctionne que pour les vêtements : les chaussures, sacs, bijoux, montres, lunettes, chapeaux, ceintures et autres accessoires ne peuvent pas être essayés. Cet essai n'a pas été décompté."
+    );
+    setActiveLocale("en");
+    expect(failureView(refusal, ON, "en").message).toBe(
+      "Try-on only works for clothes: shoes, bags, jewellery, watches, glasses, hats, belts and other accessories can't be tried on. This try-on wasn't counted."
+    );
+    expect(failureNeedsCounter(refusal)).toBe(false);
+    expect(failureNeedsStatus(refusal)).toBe(false);
+    expect(tryonFlow({ step: "running" }, { type: "failed", failure: refusal })).toEqual({ step: "photo", failure: refusal });
+  });
+});
+
 describe("porte d'âge : contrôle immédiat avant l'envoi (le serveur décide de l'âge)", () => {
   const today = "2026-11-13";
 
@@ -304,6 +383,7 @@ describe("erreurs : chaque code du serveur a son message, en français et en ang
     tryon_attest_required: true,
     tryon_item_not_found: true,
     tryon_item_not_eligible: true,
+    tryon_item_not_wearable: true,
     tryon_photo_invalid: true,
     tryon_in_progress: true,
     tryon_quota_exhausted: true,

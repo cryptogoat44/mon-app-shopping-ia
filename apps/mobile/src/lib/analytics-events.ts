@@ -18,6 +18,7 @@ import {
   PRIVACY_LEVELS,
   REPORT_TARGET_TYPES,
   TEXT_SEARCH_STATUSES,
+  VERDICT_LEVELS,
   VIDEO_LINK_FAILURE_CAUSES,
 } from "@monapp/shared-types";
 import { RESULT_SORTS } from "./result-sort";
@@ -100,8 +101,11 @@ export const ANALYTICS_EVENTS = {
   no_price_results_opened: { results_count: count, context: oneOf(["section", "not_right"]) },
   // Tri des résultats (2026-11-08, lib/result-sort.ts) : tri ou filtre « Avec
   // prix seulement » changé sur l'écran Résultat — le nouveau choix et ce qui
-  // a changé, jamais la recherche ni les pièces.
-  result_view_changed: { sort: oneOf(RESULT_SORTS), with_price_only: bool, change: oneOf(["sort", "filter"]) },
+  // a changé, jamais la recherche ni les pièces. Stock affiché (lot « stock
+  // visible ») : in_stock_only, l'état de « En stock seulement », et la
+  // valeur « stock_filter » quand c'est lui qui change ; « filter » reste
+  // « Avec prix seulement ».
+  result_view_changed: { sort: oneOf(RESULT_SORTS), with_price_only: bool, change: oneOf(["sort", "filter", "stock_filter"]), in_stock_only: bool },
   // Écran Envies (2026-11-09, lib/wishlist-view.ts) : tri changé — le nouveau
   // tri et s'il est choisi dans une collection, jamais la recherche tapée.
   wishlist_sort_changed: { sort: oneOf(WISHLIST_SORTS), in_collection: bool },
@@ -217,6 +221,13 @@ export const ANALYTICS_EVENTS = {
   // montré, passé (« Passer ») ou terminé (dernière étape) ; step : l'étape
   // (1 à 3) où la personne passe ou termine (absente pour « shown »).
   first_search_guide: { action: oneOf(["shown", "skipped", "finished"]), step: count },
+  // Le verdict (lot « verdict », lib/verdict.ts ; rangé avant les quatre
+  // événements du Parcours 3, que leurs tests veulent en fin de catalogue) :
+  // la phrase de tête de l'écran Résultat montrée, et son niveau
+  // (identified, close, lookalikes), une fois par résultat affiché, et de
+  // nouveau si le niveau change quand les boutiques arrivent. Jamais la
+  // pièce, la marque, une boutique, un prix ni le nombre de boutiques.
+  verdict_shown: { level: oneOf(VERDICT_LEVELS) },
   // Parcours 3 (« Vous l'avez achetée ? », lib/purchase-question.ts) : un
   // retour de la boutique repéré, depuis l'écran Résultat (result, similar)
   // ou la fiche d'une Envie (wishlist, price_alert), question posée ou non,
@@ -239,6 +250,14 @@ export const ANALYTICS_EVENTS = {
   // plus tant que l'app reste ouverte (mémoire de l'app, rien sur
   // l'appareil) ; count : combien.
   price_drop_shown: { count },
+  // Lot « alertes visibles » : le bandeau des nouveautés en tête des Envies
+  // affiche des nouveautés pas encore vues (count : combien), puis une ligne
+  // touchée (kind : baisse de prix ou retour en stock). Jamais la pièce, la
+  // boutique, le prix, le jour ni un identifiant. Nommés d'après le bandeau :
+  // les tests du serveur (alertesPrixChemins) refusent « wish » ou « alert »
+  // dans un appel de statistiques des écrans des alertes.
+  news_banner_shown: { count },
+  news_line_opened: { kind: oneOf(["price_drop", "restock"]) },
 } as const satisfies Record<string, Record<string, Rule>>;
 
 export type AnalyticsEvent = keyof typeof ANALYTICS_EVENTS;

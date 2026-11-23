@@ -38,6 +38,35 @@ function promotable(piece: Pick<Piece, "priceFrom">): boolean {
   return piece.priceFrom !== null && piece.priceFrom > 0;
 }
 
+/** Stock affiché (lot « stock visible ») : Google disait l'offre épuisée au
+ * moment de la recherche. Inconnu (rien dit, ancien serveur) : non. */
+export function isSoldOut(piece: Pick<Piece, "inStock">): boolean {
+  return piece.inStock === false;
+}
+
+/** Une offre qui peut être mise en grand d'office : avec un prix (promotable)
+ * et pas épuisée. Une offre épuisée n'est jamais la grande carte d'office
+ * quand une autre existe ; elle garde sa place dans sa section. */
+function promotableInStock(piece: Pick<Piece, "priceFrom" | "inStock">): boolean {
+  return promotable(piece) && !isSoldOut(piece);
+}
+
+/** La proposition qui reçoit « Meilleure proposition » : la première de la
+ * recherche visuelle qui n'est pas épuisée ; si toutes le sont, l'ordre REÇU,
+ * jamais l'ordre affiché du complément (le serveur y remonte la boutique de
+ * la marque et les boutiques connues : « aucune marque mise en avant ») —
+ * boutiques arrivées après le premier affichage (`late`) : 0, comme avant ;
+ * sinon la première reçue du complément (firstReceivedComplementIndex) si
+ * elle n'est pas épuisée ; sinon 0. Sans stock connu : 0, comme avant. */
+export function firstAvailableIndex(result: ResultLists): number {
+  const lens = result.pieces.findIndex((piece) => !isSoldOut(piece));
+  if (lens !== -1) return lens;
+  if (result.complement?.late && result.pieces.length > 0) return 0;
+  const first = firstReceivedComplementIndex(result);
+  const piece = allPieces(result)[first];
+  return piece && !isSoldOut(piece) ? first : 0;
+}
+
 /** La première proposition REÇUE du complément, par indice dans allPieces
  * (-1 sans complément) : dans « Cette pièce dans d'autres boutiques », celle
  * de plus petit rang, pas la première affichée — le serveur y range les
@@ -82,14 +111,15 @@ export function noPriceAnywhere(result: ResultLists): boolean {
  * premier affichage (`late`) : jamais en grand d'office — sans prix dans la
  * recherche visuelle, la grande carte reste sa première proposition. */
 export function bestProposalIndex(result: ResultLists, country?: string): number {
-  const local = country === undefined ? -1 : result.pieces.findIndex((piece) => promotable(piece) && !isForeignPrice(piece.priceFrom, piece.currency, country));
+  const local = country === undefined ? -1 : result.pieces.findIndex((piece) => promotableInStock(piece) && !isForeignPrice(piece.priceFrom, piece.currency, country));
   if (local !== -1) return local;
-  const lensWithPrice = result.pieces.findIndex(promotable);
+  const lensWithPrice = result.pieces.findIndex(promotableInStock);
   if (lensWithPrice !== -1) return lensWithPrice;
-  if (result.complement?.late && result.pieces.length > 0) return 0;
+  // Stock affiché : à chaque repli, la première qui n'est pas épuisée, dans l'ordre reçu (firstAvailableIndex ; 0 sans stock connu, comme avant).
+  if (result.complement?.late && result.pieces.length > 0) return firstAvailableIndex(result);
   const firstComplement = firstReceivedComplementIndex(result);
   const piece = allPieces(result)[firstComplement];
-  return piece && promotable(piece) ? firstComplement : 0;
+  return piece && promotableInStock(piece) ? firstComplement : firstAvailableIndex(result);
 }
 
 export interface StartOptions {
@@ -128,8 +158,12 @@ export type BigCardLabel = "best" | "bestWithPrice" | "other";
  *   grand quand ce n'est pas la première — des propositions mieux classées
  *   sont alors plus bas, souvent repliées sans prix ;
  * - « Autre proposition » sinon. */
-export function bigCardLabel(selectedIndex: number, bestIndex: number): BigCardLabel {
-  if (selectedIndex === 0) return "best";
+export function bigCardLabel(selectedIndex: number, bestIndex: number, firstAvailable = 0, selected?: Pick<Piece, "priceFrom" | "inStock">): BigCardLabel {
+  // Stock affiché : « Meilleure proposition » va à la première qui n'est pas
+  // épuisée (firstAvailableIndex) ; une offre épuisée ne l'est jamais quand une autre existe.
+  if (selectedIndex === firstAvailable) return "best";
+  // « … avec prix » seulement sur une offre qui a vraiment un prix et n'est pas épuisée.
+  if (selected !== undefined && !promotableInStock(selected)) return "other";
   return selectedIndex === bestIndex ? "bestWithPrice" : "other";
 }
 
@@ -150,10 +184,20 @@ export function noPriceNoticeShown(result: ResultLists, startIndex: number): boo
  * remonté en tête les propositions dont le nom contient un des mots : la
  * première de l'écran en est une. Quand la grande carte d'office est une
  * autre, cette première est plus bas, repliée sans prix : « Triées selon vos
- * mots » ne décrirait plus l'écran, le texte dit l'ordre réel (relecture, F4). */
-export function wordsSortNote(result: Pick<SpotResult, "sortedByWords">, startIndex: number): "words" | "priceThenWords" | null {
+ * mots » ne décrirait plus l'écran, le texte dit l'ordre réel (relecture, F4).
+ * « Avec prix d'abord » seulement quand les propositions de la recherche
+ * visuelle placées avant la grande carte n'ont pas de prix ; si l'une en a un
+ * (sautée parce qu'épuisée), aucun texte : il décrirait un autre ordre ; et
+ * seulement quand la grande carte a elle-même un prix. */
+export function wordsSortNote(result: Pick<SpotResult, "sortedByWords"> & Partial<ResultLists>, startIndex: number): "words" | "priceThenWords" | null {
   if (!result.sortedByWords) return null;
-  return startIndex === 0 ? "words" : "priceThenWords";
+  if (startIndex === 0) return "words";
+  const pieces = result.pieces ?? [];
+  // La grande carte elle-même doit avoir un prix : sinon elle n'a pas été
+  // mise devant pour son prix (mais parce que la première est épuisée), et
+  // « Avec prix d'abord » contredirait « Aucune de ces propositions n'affiche de prix ».
+  const start = allPieces({ pieces, complement: result.complement })[startIndex];
+  return start !== undefined && hasPrice(start) && pieces.slice(0, startIndex).every((piece) => !hasPrice(piece)) ? "priceThenWords" : null;
 }
 
 export interface PriceFirstSections {

@@ -727,6 +727,43 @@ export const fr = {
       follow: "Suivre son prix ? Une baisse s'affichera dans vos Envies.",
       turnOnAlert: "Activer l'alerte",
     },
+    // Stock affiché (lot « stock visible ») : ce que Google disait au moment de
+    // la recherche, sur les cartes (components/stock-note.tsx) ; rien quand
+    // c'est inconnu. Le filtre « En stock seulement » garde les offres au stock
+    // inconnu (components/result-sort-bar.tsx).
+    stock: {
+      inStock: "En stock",
+      soldOut: "Épuisée",
+      // Lu par VoiceOver après « En stock » ou « Épuisée ».
+      source: "d'après Google, au moment de la recherche",
+      hint: "Explique d'où vient cette information.",
+      explanation: "D'après Google, au moment de la recherche. Le stock a pu changer depuis : vérifiez-le sur le site de la boutique avant d'acheter.",
+      close: "J'ai compris",
+    },
+    inStockOnly: "En stock seulement",
+    inStockOnlyHint: "Masque les offres que Google disait épuisées au moment de la recherche. Celles dont le stock est inconnu restent.",
+    // « En stock seulement » choisi et plus rien à montrer : retirer les filtres.
+    filtersEmpty: "Aucune proposition ne correspond à ces filtres pour l'instant.",
+    showAllWithoutFilters: "Afficher toutes les propositions",
+    // Le verdict (lot « verdict », serveur lib/verdict.ts) : une phrase en tête
+    // de l'écran Résultat, touchable (components/verdict-line.tsx). Toujours
+    // « d'après les titres des boutiques » quand elle affirme quelque chose ;
+    // une fourchette de prix dit d'où (les boutiques) et de quand (au moment
+    // de la recherche) elle vient. Rien quand le serveur ne sait pas.
+    verdict: {
+      identified: (shops: number) => `Pièce identifiée, d'après les titres des boutiques : ${shops} boutiques.`,
+      identifiedWithPrices: (shops: number, low: string, high: string) =>
+        `Pièce identifiée, d'après les titres des boutiques : ${shops} boutiques, de ${low} à ${high} au moment de la recherche.`,
+      // Le même prix partout.
+      identifiedOnePrice: (shops: number, price: string) => `Pièce identifiée, d'après les titres des boutiques : ${shops} boutiques, toutes à ${price} au moment de la recherche.`,
+      close: "Pièce probablement trouvée, d'après les titres des boutiques : vérifiez le modèle avant d'acheter.",
+      lookalikes: "Pas de pièce exacte trouvée : voici les plus proches.",
+      hint: `Explique comment ${BRAND} décide.`,
+      sheetTitle: "D'après les titres des boutiques",
+      how: `${BRAND} lit les titres des offres de « Cette pièce dans d'autres boutiques ». Seuls comptent les boutiques connues et les sites officiels des marques, sans les places de marché ni les sites de revente, où chaque vendeur écrit son titre. « Pièce identifiée » : au moins deux de ces boutiques, différentes, y nomment la même marque et le même modèle. « Pièce probablement trouvée » : une seule le fait. Sinon, les propositions sont seulement des pièces qui se ressemblent.`,
+      limits: `${BRAND} ne vérifie ni qu'une pièce est d'origine, ni son état, et cette phrase ne change pas l'ordre des propositions. Les prix sont ceux affichés par les boutiques au moment de la recherche. Vérifiez toujours avant d'acheter.`,
+      closeButton: "J'ai compris",
+    },
   },
   wishlistItem: {
     back: "Envies",
@@ -974,6 +1011,19 @@ export const fr = {
     // fiche d'une Envie), même interrupteur « Alertes prix et stock » coupé.
     priceDrop: "Baisse de prix",
     priceDropAt: (price: string) => `Baisse de prix · ${price}`,
+    // Lot « alertes visibles » : les nouveautés en tête de vos Envies. Chaque
+    // ligne dit le prix vu, son jour et sa boutique ; l'écart est celui avec
+    // votre seuil (jamais « promotion » ni prix barré).
+    newsTitle: (count: number) => (count === 1 ? "1 nouveauté" : `${count} nouveautés`),
+    newsSource: `Repérées dans les recherches faites dans ${BRAND}.`,
+    newsPriceDrop: (title: string, price: string, gap: string, day: string, shop: string | null) =>
+      shop ? `${title} : ${price}, ${gap} sous votre seuil · prix vu le ${day} chez ${shop}` : `${title} : ${price}, ${gap} sous votre seuil · prix vu le ${day}`,
+    newsRestock: (title: string, day: string, shop: string | null) =>
+      shop ? `De nouveau disponible : ${title} · vu le ${day} chez ${shop}` : `De nouveau disponible : ${title} · vu le ${day}`,
+    newsOpenHint: "Ouvre cette envie",
+    newsHide: "Masquer",
+    newsHideLabel: "Masquer les nouveautés",
+    newsTabLabel: (tab: string) => `${tab}, avec des nouveautés`,
   },
   // Lot collections : collections d'envies, privées ou montrées aux amis
   // (puces de l'écran Envies, « Ajouter à une collection », profil d'un ami).

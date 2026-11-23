@@ -3,6 +3,7 @@
 // n'importe rien d'autre. La version du site (même nom, suffixe .web) n'est
 // prise que par la compilation du site.
 import type { StyleProp, ViewStyle } from "react-native";
+import type { VaultCategory } from "@monapp/shared-types";
 
 export interface PieceExtraActionsProps {
   /** Identifiant de la proposition d'origine (product_match), null sans proposition. */
@@ -13,6 +14,8 @@ export interface PieceExtraActionsProps {
   buyUrl: string | null;
   /** Nom de la pièce, pour les lecteurs d'écran. */
   title: string;
+  /** Catégorie choisie dans le Vault, quand la fiche la connaît. */
+  category?: VaultCategory | null;
   style?: StyleProp<ViewStyle>;
 }
 
