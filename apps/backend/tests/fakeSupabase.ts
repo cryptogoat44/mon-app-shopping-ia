@@ -23,6 +23,7 @@ import { randomUUID } from "node:crypto";
 // Migration 0051 : un nouvel appareil ne reçoit aucune sorte d'activité
 // (valeurs par défaut de la base ; celles de 0036 ne sont pas imitées : un
 // appareil enregistré sans elles les laisse absentes, comme avant).
+// Migration 0057 : une page look par membre et par pièce, un jeton unique.
 
 export type Row = Record<string, unknown>;
 type Filter = (row: Row) => boolean;
@@ -115,6 +116,8 @@ const DEFAULTS: Record<string, () => Row> = {
   posts: () => ({ id: randomUUID(), wishlist_item_id: null, media_thumb_url: null, media_removed_at: null, hidden_at: null, created_at: nextTimestamp() }),
   // Migration 0051 : aucune sorte d'activité pour un nouvel appareil.
   push_tokens: () => ({ notify_likes: false, notify_comments: false, notify_follows: false, notify_mentions: false }),
+  // Migration 0057 : la page look reçoit son identifiant de la base.
+  shared_looks: () => ({ id: randomUUID(), image_path: null, created_at: nextTimestamp() }),
 };
 
 /** Clés uniques imitées (doublon : erreur 23505, comme Postgres). */
@@ -136,6 +139,8 @@ const UNIQUE: Record<string, string[][]> = {
   post_people_tags: [["post_id", "user_id"]],
   // Migration 0048 : une publication enregistrée par membre.
   saved_posts: [["user_id", "post_id"]],
+  // Migration 0057 : un seul jeton, une page par membre et par pièce.
+  shared_looks: [["token"], ["user_id", "match_id"]],
 };
 
 /** Suppressions en cascade imitées : en supprimant une ligne de la table,
