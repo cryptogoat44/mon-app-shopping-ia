@@ -494,7 +494,10 @@ Seuls les membres qui ont accepté les statistiques envoient :
   `native` (feuille de partage du téléphone ou du navigateur) ou `copy`
   (lien copié, navigateur sans partage) ; `reused` = oui quand la page
   existait déjà pour cette pièce (même lien). Fermer la feuille de partage
-  sur iPhone sans choisir d'app n'est pas compté.
+  sur iPhone sans choisir d'app n'est pas compté. Une page créée à l'instant
+  mais pas encore partagée (sur le site, « touchez Partager le look » après
+  l'attente ; ou feuille fermée puis rouverte) garde `reused` = non à son
+  premier partage réussi.
 - **`look_stopped`** : une page arrêtée depuis Réglages → Vos données →
   « Pages look partagées » (`from` = `settings`). Une page arrêtée par la
   modération ou expirée n'est pas comptée.

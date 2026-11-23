@@ -88,7 +88,7 @@ import { isAffiliateLink } from "@/lib/affiliate-link";
 import { AffiliateMention } from "@/components/affiliate-mention";
 import { PieceExtraActions } from "@/components/piece-extra-actions";
 import { LookConfirmSheet } from "@/components/look-confirm-sheet";
-import { createLook, rememberedLookUrl, rememberLookUrl, shareLookLink, useLookPagesStatus } from "@/lib/look-pages";
+import { createLook, rememberedLookReused, rememberedLookUrl, rememberLookUrl, shareLookLink, useLookPagesStatus } from "@/lib/look-pages";
 import { dayOf, lookShareAllowed } from "@/lib/look-page";
 import { ApiError } from "@/lib/api-error";
 import { themedStyles } from "@/theme/themed-styles";
@@ -504,7 +504,7 @@ export default function ResultScreen() {
     if (lookAllowed) {
       // Même pièce déjà partagée pendant cette visite : le même lien, sans nouvelle feuille.
       const known = rememberedLookUrl(piece.id);
-      if (known) await shareLook(piece, known, true);
+      if (known) await shareLook(piece, known, rememberedLookReused(piece.id));
       else setLookTarget(piece);
       return;
     }
@@ -534,7 +534,7 @@ export default function ResultScreen() {
     AccessibilityInfo.announceForAccessibility(t.look.creating);
     try {
       const look = await createLook(target.id);
-      rememberLookUrl(target.id, look.url);
+      rememberLookUrl(target.id, look.url, look.created);
       await shareLook(target, look.url, !look.created);
     } catch (error) {
       const body = error instanceof ApiError ? (error.body as { error?: string; reason?: string }) : null;
@@ -545,7 +545,7 @@ export default function ResultScreen() {
   }
 
   async function shareLook(target: Piece, url: string, reused: boolean) {
-    const outcome = await shareLookLink(target.name, url, reused);
+    const outcome = await shareLookLink(target.name, url, reused, target.id);
     if (outcome === "copied") showToast(t.look.linkCopied);
     // Site : le navigateur a refusé après l'attente de la création ; le lien est gardé, un nouveau toucher le partage.
     else if (outcome === "needs_tap") showToast(t.look.tapToShare);

@@ -71,14 +71,22 @@ export function useLookPagesStatus(): LookPagesStatus | null {
 
 // Liens déjà créés pendant cette visite (mémoire seulement) : la même pièce
 // partagée de nouveau reprend son lien sans nouvelle feuille de confirmation.
-const sharedLookUrls = new Map<string, string>();
+// `notShared` : page créée à l'instant et pas encore partagée (le site a
+// demandé un nouveau toucher, ou la feuille a été fermée) ; son premier
+// partage compte reused = false (STATISTIQUES.md).
+const sharedLookUrls = new Map<string, { url: string; notShared: boolean }>();
 
 export function rememberedLookUrl(matchId: string): string | null {
-  return sharedLookUrls.get(matchId) ?? null;
+  return sharedLookUrls.get(matchId)?.url ?? null;
 }
 
-export function rememberLookUrl(matchId: string, url: string): void {
-  sharedLookUrls.set(matchId, url);
+export function rememberLookUrl(matchId: string, url: string, created = false): void {
+  sharedLookUrls.set(matchId, { url, notShared: created });
+}
+
+/** `reused` du prochain partage du lien gardé : false tant qu'une page créée à l'instant n'a pas été partagée. */
+export function rememberedLookReused(matchId: string): boolean {
+  return !sharedLookUrls.get(matchId)?.notShared;
 }
 
 /** POST /api/looks : la page de la pièce (ou celle déjà active : même lien). */
@@ -110,7 +118,15 @@ export async function stopLookAsAdmin(link: string): Promise<void> {
  * « needs_tap » : le navigateur a refusé le partage ou la copie parce que le
  * toucher était trop ancien (après l'attente de la création du lien) ; le
  * lien est gardé (rememberLookUrl) et un nouveau toucher le partage. */
-export async function shareLookLink(pieceName: string, url: string, reused: boolean): Promise<"shared" | "copied" | "cancelled" | "needs_tap"> {
+export async function shareLookLink(pieceName: string, url: string, reused: boolean, matchId?: string): Promise<"shared" | "copied" | "cancelled" | "needs_tap"> {
+  const outcome = await shareLookOnce(pieceName, url, reused);
+  // Partagée une fois : les partages suivants de ce lien comptent reused = true.
+  const remembered = matchId === undefined ? undefined : sharedLookUrls.get(matchId);
+  if (remembered && (outcome === "shared" || outcome === "copied")) remembered.notShared = false;
+  return outcome;
+}
+
+async function shareLookOnce(pieceName: string, url: string, reused: boolean): Promise<"shared" | "copied" | "cancelled" | "needs_tap"> {
   const message = lookShareMessage(pieceName, url, t.look);
   try {
     if (Platform.OS === "web") {
