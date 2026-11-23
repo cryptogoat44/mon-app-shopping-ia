@@ -12,6 +12,7 @@ import type { ClickPlacement } from "@/lib/price-first";
 import { SpotImage } from "@/components/spot-image";
 import { ForeignShopNote } from "@/components/foreign-shop-note";
 import { OfferMarkNote } from "@/components/offer-mark";
+import { StockNote } from "@/components/stock-note";
 import { SendToFriendLink } from "@/components/send-to-friend-link";
 import { StockReportLink } from "@/components/stock-report-sheet";
 import { isAffiliateLink } from "@/lib/affiliate-link";
@@ -79,10 +80,12 @@ export function ProposalCard({
             <ForeignShopNote piece={piece} compact />
           </View>
         </Pressable>
-        {piece.merchantUrl || onSend || onReportGone || piece.offerMark ? (
+        {piece.merchantUrl || onSend || onReportGone || piece.offerMark || typeof piece.inStock === "boolean" ? (
           <View style={styles.rowLink}>
             {/* Boutiques douteuses : « Boutique connue » ou « Prix inhabituellement bas », touchable à part. */}
             <OfferMarkNote piece={piece} />
+            {/* Stock affiché : « En stock » ou « Épuisée » d'après Google, touchable à part (components/stock-note.tsx). */}
+            <StockNote piece={piece} />
             {piece.merchantUrl ? <ShopLink piece={piece} placement={placement} /> : null}
             {onSend ? <SendToFriendLink pieceName={piece.name} onPress={onSend} /> : null}
             {onReportGone ? <StockReportLink pieceName={piece.name} onPress={onReportGone} /> : null}
@@ -110,6 +113,8 @@ export function ProposalCard({
       </Pressable>
       {/* Boutiques douteuses : « Boutique connue » ou « Prix inhabituellement bas », touchable à part. */}
       <OfferMarkNote piece={piece} />
+      {/* Stock affiché : « En stock » ou « Épuisée » d'après Google, touchable à part (components/stock-note.tsx). */}
+      <StockNote piece={piece} />
       {piece.merchantUrl ? <ShopLink piece={piece} placement={placement} /> : null}
       {onSend ? <SendToFriendLink pieceName={piece.name} onPress={onSend} /> : null}
       {onReportGone ? <StockReportLink pieceName={piece.name} onPress={onReportGone} /> : null}

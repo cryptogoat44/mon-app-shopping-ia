@@ -34,6 +34,7 @@ import { voieCEnabled } from "./aiSwitches.js";
 import { photoCallsLeft, VOIE_C_BUDGET, type Deadline } from "./deadline.js";
 import type { SearchReservation } from "./searchCapacity.js";
 import { isBrandShop, withoutDubiousOffers, type TrustOffer } from "./shopTrust.js";
+import { verdictTier } from "./lightSort.js";
 import { AI_ERROR_KINDS, NO_QUERY_REASONS, totalSeconds, type AiErrorKind, type ComplementMeasure, type NoQueryReason } from "./searchMeasure.js";
 import { singleFlight } from "./singleFlight.js";
 import { sortByWords } from "./wordSort.js";
@@ -669,6 +670,16 @@ function withBrandShop(matches: readonly ShoppingMatch[], brand: string): Shoppi
   return matches.map((match) => (isBrandShop(match.merchantUrl, brand) ? { ...match, brandShop: true } : match));
 }
 
+/** Le verdict (lot « verdict », migration 0055) : le palier de chaque
+ * proposition montrée, noté ici, seul moment où la marque et le modèle sont
+ * connus (lib/lightSort.ts, verdictTier). Un nombre sur sa ligne, rien
+ * d'autre : ni la marque ni le modèle ne sont enregistrés. Le verdict lui-même
+ * se calcule à la relecture (lib/verdict.ts). De nouveaux objets : ceux du
+ * cache ne sont jamais touchés. */
+function withTitleTiers(matches: readonly ShoppingMatch[], reference: { brand: string; model: string }): ShoppingMatch[] {
+  return matches.map((match) => ({ ...match, titleTier: verdictTier(match.productName, reference) }));
+}
+
 /** Boutiques ensuite : le complément aura-t-il besoin d'un appel (cache, IA
  * ou Google Shopping) ? Faux : runComplement répond tout de suite, sans aucun
  * port (Lens en panne, aucune proposition Lens, IA coupée) ; le lancement
@@ -721,7 +732,7 @@ export async function runComplement(ports: ComplementPorts, input: ComplementInp
     if (shown.matches.length === 0) return finish(state, input, "empty", [], true);
     const lensTier0 = ports.sortShopping([...input.lens], reference).tierCounts[0] ?? 0;
     const reliable = (state.measure.tier0 ?? 0) > 0 || lensTier0 > 0;
-    return finish(state, input, "shown", withBrandShop(shown.matches, query.brand), !reliable);
+    return finish(state, input, "shown", withTitleTiers(withBrandShop(shown.matches, query.brand), reference), !reliable);
   } catch (error) {
     // g. Exception inattendue : « error » (distincte de « skipped »), journalisée sans contenu.
     ports.log.error({ step: "complement", errorName: errorName(error) }, "Complément de la voie C : exception inattendue, résultats Lens seuls");

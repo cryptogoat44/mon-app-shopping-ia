@@ -42,12 +42,17 @@ export function shopsOutcomeOf(search: ProductSearch): ShopsOutcome {
  * la recherche visuelle restent celles affichées, dans le même ordre (mêmes
  * indices, même tri par les mots) ; seules les sections du complément
  * s'ajoutent dessous, marquées `late` : la grande carte et ce qui est replié
- * ne changent pas. */
+ * ne changent pas. Le verdict, lui, est celui de la réponse (il arrive avec
+ * les boutiques), au-dessus de tout, sans rien déplacer d'autre. */
 export function withShops(previous: SpotResult, search: ProductSearch): SpotResult {
-  const shops = toSpotResult(search).complement;
+  const next = toSpotResult(search);
+  const shops = next.complement;
   if (previous.status !== "success" || !shops) return withoutShopsPending(previous);
+  // Le verdict arrive avec les boutiques (lib/verdict.ts) : celui de la réponse, ou aucun.
+  const { verdict: _previousVerdict, ...rest } = previous;
   return {
-    ...previous,
+    ...rest,
+    ...(next.verdict ? { verdict: next.verdict } : {}),
     complement: {
       shopping: shops.shopping,
       words: shops.words,

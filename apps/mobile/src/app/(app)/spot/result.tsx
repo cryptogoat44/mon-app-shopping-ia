@@ -6,7 +6,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import * as WebBrowser from "expo-web-browser";
 import * as Haptics from "expo-haptics";
-import type { MatchFeedbackReason, ProductSearch, VaultCategory } from "@monapp/shared-types";
+import type { MatchFeedbackReason, ProductSearch, VaultCategory, VerdictLevel } from "@monapp/shared-types";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { acceptLanguage, getActiveLocale, t } from "@/i18n";
 import { closeSpotter } from "@/lib/spot-navigation";
@@ -21,6 +21,7 @@ import { allPieces, merchantContextFor, merchantMarkFor, opensOfferPage } from "
 import {
   bestProposalIndex,
   bigCardLabel,
+  firstAvailableIndex,
   chooseCard,
   clickPlacements,
   hasPrice,
@@ -36,7 +37,7 @@ import {
   type ClickPlacement,
   type StartOptions,
 } from "@/lib/price-first";
-import { isPriceSort, resultLayout, type ResultView } from "@/lib/result-sort";
+import { isPriceSort, resultLayout, stockFilterShown, type ResultView } from "@/lib/result-sort";
 import { usePreferences } from "@/lib/preferences-context";
 import { searchCountryFrom } from "@/lib/foreign-shop";
 import { getDraft } from "@/lib/spot-draft";
@@ -61,7 +62,7 @@ import { ReportedLine, ResultFeedbackButton, ResultFeedbackSheet } from "@/compo
 import { ResultComplement, ShopsPending, textSearchStatusNote } from "@/components/result-complement";
 import { TextSearchAlreadyUsed, TextSearchPrompt } from "@/components/text-search-prompt";
 import { CheapestBadge, ProposalCard } from "@/components/proposal-card";
-import { ResultSortBar, WithPriceOnlyEmpty } from "@/components/result-sort-bar";
+import { FiltersEmpty, InStockOnlyToggle, ResultSortBar, WithPriceOnlyEmpty } from "@/components/result-sort-bar";
 import { PriceSortedList } from "@/components/price-sorted-list";
 import { NoPriceSection } from "@/components/no-price-section";
 import { YourPiece } from "@/components/your-piece";
@@ -69,6 +70,9 @@ import { yourPieceImage } from "@/lib/your-piece";
 import { useHeroReveal } from "@/lib/use-hero-reveal";
 import { ForeignShopNote } from "@/components/foreign-shop-note";
 import { OfferMarkNote } from "@/components/offer-mark";
+import { StockNote } from "@/components/stock-note";
+import { VerdictLine } from "@/components/verdict-line";
+import { verdictToTrack } from "@/lib/verdict";
 import { KeptNotice } from "@/components/kept-notice";
 import { PurchaseQuestionSheet, type PurchaseQuestionActions } from "@/components/purchase-question-sheet";
 import { SendToFriendLink } from "@/components/send-to-friend-link";
@@ -282,6 +286,18 @@ export default function ResultScreen() {
     if (!autoTextSearchId) return;
     setAutoText(claimAutoTextSearch(autoTextSearchId) ? "running" : "done");
   }, [autoTextSearchId]);
+
+  // Le verdict (lot « verdict », lib/verdict.ts) : verdict_shown une fois par
+  // résultat affiché, et de nouveau si son niveau change (boutiques arrivées ensuite).
+  const verdictTracked = useRef<{ searchId: string | null; level: VerdictLevel } | null>(null);
+  const verdictLevel = result?.verdict?.level ?? null;
+  const verdictSearchId = result?.searchId ?? null;
+  useEffect(() => {
+    const next = verdictToTrack(verdictSearchId, result?.verdict, verdictTracked.current);
+    if (!next) return;
+    verdictTracked.current = next;
+    track("verdict_shown", { level: next.level });
+  }, [verdictSearchId, verdictLevel]);
 
   useScrollToEndOnKeyboard(scrollRef, result?.complement?.suggestText === true);
 
@@ -779,6 +795,14 @@ export default function ResultScreen() {
         // (iPhone ; le navigateur le fait de lui-même). « Pertinence » : inchangé.
         maintainVisibleContentPosition={priceSort && Platform.OS !== "web" ? { minIndexForVisible: 0 } : undefined}
       >
+        {/* Le verdict : la phrase de tête, d'après les titres des boutiques ; rien quand le serveur ne sait pas (components/verdict-line.tsx).
+            Sa boîte est toujours là, même vide (collapsable={false} : jamais aplatie), en premier : trié par prix sur
+            iPhone, la phrase arrivée avec les boutiques grandit vers le bas, visible, au lieu de passer au-dessus de l'écran.
+            minHeight 1 : vide, une boîte de hauteur 0 en haut de la liste n'est pas « visible » pour iOS ni Android
+            (y + hauteur > défilement), qui prendraient alors la ligne d'après comme repère et cacheraient la phrase. */}
+        <View collapsable={false} testID="verdict-place" style={styles.verdictPlace}>
+          <VerdictLine verdict={result.verdict} />
+        </View>
         {/* Voie C : le décompte, le tri et l'absence de prix parlent de la recherche visuelle seule.
             Prix d'abord : « aucun prix » quand la recherche visuelle n'en a aucun et que la grande carte
             d'office n'en a pas non plus (sinon elles sont toutes repliées en bas, avec le même texte). */}
@@ -786,7 +810,11 @@ export default function ResultScreen() {
         {wordsNote && !priceSort ? <Text style={styles.count}>{wordsNote === "words" ? t.result.sortedByWords : t.result.sortedByWordsPriceFirst}</Text> : null}
         {/* Tri des résultats : en haut de la liste, la ligne des prix avec. */}
         <ResultSortBar view={view} onChange={changeView} summary={summaryText} />
+        {/* Stock affiché : « En stock seulement », juste sous « Avec prix seulement », quand une offre dit son stock (ou qu'il est déjà choisi). */}
+        {stockFilterShown(result, view) ? <InStockOnlyToggle view={view} onChange={changeView} /> : null}
         {layout.emptyWithFilter ? <WithPriceOnlyEmpty onShowAll={() => changeView({ ...view, withPriceOnly: false })} /> : null}
+        {/* Stock affiché : « En stock seulement » ne laisse plus rien ; un seul geste retire les deux filtres. */}
+        {layout.emptyWithStockFilter ? <FiltersEmpty onShowAll={() => changeView({ ...view, withPriceOnly: false, inStockOnly: false })} /> : null}
         {noPriceNotice ? <NoPriceNotice /> : null}
 
         {yourPiece ? <YourPiece image={yourPiece} /> : null}
@@ -797,7 +825,7 @@ export default function ResultScreen() {
               <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} accessibilityLabel={piece.name} />
             </View>
 
-            <Text style={styles.rankLabel}>{bigCardLabelText(bigCardLabel(selectedIndex, bestIndex))}</Text>
+            <Text style={styles.rankLabel}>{bigCardLabelText(bigCardLabel(selectedIndex, bestIndex, firstAvailableIndex(result), allPieces(result)[selectedIndex]))}</Text>
             <Text style={styles.name} accessibilityRole="header">
               {piece.name}
             </Text>
@@ -808,6 +836,8 @@ export default function ResultScreen() {
             <ForeignShopNote piece={piece} />
             {/* Boutiques douteuses : « Boutique connue » ou « Prix inhabituellement bas » (components/offer-mark.tsx). */}
             <OfferMarkNote piece={piece} />
+            {/* Stock affiché : « En stock » ou « Épuisée » d'après Google, au moment de la recherche (components/stock-note.tsx). */}
+            <StockNote piece={piece} />
             {/* Juste sous la proposition, visible sans défilement (décision du fondateur, lot 4 ter). */}
             {sheetActions.length > 0 ? <CorrectionsLink style={styles.notRight} onPress={() => setCorrectionsOpen(true)} /> : null}
 
@@ -1073,6 +1103,7 @@ const styles = themedStyles(() => ({
   navTitle: { fontSize: font.caption, color: color.acier },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   count: { fontSize: font.caption, color: color.acier, marginBottom: space.sm },
+  verdictPlace: { minHeight: 1 },
   hero: { width: "100%", aspectRatio: 4 / 5, backgroundColor: color.plinthe, borderRadius: radius.sm, overflow: "hidden" },
   fill: { width: "100%", height: "100%" },
   rankLabel: { fontSize: font.caption, color: color.acier, fontWeight: "600", marginTop: space.md },
