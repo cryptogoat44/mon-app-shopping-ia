@@ -285,6 +285,20 @@ describe("les mots de la recherche", () => {
     expect(searchWordsOf("Dior B23 Europa", dior, [])).toBe("Dior B23 Europa");
   });
 
+  it("jamais un prix collé à un mot par un signe (« Saddle—2900EUR », « Prix:2900 € »)", () => {
+    expect(searchWordsOf("Dior Saddle—2900EUR noir", dior, [])).toBe("Dior Saddle noir");
+    expect(searchWordsOf("Dior Marmont Prix:2900EUR", dior, [])).toBe("Dior Marmont Prix");
+    expect(searchWordsOf("Dior 2900EUR/noir", dior, [])).toBe("Dior noir");
+    expect(searchWordsOf("Dior Marmont Prix:2900 EUR", dior, [])).toBe("Dior Marmont Prix");
+    expect(searchWordsOf("Dior Marmont Prix:2900 €", dior, [])).toBe("Dior Marmont Prix");
+    expect(searchWordsOf("Dior Marmont Prix.2900EUR", dior, [])).toBe("Dior Marmont Prix");
+    expect(searchWordsOf("Dior Marmont Prix-2900 €", dior, [])).toBe("Dior Marmont Prix");
+    expect(searchWordsOf("Dior Saddle 2900EUR-noir", dior, [])).toBe("Dior Saddle");
+    // Permis : un nombre de modèle collé par un signe, sans devise, reste (« Dior 30 Montaigne », « B23 »).
+    expect(searchWordsOf("Dior—30 Montaigne", dior, [])).toBe("Dior 30 Montaigne");
+    expect(searchWordsOf("Dior Saddle:B23 1.250,00", dior, [])).toBe("Dior Saddle B23 1 250 00");
+  });
+
   it("jamais le nom d'une boutique connue montrée", () => {
     const shown = parseMatchRows([offer("https://www.farfetch.com/a", "x")])!.map((match) => ({ match, mark: null, demoted: false }));
     expect(searchWordsOf("Dior Saddle - Farfetch", dior, shown)).toBe("Dior Saddle");
@@ -296,6 +310,22 @@ describe("les mots de la recherche", () => {
     expect(searchWordsOf("B23 sneakers | Dior | MR PORTER", dior, shownAt("https://www.mrporter.com/a"))).toBe("B23 sneakers Dior");
     expect(searchWordsOf("Sac Lady Dior - Dior | Galeries Lafayette", dior, shownAt("https://www.galerieslafayette.com/a"))).toBe("Sac Lady Dior Dior");
     expect(searchWordsOf("Dior Saddle | THE OUTNET", dior, shownAt("https://www.theoutnet.com/a"))).toBe("Dior Saddle");
+  });
+
+  it("jamais le nom d'une boutique qui commence par un petit mot (« La Redoute », « My Theresa »)", () => {
+    const shownAt = (url: string) => parseMatchRows([offer(url, "x")])!.map((match) => ({ match, mark: null, demoted: false }));
+    expect(searchWordsOf("Sac Dior Saddle | La Redoute", dior, shownAt("https://www.laredoute.fr/a"))).toBe("Sac Dior Saddle");
+    expect(searchWordsOf("Sac Dior Saddle - My Theresa", dior, shownAt("https://www.mytheresa.com/a"))).toBe("Sac Dior Saddle");
+    // Permis : sans la boutique montrée, les mots restent (le petit mot part comme d'habitude).
+    expect(searchWordsOf("Sac Dior Saddle | La Redoute", dior, [])).toBe("Sac Dior Saddle Redoute");
+    // Permis : un petit mot suivi d'un mot qui n'est pas une boutique part seul.
+    expect(searchWordsOf("Sac Dior Saddle la rouge", dior, shownAt("https://www.laredoute.fr/a"))).toBe("Sac Dior Saddle rouge");
+  });
+
+  it("de bout en bout : laredoute + mytheresa — « Redoute » n'est ni dans les mots ni dans l'adresse", () => {
+    const resale = resaleOf([offer("https://www.laredoute.fr/a", "Sac Gucci Marmont | La Redoute"), offer("https://www.mytheresa.com/b", "Gucci Marmont bag")]);
+    expect(resale?.words).toBe("Sac Gucci Marmont");
+    for (const site of resale!.sites) expect(site.url.toLowerCase()).not.toMatch(/redoute|theresa/);
   });
 
   it("permis : les mêmes mots restent quand la boutique n'est pas montrée (« Porter » n'est pas une boutique à lui seul)", () => {

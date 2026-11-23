@@ -45,9 +45,10 @@
 // M ; les mots dans leur écriture d'origine, sans signes (sauf « ' », « - »
 // et « & »), sans petits mots courants, sans référence (5 chiffres ou plus),
 // sans prix (un nombre collé à une devise, symbole ou code comme « 1250EUR »,
-// ou égal au prix d'une offre montrée) ni nom d'une boutique montrée (aussi
-// en plusieurs mots ou avec des tirets : « NET-A-PORTER », « MR PORTER »,
-// « Galeries Lafayette », « THE OUTNET ») ; les 8 premiers ; le nom de M en tête
+// même attaché à un mot par un signe comme « Prix:2900 € », ou égal au prix
+// d'une offre montrée) ni nom d'une boutique montrée (aussi en plusieurs mots,
+// avec des tirets ou un petit mot en tête : « NET-A-PORTER », « MR PORTER »,
+// « Galeries Lafayette », « THE OUTNET », « La Redoute ») ; les 8 premiers ; le nom de M en tête
 // s'il n'y est pas ; 80 caractères au plus, coupés sur une fin de mot.
 // Jamais les mots du membre (query, description d'une vidéo, requête de
 // l'IA) : ils ne sont pas lus ici.
@@ -183,7 +184,18 @@ function priceNumbers(shown: readonly LuxuryShownMatch[]): Set<string> {
 
 /** Les mots de la recherche, tirés d'un titre (voir l'en-tête). */
 export function searchWordsOf(title: string, house: MaisonDeLuxe, shown: readonly LuxuryShownMatch[]): string {
-  const raw = title.replace(/[‘’ʼ]/g, "'").split(/\s+/u).filter(Boolean);
+  // D'abord, les signes qui collent un prix à un mot (« Saddle—2900EUR »,
+  // « Prix:2900 € », « Prix.2900EUR », « Prix-2900 EUR ») deviennent des
+  // espaces : seuls restent les lettres, les chiffres, les devises, « ' »,
+  // « & », « - » entre deux non-chiffres et « . » « , » entre deux chiffres
+  // (« 1.250,00 »).
+  const raw = title
+    .replace(/[‘’ʼ]/g, "'")
+    .replace(/(?<!\d)[.,]|[.,](?!\d)/gu, " ")
+    .replace(/(?<=\d)-|-(?=\d)/gu, " ")
+    .replace(/[^\p{L}\p{M}\p{N}.,'\-&€$£¥\s]/gu, " ")
+    .split(/\s+/u)
+    .filter(Boolean);
   // Prix : la devise, et les nombres qui la touchent (« 1 250,00 € », « €1250 », « 1250 EUR »).
   const dropped = raw.map(() => false);
   raw.forEach((token, index) => {
@@ -205,30 +217,34 @@ export function searchWordsOf(title: string, house: MaisonDeLuxe, shown: readonl
     const plain = name.replace(/[^a-z0-9]/g, "");
     return plain.startsWith("the") && plain.length > 3 ? [plain, plain.slice(3)] : [plain];
   }));
-  const filtered = raw
+  const tokens = raw
     .filter((_, index) => !dropped[index])
     .flatMap((token) => token.replace(/[^\p{L}\p{N}'\-& ]/gu, " ").split(" "))
     .map((token) => token.replace(/^['\-&]+|['\-&]+$/g, ""))
-    .filter((token) => {
-      if (!/[\p{L}\p{N}]/u.test(token)) return false;
-      const words = wordsOf(token);
-      if (words.every((word) => SMALL_WORDS.has(word))) return false;
-      if (/\d{5,}/u.test(token)) return false;
-      if (/^\d+$/u.test(token) && prices.has(String(Number(token)))) return false;
-      if (shops.has(words.join(""))) return false;
-      return true;
-    });
-  // Un nom de boutique écrit en 2 ou 3 mots (« MR PORTER », « Galeries Lafayette »).
-  const kept: string[] = [];
-  for (let index = 0; index < filtered.length; ) {
-    const run = [3, 2].find((size) => index + size <= filtered.length && shops.has(filtered.slice(index, index + size).flatMap(wordsOf).join("")));
+    .filter((token) => /[\p{L}\p{N}]/u.test(token));
+  // Un nom de boutique écrit en 2 ou 3 mots (« MR PORTER », « Galeries
+  // Lafayette », « La Redoute », « My Theresa ») : cherché AVANT de retirer
+  // les petits mots, sinon « Redoute » resterait seul.
+  const unshopped: string[] = [];
+  for (let index = 0; index < tokens.length; ) {
+    const run = [3, 2].find((size) => index + size <= tokens.length && shops.has(tokens.slice(index, index + size).flatMap(wordsOf).join("")));
     if (run !== undefined) {
       index += run;
       continue;
     }
-    kept.push(filtered[index]!);
+    unshopped.push(tokens[index]!);
     index += 1;
   }
+  const kept = unshopped.filter((token) => {
+    const words = wordsOf(token);
+    if (words.every((word) => SMALL_WORDS.has(word))) return false;
+    if (/\d{5,}/u.test(token)) return false;
+    // Filet de sécurité : un nombre collé à un code de devise, même dans un mot à tirets.
+    if (token.split(/[-&']/u).some((part) => GLUED_CURRENCY_CODE.test(part))) return false;
+    if (/^\d+$/u.test(token) && prices.has(String(Number(token)))) return false;
+    if (shops.has(words.join(""))) return false;
+    return true;
+  });
   kept.splice(LUXURY_MAX_WORDS);
   const named = houseNames(house).some((name) => containsSequence(wordsOf(kept.join(" ")), name));
   const all = named ? kept : [house.nom, ...kept];
