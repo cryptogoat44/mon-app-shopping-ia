@@ -97,7 +97,7 @@ function TopBar({ onBack, onClose }: { onBack: () => void; onClose: () => void }
   return (
     <View style={styles.nav}>
       <Pressable onPress={onBack} hitSlop={12} style={styles.navSide} accessibilityRole="button" accessibilityLabel={t.common.back}>
-        <Text style={styles.back}>‹</Text>
+        <Text style={styles.back}>‹ {t.common.back}</Text>
       </Pressable>
       <Pressable onPress={onClose} hitSlop={12} style={[styles.navSide, styles.navRight]} accessibilityRole="button">
         <Text style={styles.close}>{t.spotter.close}</Text>
@@ -694,7 +694,8 @@ const styles = themedStyles(() => ({
   nav: { height: 47, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12 },
   navSide: { minWidth: 44, height: 44, justifyContent: "center" },
   navRight: { alignItems: "flex-end" },
-  back: { fontSize: 26, color: color.encre },
+  // « ‹ Retour » écrit en toutes lettres : sur cet écran, le geste « glisser pour revenir » est coupé.
+  back: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
   close: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
   body: { fontSize: font.secondary, color: color.acier, lineHeight: 21 },
   box: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md, gap: space.sm, alignSelf: "stretch", marginTop: space.md },

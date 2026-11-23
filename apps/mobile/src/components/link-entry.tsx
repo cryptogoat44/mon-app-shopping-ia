@@ -54,6 +54,12 @@ export function LinkEntry({ onHelp }: { onHelp: () => void }) {
     }
   }
 
+  /** La croix du champ : vide le lien collé ou tapé (et le message qui l'accompagnait). */
+  function handleClear() {
+    setLink("");
+    setMessage(null);
+  }
+
   async function handleContinue() {
     if (detection.kind !== "supported") return;
     setMessage(null);
@@ -88,6 +94,11 @@ export function LinkEntry({ onHelp }: { onHelp: () => void }) {
           onSubmitEditing={handleContinue}
           accessibilityLabel={label}
         />
+        {link.length > 0 ? (
+          <Pressable onPress={handleClear} hitSlop={10} style={styles.clearButton} accessibilityRole="button" accessibilityLabel={t.spotter.clearLink}>
+            <Text style={styles.clearLabel}>×</Text>
+          </Pressable>
+        ) : null}
         <Pressable onPress={handlePaste} hitSlop={10} style={styles.pasteButton} accessibilityRole="button">
           <ClipboardIcon size={16} tint={color.vert} />
           <Text style={styles.pasteLabel}>{t.spotter.paste}</Text>
@@ -110,6 +121,8 @@ const styles = themedStyles(() => ({
   hint: { fontSize: font.caption, color: color.acier, marginTop: space.xs, lineHeight: 18 },
   field: { flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: color.filet, gap: space.sm },
   input: { flex: 1, fontSize: font.body, color: color.encre, paddingVertical: 12 },
+  clearButton: { minWidth: 32, minHeight: 44, alignItems: "center", justifyContent: "center" },
+  clearLabel: { fontSize: 22, lineHeight: 24, color: color.acier },
   pasteButton: { flexDirection: "row", alignItems: "center", gap: 5, minHeight: 44 },
   pasteLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   detected: { flexDirection: "row", alignItems: "center", gap: space.sm, marginTop: space.md },

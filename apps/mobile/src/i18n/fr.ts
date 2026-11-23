@@ -95,6 +95,7 @@ export const fr = {
     paste: "Coller",
     pasteEmpty: "Le presse-papiers ne contient pas de lien.",
     pasteDenied: "Collez le lien directement dans le champ.",
+    clearLink: "Effacer le lien",
     preparing: "Préparation…",
     addVideo: "Ajouter une vidéo",
     addPhoto: "Ajouter une photo",

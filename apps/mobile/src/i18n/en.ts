@@ -92,6 +92,7 @@ export const en: Catalog = {
     paste: "Paste",
     pasteEmpty: "There's no link on your clipboard.",
     pasteDenied: "Paste the link directly into the field.",
+    clearLink: "Clear the link",
     preparing: "Preparing…",
     addVideo: "Add a video",
     addPhoto: "Add a photo",
