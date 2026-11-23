@@ -709,6 +709,31 @@ describe("la copie publique ne survit pas à sa page", () => {
     expect(fake.table("shared_looks")).toEqual([]);
   });
 
+  it("même milliseconde : une page arrêtée pendant que le stockage refusait est reprise par le passage suivant, même s'il tombe au même instant (horloge figée)", async () => {
+    let storageDown = true;
+    const fake = seeded({}, { failStorageRemove: () => storageDown });
+    await withImages();
+    const target = await looksApp(fake.db);
+    const { body } = await share(target);
+    const copy = fake.uploads[0]!;
+    // Seule la date est figée (les minuteries restent réelles) : l'arrêt et le passage suivant ont lieu au même instant.
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date() });
+    try {
+      expect((await as(target, ALICE).del(`/api/looks/${body.id}`)).statusCode).toBe(204);
+      // Refusé : la page arrêtée n'est plus servie, et sa copie n'est pas oubliée.
+      expect((await visit(target, tokenOf(body.url))).statusCode).toBe(404);
+      expect(fake.table("shared_looks")).toHaveLength(1);
+      expect(fake.files.has(copy)).toBe(true);
+      storageDown = false;
+      // Permis : le passage d'un autre membre, au même instant, efface la copie et la ligne.
+      expect((await as(target, BOB).get("/api/looks")).statusCode).toBe(200);
+      expect(fake.files.has(copy)).toBe(false);
+      expect(fake.table("shared_looks")).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("refusé : page arrêtée pendant que le stockage refuse, la même pièce repartagée → 503 « réessayez plus tard » (jamais 500), aucune nouvelle copie, l'ancienne copie gardée avec sa ligne", async () => {
     const fake = seeded({}, { failStorageRemove: () => true });
     await withImages();
