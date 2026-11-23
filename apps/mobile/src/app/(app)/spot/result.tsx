@@ -73,6 +73,8 @@ import { OfferMarkNote } from "@/components/offer-mark";
 import { StockNote } from "@/components/stock-note";
 import { VerdictLine } from "@/components/verdict-line";
 import { verdictToTrack } from "@/lib/verdict";
+import { LuxuryResaleEntry } from "@/components/luxury-resale";
+import { luxuryResaleToTrack } from "@/lib/luxury-resale";
 import { KeptNotice } from "@/components/kept-notice";
 import { PurchaseQuestionSheet, type PurchaseQuestionActions } from "@/components/purchase-question-sheet";
 import { SendToFriendLink } from "@/components/send-to-friend-link";
@@ -298,6 +300,18 @@ export default function ResultScreen() {
     verdictTracked.current = next;
     track("verdict_shown", { level: next.level });
   }, [verdictSearchId, verdictLevel]);
+
+  // Seconde main de luxe (lib/luxury-resale.ts) : luxury_resale_shown une fois
+  // par résultat affiché qui montre l'entrée, et quand elle apparaît avec les
+  // boutiques arrivées ensuite (mémoire par recherche, comme le verdict).
+  const luxuryResaleTracked = useRef<string | null | undefined>(undefined);
+  const luxuryResaleShown = result?.status === "success" && result.luxuryResale !== undefined;
+  useEffect(() => {
+    const next = luxuryResaleToTrack(verdictSearchId, luxuryResaleShown ? result?.luxuryResale : undefined, luxuryResaleTracked.current);
+    if (!next) return;
+    luxuryResaleTracked.current = next.searchId;
+    track("luxury_resale_shown", { sites_count: next.sitesCount });
+  }, [verdictSearchId, luxuryResaleShown]);
 
   useScrollToEndOnKeyboard(scrollRef, result?.complement?.suggestText === true);
 
@@ -882,6 +896,8 @@ export default function ResultScreen() {
             />
             {canSendToFriend(piece, messages) ? <SendToFriendLink style={styles.sendToFriend} pieceName={piece.name} onPress={handleSendToFriend} /> : null}
             {canReportResult(alerts, piece) ? <StockReportLink style={styles.sendToFriend} pieceName={piece.name} onPress={handleStockReport} /> : null}
+            {/* Seconde main de luxe : sous « Plus disponible ? », seulement quand le serveur a retenu une seule maison (components/luxury-resale.tsx). */}
+            <LuxuryResaleEntry resale={result.luxuryResale} />
             {/* Sans clé (VoiceOver ne relit pas le message à chaque pièce) : « Couper l'alerte » en cours ou en échec reste à sa pièce par `pieceId`. */}
             {keptSaved.has(piece.id) ? (
               <KeptNotice pieceId={piece.id} onOpen={() => openWishlistFromSpotter(router)} alert={keptNoticeAlert(keptWishes.get(piece.id), bought.has(piece.id))} onTurnOff={() => turnOffAlertFor(piece)} />
@@ -892,6 +908,8 @@ export default function ResultScreen() {
         ) : null}
         {/* Sans grande carte, le lien reste en haut de la liste, visible sans défilement. */}
         {!showBigCard && sheetActions.length > 0 ? <CorrectionsLink style={styles.notRight} onPress={() => setCorrectionsOpen(true)} /> : null}
+        {/* Seconde main de luxe, sans grande carte : juste sous « Ce n'est pas la bonne pièce ? ». */}
+        {!showBigCard ? <LuxuryResaleEntry style={styles.luxuryResaleTop} resale={result.luxuryResale} /> : null}
 
         {priceSort ? (
           <>
@@ -1123,6 +1141,7 @@ const styles = themedStyles(() => ({
   actionError: { fontSize: font.caption, marginTop: space.sm },
   extraActions: { marginTop: space.sm },
   sendToFriend: { alignSelf: "center", marginTop: 4 },
+  luxuryResaleTop: { alignSelf: "flex-start", marginTop: 0 },
   sectionTitle: { fontSize: font.body, fontWeight: "600", color: color.encre, marginTop: space.xl, marginBottom: space.md },
   grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: space.lg },
   failContent: { flexGrow: 1, justifyContent: "center", paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },

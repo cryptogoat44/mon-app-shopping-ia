@@ -764,6 +764,23 @@ export const fr = {
       limits: `${BRAND} ne vérifie ni qu'une pièce est d'origine, ni son état, et cette phrase ne change pas l'ordre des propositions. Les prix sont ceux affichés par les boutiques au moment de la recherche. Vérifiez toujours avant d'acheter.`,
       closeButton: "J'ai compris",
     },
+    // Seconde main de luxe (lot « seconde main de luxe », components/luxury-resale.tsx).
+    // Si un jour un lien de cette liste devient affilié, la phrase `leave` devient fausse : la changer,
+    // ajouter la mention « Lien affilié » (components/affiliate-mention.tsx) et la phrase des conditions.
+    luxuryResale: {
+      entry: "Seconde main de luxe",
+      entryLabel: (house: string) => `Seconde main de luxe : chercher cette pièce ${house} sur des sites de revente`,
+      entryHint: "Ouvre la liste des sites de revente.",
+      sheetTitle: "Seconde main de luxe",
+      intro: (house: string) =>
+        `D'après les boutiques trouvées, cette pièce semble venir de la maison ${house}. Vous pouvez la chercher d'occasion sur ces sites de revente, choisis par ${BRAND} et rangés par ordre alphabétique.`,
+      words: (words: string) => `Recherche déjà remplie : “${words}”`,
+      site: (name: string) => `Chercher sur ${name}`,
+      siteLabel: (name: string, host: string) => `Chercher sur ${name}, ${host}, s'ouvre hors de ${BRAND}`,
+      limits: `${BRAND} ne voit pas les pièces de ces sites, ni leur prix, ni leur état : c'est le site de revente qui les présente et en répond, selon ses propres conditions. Vérifiez avant d'acheter.`,
+      leave: `Vous allez quitter ${BRAND} : le site s'ouvre dans votre navigateur. Aucun de ces liens n'est affilié : ${BRAND} ne touche rien sur ces achats.`,
+      close: "Fermer",
+    },
   },
   wishlistItem: {
     back: "Envies",
