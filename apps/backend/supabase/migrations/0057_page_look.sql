@@ -17,7 +17,12 @@
 --
 -- Arrêt d'urgence de toutes les pages, sans rien perdre (le serveur ne peut
 -- plus lire la table : chaque page répond « La page n'a pas pu être
--- chargée », plus aucune création, liste ni export tant que dure l'arrêt) :
+-- chargée », plus aucune création, liste ni export tant que dure l'arrêt ;
+-- si le serveur redémarre pendant l'arrêt, il croit 0057 absente : chaque
+-- page répond « Cette page n'est plus disponible », le bouton redevient
+-- « Partager » et « Pages look partagées » est caché ; la suppression d'un
+-- compte marche toujours, mais les copies d'images de ses pages restent dans
+-- post-media/looks/ : les effacer à la main, dans Storage de Supabase) :
 --   revoke select on table shared_looks from service_role;
 -- Reprise :
 --   grant select on table shared_looks to service_role;

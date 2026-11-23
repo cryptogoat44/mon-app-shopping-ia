@@ -862,4 +862,19 @@ describe("export des données et suppression du compte", () => {
     expect((await visit(target, bobToken)).statusCode).toBe(200);
     expect(fake.deletedUsers).toEqual([ALICE]);
   });
+
+  it("arrêt d'urgence de 0057 (lecture refusée au serveur déjà lancé) : le compte est supprimé quand même, refusé : aucune réponse 500", async () => {
+    const options: FakeDbOptions = {};
+    const fake = seeded({}, options);
+    await withImages();
+    const target = await looksApp(fake.db);
+    // Permis avant l'arrêt : la page est créée (la sonde a vu la table).
+    const { res } = await share(target);
+    expect(res.statusCode).toBe(201);
+    // L'arrêt : la table ne se lit plus (revoke select … from service_role).
+    options.missing = ["shared_looks"];
+    const deleted = await as(target, ALICE).del("/api/me", { confirmation: "SUPPRIMER" });
+    expect(deleted.statusCode).toBe(204);
+    expect(fake.deletedUsers).toEqual([ALICE]);
+  });
 });
