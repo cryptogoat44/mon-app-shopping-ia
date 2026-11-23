@@ -159,6 +159,9 @@ export const tryonFr = {
     tryon_pose_not_detected: "Votre silhouette n'a pas été reconnue sur cette photo. Essayez avec une autre, en suivant ces conseils :",
     tryon_moderation_blocked: "Cet essai a été refusé par la modération du service : certaines pièces, comme les maillots de bain ou la lingerie, ne peuvent pas être essayées. Choisissez une autre pièce ou une autre photo : cet essai n'a pas été décompté.",
     tryon_image_unreadable: "Une des images n'a pas pu être lue. Essayez avec une autre photo ou une autre pièce : cet essai n'a pas été décompté.",
+    // Garde-fou de l'essayage : pièce qui ne se porte pas sur le corps, refusée avant toute dépense.
+    tryon_item_not_wearable:
+      "L'essayage ne fonctionne que pour les vêtements : les chaussures, sacs, bijoux, montres, lunettes, chapeaux, ceintures et autres accessoires ne peuvent pas être essayés. Cet essai n'a pas été décompté.",
   } satisfies Record<TryonServerCode, string>,
   // Sans réponse lisible du serveur.
   fallback: {

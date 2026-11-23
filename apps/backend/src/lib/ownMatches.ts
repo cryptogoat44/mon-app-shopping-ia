@@ -93,6 +93,8 @@ const TRYON_MATCH_ROW = z.object({
   image_url: z.string(),
   image_hd_url: z.string().nullable(),
   merchant_url: z.string(),
+  // Garde-fou de l'essayage (lib/tryon/wornPiece.ts) ; absent d'une lecture plus ancienne.
+  product_name: z.string().nullable().optional(),
 });
 const AFFILIATE_ROWS = z.array(z.object({ affiliate_url: z.string() }));
 
@@ -104,13 +106,15 @@ export interface OwnMatchLinks {
   merchantUrl: string;
   /** Lien affilié rangé avec le résultat, s'il y en a un. */
   affiliateUrl: string | null;
+  /** Nom de la pièce tel que la recherche l'a rangé (null s'il manque). */
+  productName?: string | null;
 }
 
 /** Le résultat `matchId` avec ses images et ses liens, s'il vient d'une
  * recherche de `userId` ; null sinon (inexistant ou recherche d'une autre
  * personne : même réponse). Lecture impossible : DatabaseReadError. */
 export async function findOwnMatchWithLinks(fastify: FastifyInstance, userId: string, matchId: string): Promise<OwnMatchLinks | null> {
-  const { data, error } = await fastify.supabaseAdmin.from("product_matches").select("id, search_id, image_url, image_hd_url, merchant_url").eq("id", matchId).maybeSingle();
+  const { data, error } = await fastify.supabaseAdmin.from("product_matches").select("id, search_id, image_url, image_hd_url, merchant_url, product_name").eq("id", matchId).maybeSingle();
   if (error) throw new DatabaseReadError("Lecture d'un résultat de recherche impossible");
   if (data === null) return null;
   const row = TRYON_MATCH_ROW.safeParse(data);
@@ -128,5 +132,6 @@ export async function findOwnMatchWithLinks(fastify: FastifyInstance, userId: st
     imageHdUrl: row.data.image_hd_url,
     merchantUrl: row.data.merchant_url,
     affiliateUrl: links[0]?.affiliate_url ?? null,
+    productName: row.data.product_name ?? null,
   };
 }

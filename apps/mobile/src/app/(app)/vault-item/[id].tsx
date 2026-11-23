@@ -328,6 +328,7 @@ export default function VaultItemDetailScreen() {
               imageUrls={[item.imageHdUrl, item.imageUrl]}
               buyUrl={item.affiliateUrl ?? item.merchantUrl}
               title={item.title}
+              category={item.category}
               style={styles.extraActions}
             />
           </View>

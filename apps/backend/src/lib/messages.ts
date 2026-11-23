@@ -296,6 +296,9 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Vous avez lancé beaucoup d'essais aujourd'hui. Réessayez demain.": "You've started a lot of try-ons today. Please try again tomorrow.",
   "Les essais sont très demandés en ce moment. Réessayez dans un moment.": "Try-ons are in high demand right now. Please try again shortly.",
   "Vous avez envoyé beaucoup de signalements en peu de temps. Réessayez dans une heure.": "You've sent a lot of reports in a short time. Please try again in an hour.",
+  // Garde-fou de l'essayage (lib/tryon/wornPiece.ts) : pièce qui ne se porte pas sur le corps.
+  "L'essayage ne fonctionne que pour les vêtements. Les chaussures, sacs, bijoux et accessoires ne peuvent pas être essayés.":
+    "Try-on only works for clothes. Shoes, bags, jewellery and accessories can't be tried on.",
   // Lot « messages, plus de confort » (migration 0044).
   "Cette action sur les messages n'est pas encore disponible.": "This action on messages isn't available yet.",
   "Message introuvable.": "Message not found.",
