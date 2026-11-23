@@ -153,6 +153,34 @@ vous verrez dans PostHog.
   `shopping_failed` (la recherche en ligne a échoué) ou `failed` (panne du
   réseau ou du serveur, souvent immédiate sans réseau). `wait_ms` (nouveau)
   = l'attente jusqu'à l'issue.
+- **`result_view_changed`** : le tri ou un filtre de l'écran Résultat a
+  changé. `sort` = le tri choisi, `with_price_only` = « Avec prix seulement »
+  allumé ou non, `change` = ce qui a changé : `sort` (le tri), `filter`
+  (« Avec prix seulement », inchangé) ou, nouveau, `stock_filter` (« En stock
+  seulement »). Nouveau aussi : `in_stock_only` = « En stock seulement »
+  allumé ou non (absent dans les versions d'avant). Ce filtre n'est proposé
+  que si une offre de l'écran dit son stock : il est donc rare au début.
+- **`verdict_shown`** (nouveau) : la phrase de tête de l'écran Résultat
+  (le verdict) est montrée. `level` = `identified` (« Pièce identifiée,
+  d'après les titres des boutiques »), `close` (« Pièce probablement
+  trouvée ») ou `lookalikes` (« Pas de pièce exacte trouvée »). Une fois par
+  résultat affiché, et de nouveau si le niveau change quand les boutiques
+  arrivent quelques secondes plus tard. Absent quand le serveur ne sait pas
+  (migration 0055 pas encore appliquée, boutiques en échec) : il sera donc
+  rare tant que 0055 n'est pas en production. Jamais la pièce, la marque,
+  une boutique, un prix ni le nombre de boutiques.
+  **Comment le lire.** Clics vers une boutique selon le niveau : dans
+  PostHog, un entonnoir `verdict_shown` → `merchant_link_opened` (avec
+  `context` = `result`), découpé par `level` (« Breakdown » sur `level` de la
+  première étape) : la part des personnes qui ouvrent une boutique après
+  chaque niveau. On attend plus de clics après `identified` qu'après
+  `lookalikes`. Signalements « Ce n'est pas la bonne pièce » : ils ne
+  passent pas par PostHog (ils sont dans la base, table `match_feedback`,
+  raison `wrong_item`). Pour les lire selon le niveau, comptez-les sur les
+  offres des boutiques dont le titre nommait la marque et le modèle
+  (`product_matches.title_tier` = 0) et sur les autres : beaucoup de
+  signalements sur les premières voudraient dire que « Pièce identifiée »
+  se trompe, et qu'il faut durcir la règle avant tout le reste.
 
 ### 5. La boutique
 
@@ -430,6 +458,29 @@ Si la plupart des retours durent moins de 30 secondes, la question est
 rarement posée ; si la médiane est bien au-dessus, les 30 secondes laissent
 passer la plupart des vraies visites. Changer ce seuil est un changement de
 code (`MIN_AWAY_MS`, `apps/mobile/src/lib/purchase-question.ts`).
+
+## Les nouveautés des Envies (lot « alertes visibles »)
+
+Le bandeau « 2 nouveautés » en tête des Envies (onglet Envies du Profil)
+montre les baisses de prix et les retours en stock des 30 derniers jours,
+encore vrais.
+
+- **`news_banner_shown`** : le bandeau affiche des nouveautés pas encore vues
+  sur cet appareil ; `count` = combien. Une fois par nouveauté : affichée,
+  elle est notée « vue » sur l'appareil.
+- **`news_line_opened`** : une ligne du bandeau touchée (l'Envie s'ouvre) ;
+  `kind` = `price_drop` (baisse de prix) ou `restock` (retour en stock).
+  Ni la pièce, ni la boutique, ni le prix, ni le jour.
+- Ouverte depuis le bandeau, la fiche de l'Envie compte le clic vers la
+  boutique avec `context` = `wishlist`, comme une fiche ouverte depuis la
+  liste (jamais `price_alert`, réservé à une fiche ouverte par une
+  notification) : la confidentialité promet que, pour les nouveautés, les
+  statistiques comptent seulement leur nombre et la sorte ouverte.
+
+**Part des membres qui ouvrent une nouveauté** : entonnoir (**Unique
+users**, **1 day**) `news_banner_shown` → `news_line_opened`. Le clic vers
+la boutique qui suit ne se distingue pas d'un clic depuis la liste des
+Envies.
 
 ## Les limites
 

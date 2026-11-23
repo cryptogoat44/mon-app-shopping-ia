@@ -652,6 +652,31 @@ export const en: Catalog = {
       follow: "Follow its price? A drop will show in your Wishlist.",
       turnOnAlert: "Turn on alert",
     },
+    stock: {
+      inStock: "In stock",
+      soldOut: "Sold out",
+      source: "according to Google, at the time of the search",
+      hint: "Explains where this information comes from.",
+      explanation: "According to Google, at the time of the search. Stock may have changed since then: check it on the shop's website before you buy.",
+      close: "Got it",
+    },
+    inStockOnly: "In stock only",
+    inStockOnlyHint: "Hides offers Google listed as sold out at the time of the search. Offers with unknown stock stay.",
+    filtersEmpty: "No suggestions match these filters for now.",
+    showAllWithoutFilters: "Show all suggestions",
+    verdict: {
+      identified: (shops: number) => `Piece identified, based on the shops' listing titles: ${shops} shops.`,
+      identifiedWithPrices: (shops: number, low: string, high: string) =>
+        `Piece identified, based on the shops' listing titles: ${shops} shops, from ${low} to ${high} at the time of the search.`,
+      identifiedOnePrice: (shops: number, price: string) => `Piece identified, based on the shops' listing titles: ${shops} shops, all at ${price} at the time of the search.`,
+      close: "Piece probably found, based on the shops' listing titles: check the model before you buy.",
+      lookalikes: "No exact piece found: here are the closest ones.",
+      hint: `Explains how ${BRAND} decides.`,
+      sheetTitle: "Based on the shops' listing titles",
+      how: `${BRAND} reads the titles of the offers in “This piece at other shops”. Only well-known shops and official brand stores count, not marketplaces or resale sites, where each seller writes their own title. “Piece identified”: at least two different shops among them name the same brand and the same model there. “Piece probably found”: only one of them does. Otherwise, the suggestions are only pieces that look alike.`,
+      limits: `${BRAND} checks neither whether a piece is an original nor its condition, and this sentence does not change the order of the suggestions. Prices are those shown by the shops at the time of the search. Always check before you buy.`,
+      closeButton: "Got it",
+    },
   },
   wishlistItem: {
     back: "Wishlist",
@@ -877,6 +902,19 @@ export const en: Catalog = {
     // even with the "Price and stock alerts" switch off.
     priceDrop: "Price drop",
     priceDropAt: (price: string) => `Price drop · ${price}`,
+    // "Visible alerts" lot: updates at the top of your Wishlist. Each line
+    // gives the price seen, its day and its shop; the gap is with your
+    // threshold (never "sale" or a crossed-out price).
+    newsTitle: (count: number) => (count === 1 ? "1 update" : `${count} updates`),
+    newsSource: `Spotted in searches made in ${BRAND}.`,
+    newsPriceDrop: (title: string, price: string, gap: string, day: string, shop: string | null) =>
+      shop ? `${title}: ${price}, ${gap} below your threshold · price seen on ${day} at ${shop}` : `${title}: ${price}, ${gap} below your threshold · price seen on ${day}`,
+    newsRestock: (title: string, day: string, shop: string | null) =>
+      shop ? `Available again: ${title} · seen on ${day} at ${shop}` : `Available again: ${title} · seen on ${day}`,
+    newsOpenHint: "Opens this wish",
+    newsHide: "Hide",
+    newsHideLabel: "Hide updates",
+    newsTabLabel: (tab: string) => `${tab}, with updates`,
   },
   // Collections lot: wish collections, private or shown to friends.
   collections: {

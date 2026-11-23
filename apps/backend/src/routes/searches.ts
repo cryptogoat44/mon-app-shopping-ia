@@ -67,6 +67,8 @@ import { assertNoUserImage, voieCAiEnabled } from "../lib/aiSwitches.js";
 import { photoCallsLeft, startDeadline, VOIE_C_BUDGET } from "../lib/deadline.js";
 import { lightSort } from "../lib/lightSort.js";
 import { brandShopColumnReady } from "../lib/brandShopColumn.js";
+import { stockColumnReady } from "../lib/stockColumn.js";
+import { verdictColumnReady } from "../lib/verdictColumn.js";
 import { cacheKey, imageHash, purgeExpiredCache, readCache, writeCache } from "../lib/searchCache.js";
 import {
   complementAfterSaveFailure,
@@ -166,9 +168,13 @@ const INSERTED_MATCH_ROWS = z.array(z.object({ id: z.string(), merchant_url: z.s
  * mots (ordre de Google), quand les mots l'ont changé ; null sinon. */
 type LensRanks = ReadonlyMap<VisualMatch, number> | null;
 
-function toMatchRow(searchId: string, m: VisualMatch, rank: number, lensRanks: LensRanks = null) {
+/** `withStock` : la colonne in_stock (0056) est vue (lib/stockColumn.ts) ;
+ * le stock annoncé par Google n'est écrit qu'alors, et seulement quand il
+ * l'annonce (true ou false ; rien quand il ne dit rien). */
+function toMatchRow(searchId: string, m: VisualMatch, rank: number, lensRanks: LensRanks = null, withStock = false) {
   const lensRank = lensRanks?.get(m);
   return {
+    ...(withStock && typeof m.inStock === "boolean" ? { in_stock: m.inStock } : {}),
     search_id: searchId,
     rank,
     // Seulement avec 0031 et des mots qui ont changé l'ordre (lancement « boutiques ensuite »).
@@ -188,11 +194,25 @@ function toMatchRow(searchId: string, m: VisualMatch, rank: number, lensRanks: L
 /** Range les propositions et renvoie leur nombre. Une proposition que la
  * base refuse (valeur inattendue) est écartée seule, jamais les autres : on
  * reprend alors une par une, rangs renumérotés sans trou (fiabilité des
- * résultats, 2026-10-15). 0 : rien n'a pu être rangé. */
-async function insertMatches(fastify: FastifyInstance, searchId: string, matches: VisualMatch[], lensRanks: LensRanks): Promise<number> {
+ * résultats, 2026-10-15). 0 : rien n'a pu être rangé. `freshStock` : la
+ * réponse vient d'un vrai appel à Google pour cette recherche ; rejouée par
+ * le cache de 24 h (ou un appel identique en cours, peut-être d'un autre
+ * membre), son stock n'est jamais écrit — l'app dirait « au moment de la
+ * recherche » d'un stock dit jusqu'à 24 h plus tôt. */
+async function insertMatches(fastify: FastifyInstance, searchId: string, matches: VisualMatch[], lensRanks: LensRanks, freshStock: boolean): Promise<number> {
   const table = () => fastify.supabaseAdmin.from("product_matches");
-  const { error } = await table().insert(matches.map((m, index) => toMatchRow(searchId, m, index + 1, lensRanks)));
+  // Stock affiché (0056) : écrit seulement une fois la colonne vue, et seulement d'un appel frais.
+  const withStock = freshStock && matches.some((m) => typeof m.inStock === "boolean") && (await stockColumnReady(fastify));
+  let { error } = await table().insert(matches.map((m, index) => toMatchRow(searchId, m, index + 1, lensRanks, withStock)));
   if (!error) return matches.length;
+  // Refusée avec le stock malgré la sonde (colonne retirée depuis, cache du
+  // schéma) : refaite une fois sans lui, comme avant 0056 (insertion unique :
+  // rien n'a été rangé). La reprise une par une, ensuite, se fait sans lui.
+  if (withStock) {
+    fastify.log.warn({ code: error.code ?? null }, "Stock non noté : insertion refusée avec le stock, refaite sans lui");
+    ({ error } = await table().insert(matches.map((m, index) => toMatchRow(searchId, m, index + 1, lensRanks))));
+    if (!error) return matches.length;
+  }
 
   let saved = 0;
   for (const match of matches) {
@@ -211,10 +231,10 @@ async function saveMatches(
   fastify: FastifyInstance,
   searchId: string,
   matches: VisualMatch[],
-  lensRanks: LensRanks = null
+  options: { lensRanks?: LensRanks; freshStock: boolean }
 ): Promise<boolean> {
   if (matches.length === 0) return true;
-  if ((await insertMatches(fastify, searchId, matches, lensRanks)) === 0) return false;
+  if ((await insertMatches(fastify, searchId, matches, options.lensRanks ?? null, options.freshStock)) === 0) return false;
 
   // Un lien affilié par produit identifié. Pour l'instant "direct" (aucun
   // réseau d'affiliation rejoint) : le lien pointe tel quel vers le
@@ -258,8 +278,12 @@ async function saveMatches(
  * pièce, reconnue par le complément (lib/voieC.ts), porte un oui sur sa
  * ligne, seulement une fois la colonne vue (lib/brandShopColumn.ts) ; sans
  * elle, rien n'est noté et la boutique est rangée comme une boutique connue.
- * Insertion avec ce oui refusée malgré la sonde : refaite une fois sans lui
- * (la section n'est jamais perdue pour un oui). */
+ * Le verdict (0055) : dans « shopping », le palier du titre de chaque
+ * proposition (lib/voieC.ts), seulement une fois la colonne vue
+ * (lib/verdictColumn.ts) ; sans elle, rien n'est noté et aucun verdict n'est
+ * montré. Insertion avec ce oui refusée malgré la sonde, ou avec ce palier
+ * refusé pour une colonne inconnue : refaite une fois sans eux (la section
+ * n'est jamais perdue pour eux). */
 async function saveComplementRows(
   fastify: FastifyInstance,
   searchId: string,
@@ -269,19 +293,34 @@ async function saveComplementRows(
 ): Promise<number | null> {
   if (matches.length === 0) return 0;
   const brandShops = origin === "shopping" && matches.some((m) => m.brandShop === true) && (await brandShopColumnReady(fastify));
-  const insertRows = (withBrandShop: boolean) =>
+  // Le verdict (0055) : le palier de chaque proposition, seulement quand
+  // toutes en ont un (sinon aucun : le verdict ne se calcule jamais sur une
+  // partie de la section) et une fois la colonne vue (lib/verdictColumn.ts).
+  const titleTiers = origin === "shopping" && matches.every((m) => m.titleTier !== undefined) && (await verdictColumnReady(fastify));
+  const insertRows = (withBrandShop: boolean, withTitleTier: boolean) =>
     fastify.supabaseAdmin
       .from("product_matches")
       .insert(
-        matches.map((m, index) => ({ ...toMatchRow(searchId, m, afterRank + index + 1), origin, ...(withBrandShop && m.brandShop === true ? { brand_shop: true } : {}) }))
+        matches.map((m, index) => ({
+          ...toMatchRow(searchId, m, afterRank + index + 1),
+          origin,
+          ...(withBrandShop && m.brandShop === true ? { brand_shop: true } : {}),
+          ...(withTitleTier && m.titleTier !== undefined ? { title_tier: m.titleTier } : {}),
+        }))
       )
       .select("id, merchant_url");
-  let { data, error } = await insertRows(brandShops);
+  let { data, error } = await insertRows(brandShops, titleTiers);
   // Seulement un refus de la base (insertion unique : rien n'a été rangé) ;
   // jamais une réponse illisible, où les lignes sont peut-être déjà là.
-  if (brandShops && error) {
-    fastify.log.warn({ origin, code: error?.code ?? null }, "Boutique de la marque non notée : insertion refusée avec le oui, refaite sans lui");
-    ({ data, error } = await insertRows(false));
+  // Refaite UNE fois, sans le oui ni le palier (colonnes facultatives) : pour
+  // le oui, après tout refus (comme avant) ; pour le palier, seulement quand
+  // la base dit ne pas connaître une colonne (PGRST204, 42703) — un autre
+  // refus échouerait de même sans lui.
+  const columnRefused = error?.code === "PGRST204" || error?.code === "42703";
+  if (error && (brandShops || (titleTiers && columnRefused))) {
+    if (brandShops) fastify.log.warn({ origin, code: error?.code ?? null }, "Boutique de la marque non notée : insertion refusée avec le oui, refaite sans lui");
+    if (titleTiers) fastify.log.warn({ origin, code: error?.code ?? null }, "Verdict non noté : insertion refusée, refaite sans le palier");
+    ({ data, error } = await insertRows(false, false));
   }
   const inserted = INSERTED_MATCH_ROWS.safeParse(data);
   if (error || !inserted.success) {
@@ -560,7 +599,8 @@ async function writeOutcome(fastify: FastifyInstance, request: FastifyRequest, i
   }
   const affiliateUrlByMatchId = await fetchAffiliateUrls(fastify, matches.map((m) => m.id));
   // Recherche toute neuve : aucune proposition n'a encore pu être signalée.
-  return toProductSearch(search, matches, affiliateUrlByMatchId, new Map());
+  // Toutes ses propositions sont là : le verdict est calculé (lib/verdict.ts), sur une base qui a 0055.
+  return toProductSearch(search, matches, affiliateUrlByMatchId, new Map(), false, { verdict: await verdictColumnReady(fastify) });
 }
 
 /** Enregistre l'issue de l'appel et sa mesure, et renvoie la recherche
@@ -573,7 +613,8 @@ async function saveOutcome(
   outcome: SearchOutcome,
   cropPct: number
 ): Promise<{ search: ProductSearch | null; saved: boolean }> {
-  const saved = await saveMatches(fastify, id, outcome.matches);
+  // Chemin d'avant la voie C : toujours un vrai appel à Lens (aucun cache).
+  const saved = await saveMatches(fastify, id, outcome.matches, { freshStock: true });
   const measure = saved ? outcome.measure : failedColumns("save_failed", outcome.measure.call_seconds);
   const reply = { provider: IMAGE_SEARCH_PROVIDER.name, statusCode: outcome.providerStatusCode };
   // Journal racine (sans le contexte de la requête) : ni identifiant de requête, ni chemin, ni compte.
@@ -704,7 +745,7 @@ async function saveVoieCOutcome(
   outcome: SearchOutcome,
   run: { lensFromCache: boolean; complement: ComplementResult; deferred?: { lensRanks: LensRanks } }
 ): Promise<{ search: ProductSearch | null; complement: ComplementResult; lensSaved: boolean }> {
-  const saved = await saveMatches(fastify, launch.id, outcome.matches, run.deferred?.lensRanks ?? null);
+  const saved = await saveMatches(fastify, launch.id, outcome.matches, { lensRanks: run.deferred?.lensRanks ?? null, freshStock: !run.lensFromCache });
   const pending = run.deferred !== undefined && saved;
   let complement = run.complement;
   let complementSaved = 0;
@@ -919,7 +960,7 @@ async function readSearchForReply(fastify: FastifyInstance, request: FastifyRequ
   const matchIds = matches.map((m) => m.id);
   const affiliateUrlByMatchId = await fetchAffiliateUrls(fastify, matchIds);
   const feedbackByMatchId = await fetchFeedbackReasons(fastify, userId, matchIds);
-  return toProductSearch(row, matches, affiliateUrlByMatchId, feedbackByMatchId, true);
+  return toProductSearch(row, matches, affiliateUrlByMatchId, feedbackByMatchId, true, { verdict: await verdictColumnReady(fastify) });
 }
 
 // ---- Boutiques ensuite (POST /api/searches/:id/complement, 0031) ----
@@ -1624,7 +1665,9 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       keptMatchIds(fastify, "wishlist_items", userId, matchIds),
       keptMatchIds(fastify, "vault_items", userId, matchIds),
     ]);
-    const reread: ProductSearch = { ...toProductSearch(row, matches, affiliateUrlByMatchId, feedbackByMatchId, textSearchOn), wishlistMatchIds, vaultMatchIds };
+    // Le verdict (lib/verdict.ts), seulement sur une base qui a 0055.
+    const verdict = await verdictColumnReady(fastify);
+    const reread: ProductSearch = { ...toProductSearch(row, matches, affiliateUrlByMatchId, feedbackByMatchId, textSearchOn, { verdict }), wishlistMatchIds, vaultMatchIds };
 
     return reply.send(reread);
   });

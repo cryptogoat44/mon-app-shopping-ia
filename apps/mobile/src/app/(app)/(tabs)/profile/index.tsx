@@ -17,6 +17,7 @@ import { ProfileLink } from "@/components/profile-link";
 import { Avatar } from "@/components/avatar";
 import { AvatarPhotoFlow } from "@/components/avatar-photo-flow";
 import { onVaultChanged } from "@/lib/vault-changes";
+import { useWishAlertNews } from "@/lib/use-wish-alert-news";
 import { requestedProfileSegment, type ProfileSegment } from "@/lib/wishlist-link";
 import { memberListRoute } from "@/lib/member-lists";
 import { Skeleton } from "@/components/skeleton";
@@ -47,6 +48,9 @@ export default function ProfileScreen() {
   const [photoOpen, setPhotoOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  // Lot « alertes visibles » : les nouveautés des Envies (pastille de l'onglet, bandeau de la grille).
+  const news = useWishAlertNews();
+  const refreshNews = news.refresh;
 
   const load = useCallback(
     () =>
@@ -85,9 +89,10 @@ export default function ProfileScreen() {
   useFocusEffect(
     useCallback(() => {
       load();
+      refreshNews();
       // Compteurs (publications, abonnés) à jour à chaque retour sur l'écran.
       refreshProfile().catch(() => {});
-    }, [load, refreshProfile])
+    }, [load, refreshNews, refreshProfile])
   );
 
   // Lot 2 (Vault) : une pièce ajoutée ou modifiée après le retour sur le
@@ -215,12 +220,16 @@ export default function ProfileScreen() {
         >
           <Text style={[styles.segItem, segment === "lifestyle" ? styles.segItemActive : null]}>{t.profile.lifestyle}</Text>
         </Pressable>
+        {/* Lot « alertes visibles » : une pastille discrète tant qu'il reste des nouveautés non vues. */}
         <Pressable
           onPress={() => setSegment("wishlist")}
           accessibilityRole="tab"
           accessibilityState={{ selected: segment === "wishlist" }}
+          accessibilityLabel={news.hasUnseen ? t.wishAlerts.newsTabLabel(t.wishlist.title) : t.wishlist.title}
+          style={styles.segWithDot}
         >
           <Text style={[styles.segItem, segment === "wishlist" ? styles.segItemActive : null]}>{t.wishlist.title}</Text>
+          {news.hasUnseen ? <View style={styles.segDot} testID="pastille-envies" /> : null}
         </Pressable>
       </View>
 
@@ -234,7 +243,7 @@ export default function ProfileScreen() {
           ))}
         </View>
       ) : segment === "wishlist" ? (
-        <WishlistPanel />
+        <WishlistPanel news={news} />
       ) : segment === "vault" ? (
         <FlatList
           data={chunk(items, 3)}
@@ -413,6 +422,8 @@ const styles = themedStyles(() => ({
   seg: { flexDirection: "row", gap: 22, paddingHorizontal: space.lg, paddingTop: space.lg, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: color.filet },
   segItem: { fontSize: 14.5, color: color.acier, paddingBottom: 12 },
   segItemActive: { color: color.encre, fontWeight: "600" },
+  segWithDot: { flexDirection: "row", alignItems: "flex-start", gap: 4 },
+  segDot: { width: 8, height: 8, borderRadius: radius.full, backgroundColor: color.vert, marginTop: 2 },
   grid: {
     paddingHorizontal: space.lg,
     paddingTop: space.md,

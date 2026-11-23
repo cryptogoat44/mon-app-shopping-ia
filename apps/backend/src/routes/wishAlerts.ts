@@ -3,6 +3,7 @@
 // cloche de chaque envie (et son seuil) et « Plus disponible ».
 // - GET /api/alerts/status : toujours 200 ; sans 0041, tout est faux et
 //   l'app cache la cloche, les réglages et « Plus disponible » ;
+// - GET /api/alerts/news : toujours 200 ; sans 0041, aucune nouveauté ;
 // - les autres routes répondent 404 « alerts_unavailable » sans 0041.
 // La cloche et les réglages sont des réglages personnels : permis à un
 // compte suspendu, comme les autres. « Plus disponible » n'en est pas un : il
@@ -11,7 +12,7 @@
 // Journal : des codes, jamais un compte, un titre, une adresse ni une envie.
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
-import { MAX_TARGET_PRICE, WISH_ALERT_ERRORS, type UpdateWishAlertResponse, type WishAlertStatesList } from "@monapp/shared-types";
+import { MAX_TARGET_PRICE, WISH_ALERT_ERRORS, type UpdateWishAlertResponse, type WishAlertNewsList, type WishAlertStatesList } from "@monapp/shared-types";
 import { trackingKeyOf } from "../lib/alertKeys.js";
 import { searchLocaleFor } from "../lib/locale.js";
 import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
@@ -19,6 +20,7 @@ import { findOwnMatch, PRODUCT_MATCH_NOT_FOUND } from "../lib/ownMatches.js";
 import { INVALID_ID, idParamsSchema, parseInput } from "../lib/validation.js";
 import {
   ensureTracking,
+  readWishAlertNews,
   readWishAlertState,
   readWishAlertStates,
   reportSoldOut,
@@ -104,6 +106,19 @@ export default async function wishAlertsRoutes(fastify: FastifyInstance) {
       return reply.send({ items: await readWishAlertStates(fastify, request.user!.id, searchLocaleFor(request).country) } satisfies WishAlertStatesList);
     } catch (error) {
       request.log.error({ error }, "Alertes prix : cloches illisibles");
+      return reply.code(500).send(SERVER_ERROR);
+    }
+  });
+
+  // Vos nouveautés (lot « alertes visibles ») : vos alertes des 30 derniers
+  // jours encore vraies, pour le bandeau en tête de vos Envies. Une lecture
+  // seule, de vos alertes seulement ; rien n'est écrit (« vu » est gardé sur
+  // l'appareil). Sans 0041 : 200 et aucune (l'app ne montre rien).
+  fastify.get("/api/alerts/news", { preHandler: fastify.requireAuth }, async (request, reply) => {
+    try {
+      return reply.send({ items: await readWishAlertNews(fastify, request.user!.id) } satisfies WishAlertNewsList);
+    } catch (error) {
+      request.log.error({ error }, "Alertes prix : nouveautés illisibles");
       return reply.code(500).send(SERVER_ERROR);
     }
   });
