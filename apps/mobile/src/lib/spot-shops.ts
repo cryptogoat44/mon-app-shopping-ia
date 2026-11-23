@@ -49,10 +49,12 @@ export function withShops(previous: SpotResult, search: ProductSearch): SpotResu
   const shops = next.complement;
   if (previous.status !== "success" || !shops) return withoutShopsPending(previous);
   // Le verdict arrive avec les boutiques (lib/verdict.ts) : celui de la réponse, ou aucun.
-  const { verdict: _previousVerdict, ...rest } = previous;
+  // La seconde main de luxe aussi (lib/luxury-resale.ts) : celle de la réponse, ou aucune.
+  const { verdict: _previousVerdict, luxuryResale: _previousResale, ...rest } = previous;
   return {
     ...rest,
     ...(next.verdict ? { verdict: next.verdict } : {}),
+    ...(next.luxuryResale ? { luxuryResale: next.luxuryResale } : {}),
     complement: {
       shopping: shops.shopping,
       words: shops.words,

@@ -1,4 +1,4 @@
-import type { ComplementStatus, MatchFeedbackReason, MatchOrigin, OfferMark, SearchVerdict, TextSearchStatus } from "@monapp/shared-types";
+import type { ComplementStatus, LuxuryResale, MatchFeedbackReason, MatchOrigin, OfferMark, SearchVerdict, TextSearchStatus } from "@monapp/shared-types";
 import type { CapacityFailReason } from "../lib/spot-capacity";
 
 export interface Piece {
@@ -94,6 +94,10 @@ export interface SpotResult {
    * d'après les titres des boutiques (lib/verdict.ts). Absent : rien
    * d'affiché (ancien serveur, base sans 0055, boutiques attendues ou en échec). */
   verdict?: SearchVerdict;
+  /** Seconde main de luxe (lot « seconde main de luxe ») : la maison et les
+   * liens vers la recherche des sites de revente, décidés par le serveur
+   * (lib/luxury-resale.ts). Absent : aucune entrée (dans le doute, ancien serveur). */
+  luxuryResale?: LuxuryResale;
 }
 
 /** Complément des propositions de la recherche visuelle (voie C, lot c) :
