@@ -25,7 +25,7 @@ import type { FastifyBaseLogger, FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import { SEARCH_CAPACITY_ERRORS, SEARCH_MONTHLY_QUOTA_ERROR, type SearchCapacityErrorBody, type SearchCapacityLimit } from "@monapp/shared-types";
 import { env } from "../env.js";
-import { raiseAlert } from "./alerts.js";
+import { raiseAlert, type AlertLog } from "./alerts.js";
 import { parisDayStart } from "./matchFeedback.js";
 import { reducedCap, searchTierFor, type SearchTier } from "./memberQuotas.js";
 import { nextParisMonthStart } from "./searchCapacityStatus.js";
@@ -186,7 +186,9 @@ async function readQuota(fastify: FastifyInstance, log: FastifyBaseLogger, reque
   const reserve = request.step === "search" || request.step === "shopping";
   const { row, tier } = await callQuota(fastify, log, caps, request.userId, reserve, request.searchId);
   if (reserve || !row.allowed) log.info(capacityLogFields(request.step, row, caps, tier), CAPACITY_LOG_MESSAGE);
-  alertIfServiceClosed(log, row, caps, new Date(), tier);
+  const now = new Date();
+  alertIfServiceClosed(log, row, caps, now, tier);
+  alertIfNearCap(log, row, caps, searchWarnPercent(), now);
   return row;
 }
 
@@ -228,6 +230,95 @@ export function alertIfServiceClosed(log: Pick<FastifyBaseLogger, "warn">, row: 
     onceKey: day ? `plafond_recherches:day:${dayKey}` : `plafond_recherches:month:${row.next_renewal}`,
     onceMs: day ? DAY_MS : 32 * DAY_MS,
   });
+}
+
+// ---- Seuil d'avertissement (lot « compteurs quota ») ----
+// Prévenir le fondateur AVANT que Spotter ne ferme à tous : à 80 % du
+// plafond du mois (180 sur 225) et du plafond du jour (20 sur 25), d'après le
+// compteur que la base renvoie déjà. Une simple comparaison : aucun appel de
+// plus, rien de changé aux plafonds ni aux refus.
+
+/** Seuil par défaut, en pourcentage des plafonds du jour et du mois. */
+export const DEFAULT_SEARCH_WARN_PERCENT = 80;
+export const MIN_SEARCH_WARN_PERCENT = 50;
+export const MAX_SEARCH_WARN_PERCENT = 99;
+// Entier écrit simplement, deux chiffres : ni signe, ni exposant, ni décimale.
+const WARN_PERCENT = /^[1-9]\d$/;
+
+export type WarnEnvSource = Pick<typeof env, "SERPAPI_WARN_PERCENT">;
+
+/** SERPAPI_WARN_PERCENT lu avec tolérance : une valeur invalide ajoute une
+ * raison à `problems` (le nom de la variable, jamais sa valeur) et laisse 80. */
+export function readSearchWarnPercent(source: WarnEnvSource, problems: string[]): number {
+  const text = source.SERPAPI_WARN_PERCENT?.trim();
+  if (!text) return DEFAULT_SEARCH_WARN_PERCENT;
+  const value = Number(text);
+  if (WARN_PERCENT.test(text) && value >= MIN_SEARCH_WARN_PERCENT && value <= MAX_SEARCH_WARN_PERCENT) return value;
+  problems.push(`SERPAPI_WARN_PERCENT : entier de ${MIN_SEARCH_WARN_PERCENT} à ${MAX_SEARCH_WARN_PERCENT} attendu, ${DEFAULT_SEARCH_WARN_PERCENT} retenu`);
+  return DEFAULT_SEARCH_WARN_PERCENT;
+}
+
+/** Le seuil en vigueur (lu à chaque appel : quelques comparaisons). */
+export function searchWarnPercent(source: WarnEnvSource = env): number {
+  return readSearchWarnPercent(source, []);
+}
+
+/** Une ligne d'avertissement, au démarrage, si le seuil est invalide. */
+export function logSearchWarnSettings(log: AlertLog, source: WarnEnvSource = env): void {
+  const problems: string[] = [];
+  readSearchWarnPercent(source, problems);
+  if (problems.length > 0) log.warn({ problems }, "Plafond des recherches : réglage invalide ignoré");
+}
+
+/** Le nombre d'appels à partir duquel on prévient (arrondi au-dessus : 180 sur 225 à 80 %). */
+export function warnThreshold(cap: number, percent: number): number {
+  return Math.ceil((cap * percent) / 100);
+}
+
+/** Compteur du jour ou du mois au seuil (ou au-delà) : une alerte
+ * « seuil_recherches » par jour de Paris (le jour) et une par cycle mensuel
+ * (le mois). Rien sous le seuil ; rien non plus quand ce plafond-là vient de
+ * refuser (l'alerte « plafond_recherches » le dit déjà). Mesuré sur les
+ * plafonds totaux du service, sans la réserve des abonnés (0053). */
+export function alertIfNearCap(
+  log: AlertLog,
+  row: QuotaRow,
+  caps: SearchCaps,
+  percent: number,
+  now = new Date(),
+  send?: Parameters<typeof raiseAlert>[3]
+): void {
+  const monthAt = warnThreshold(caps.monthly, percent);
+  if (row.refused_by !== "month" && row.month_count >= monthAt) {
+    raiseAlert(
+      log,
+      {
+        kind: "seuil_recherches",
+        message: `Recherches du mois : ${row.month_count} sur ${caps.monthly} déjà utilisées (seuil de ${percent} %) ; à ${caps.monthly}, Spotter sera fermé à tous jusqu'au ${row.next_renewal}`,
+        tags: { plafond: "month" },
+        onceKey: `seuil_recherches:month:${row.next_renewal}`,
+        onceMs: 32 * DAY_MS,
+      },
+      now.getTime(),
+      send
+    );
+  }
+  const dayAt = warnThreshold(caps.daily, percent);
+  // Service déjà fermé par le mois : le jour n'a plus rien à annoncer.
+  if (row.refused_by !== "day" && row.refused_by !== "month" && row.day_count >= dayAt) {
+    raiseAlert(
+      log,
+      {
+        kind: "seuil_recherches",
+        message: `Recherches du jour : ${row.day_count} sur ${caps.daily} déjà utilisées (seuil de ${percent} %) ; à ${caps.daily}, Spotter sera fermé à tous jusqu'à minuit`,
+        tags: { plafond: "day" },
+        onceKey: `seuil_recherches:day:${parisDayStart(now).toISOString()}`,
+        onceMs: DAY_MS,
+      },
+      now.getTime(),
+      send
+    );
+  }
 }
 
 /** Compteur lu pour l'app (lot limites annoncées, GET /api/searches/capacity) :

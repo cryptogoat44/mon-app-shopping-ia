@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { voieCEnabled } from "../lib/aiSwitches.js";
 import { speaksV2 } from "../lib/clientLevel.js";
 import { logQuotaSettings } from "../lib/memberQuotas.js";
-import { readSearchCounts } from "../lib/searchCapacity.js";
+import { logSearchWarnSettings, readSearchCounts } from "../lib/searchCapacity.js";
 import { callsPerPhoto, capacityForOlderApp, capacityStatus } from "../lib/searchCapacityStatus.js";
 
 // Lot limites annoncées (2026-11-03) : le compteur des recherches, lu AVANT
@@ -24,6 +24,8 @@ export const CAPACITY_UNREADABLE = {
 export default async function searchCapacityRoutes(fastify: FastifyInstance) {
   // Réglages des quotas lus une fois au démarrage : une valeur invalide est ignorée, et dite ici.
   logQuotaSettings(fastify.log);
+  // Seuil d'avertissement des plafonds (SERPAPI_WARN_PERCENT), même règle.
+  logSearchWarnSettings(fastify.log);
   fastify.get(
     "/api/searches/capacity",
     {

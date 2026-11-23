@@ -47,7 +47,7 @@ Le plus simple, pour travailler sur spotto-dev-2 : `pnpm --filter backend config
 | `SERPAPI_KEY` | oui | Clé SerpApi (recherche par image). Chaque vraie recherche coûte un crédit. |
 | `SUPABASE_ANON_KEY` | pour les tests | Clé publique, utilisée par les tests seulement |
 | `PORT` | non (3000) | Port local du serveur |
-| `SERPAPI_DAILY_CAP`, `SERPAPI_MONTHLY_CAP`, `SERPAPI_RENEWAL_DAY`, `SERPAPI_USER_DAILY_CAP` | non | Plafonds des recherches (25 par jour, 225 par cycle, renouvellement le 3, 8 par personne et par jour) |
+| `SERPAPI_DAILY_CAP`, `SERPAPI_MONTHLY_CAP`, `SERPAPI_RENEWAL_DAY`, `SERPAPI_USER_DAILY_CAP`, `SERPAPI_WARN_PERCENT` | non | Plafonds des recherches (25 par jour, 225 par cycle, renouvellement le 3, 8 par personne et par jour) et seuil d'alerte (80 %) |
 | `ANTHROPIC_API_KEY` | non | IA (analyse des vidéos, voie C) ; absente, ces fonctions se coupent |
 | `VOIE_C_ENABLED`, `VOIE_C_AI_ENABLED`, `ANTHROPIC_PHOTO_ENABLED` | non | Interrupteurs de la voie C, coupés sauf valeur exacte `true` |
 | `VIDEO_LINK_ANALYSIS_ENABLED` | non (`false`) | Analyse automatique d'un lien TikTok ou Instagram, COUPÉE : seule la valeur exacte `true` l'allume. Il faut aussi les deux variables suivantes et `ANTHROPIC_API_KEY`. Un réglage invalide la laisse coupée, avec un avertissement dans le journal. |
