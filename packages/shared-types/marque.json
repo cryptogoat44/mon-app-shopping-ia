@@ -3,9 +3,9 @@
   "nom": "Spotto",
   "slugExpo": "spotto",
   "schemaLiens": "spotto",
-  "identifiantApple": "com.spottoapp.ios",
-  "groupeApple": "group.com.spottoapp.ios",
-  "identifiantExtensionPartage": "com.spottoapp.ios.share-extension",
+  "identifiantApple": "com.spottoshop.app",
+  "groupeApple": "group.com.spottoshop.app",
+  "identifiantExtensionPartage": "com.spottoshop.app.share-extension",
   "adresseSite": "https://mon-app-shopping-ia-web.onrender.com",
   "adresseServeur": "https://spotto-api.onrender.com"
 }

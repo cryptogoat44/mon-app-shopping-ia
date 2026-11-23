@@ -34,7 +34,7 @@ const BACKEND_DIR = join(ROOT, "apps/backend");
 const MOBILE_DIR = join(ROOT, "apps/mobile");
 export const API_PORT = 3000;
 export const METRO_PORT = 8081;
-export const BUNDLE_ID = "com.spottoapp.ios";
+export const BUNDLE_ID = "com.spottoshop.app";
 /** Ouvre l'app de développement sur le code servi par Metro. */
 export const LIEN_DEV_CLIENT = `exp+spotto://expo-development-client/?url=${encodeURIComponent(`http://localhost:${METRO_PORT}`)}`;
 const XCODE = "/Applications/Xcode.app/Contents/Developer";

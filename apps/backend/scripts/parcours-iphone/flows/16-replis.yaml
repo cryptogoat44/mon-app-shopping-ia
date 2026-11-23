@@ -2,7 +2,7 @@
 # (« rien… ») : message clair et « Choisir l'image moi-même » (curseur), sans
 # aucune recherche donc sans crédit. Panne de l'IA (« panne… ») : « Réessayer »
 # ou « Choisir l'image moi-même ».
-appId: com.spottoapp.ios
+appId: com.spottoshop.app
 ---
 - tapOn:
     id: "latest-query"

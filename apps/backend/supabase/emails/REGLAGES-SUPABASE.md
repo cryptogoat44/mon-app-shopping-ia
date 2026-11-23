@@ -24,7 +24,8 @@ Supabase → projet **spotto-prod** → **Authentication** → **Emails** → on
 
 - **Enable custom SMTP** doit être activé, avec un service d'envoi (Brevo, Resend, Postmark, SendGrid…). Sans lui, Supabase n'envoie qu'environ 2 e-mails par heure, et seulement aux membres de l'équipe du projet : « mot de passe oublié » ne marche pour personne d'autre.
 - **Sender email** : idéalement une adresse sur votre propre nom de domaine (une adresse Gmail envoyée par un service tiers finit souvent en courrier indésirable). **Sender name** : `Spotto`.
-- Si c'est l'essai SendGrid du 9 septembre, il s'arrête le **8 novembre** : à remplacer avant.
+- L'essai SendGrid lancé le 9 septembre s'est arrêté le **8 novembre** : il n'envoie plus rien.
+- **Décision du 23 novembre 2026 : pas de Gmail.** Brancher une adresse Gmail a été envisagé puis écarté par le fondateur. Il prendra un nom de domaine, puis un service d'envoi payant (SendGrid) avec une adresse sur ce domaine. D'ici là, aucun service d'envoi n'est branché : Supabase n'écrit qu'aux membres de l'équipe du projet, et une personne extérieure ne reçoit ni l'e-mail de confirmation ni « mot de passe oublié ». Le jour où un service est branché, la politique de confidentialité est à compléter (prestataires, transferts, durées) : demandez-le à Claude avant de l'activer.
 
 ## 3. Les réglages à contrôler
 
@@ -37,8 +38,8 @@ Supabase → projet **spotto-prod** → **Authentication** → **Emails** → on
 | idem | **Email OTP Expiration** | 3600 secondes : les e-mails et l'app annoncent « valable une heure » |
 | Authentication → **Sign In / Providers** (haut de page) | **Allow new users to sign up** | activé |
 | Authentication → **URL Configuration** | **Site URL** | l'adresse du site Spotto (celle que vous ouvrez dans le navigateur, sans `/` à la fin) : c'est là que mènent les liens de confirmation |
-| idem | **Redirect URLs** | ajouter **`https://<adresse du site>/nouveau-mot-de-passe`** et **`spotto://nouveau-mot-de-passe`** (l'app iPhone). Sans la seconde, « mot de passe oublié » sur iPhone ramène sur le site |
-| Authentication → **Rate Limits** | **Rate limit for sending emails** | au moins 30 par heure (100 pour le lancement) ; ne s'applique qu'avec le service d'envoi |
+| idem | **Redirect URLs** | ajouter **`https://<adresse du site>/nouveau-mot-de-passe`**, **`spotto://nouveau-mot-de-passe`** et **`spotto:///nouveau-mot-de-passe`** (trois barres obliques : c'est l'adresse que l'app iPhone publiée demande vraiment, `Linking.createURL("/nouveau-mot-de-passe")` ; pas de joker `spotto://**`). Sans elles, « mot de passe oublié » sur iPhone ramène sur le site |
+| Authentication → **Rate Limits** | **Rate limit for sending emails** | au moins 30 par heure (100 pour le lancement), sans dépasser ce que l'offre du service d'envoi permet ; ne s'applique qu'avec le service d'envoi |
 
 ## 4. Ce qui a changé dans l'app (rien à régler de plus)
 

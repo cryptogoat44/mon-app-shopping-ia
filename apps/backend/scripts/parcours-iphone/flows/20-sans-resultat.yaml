@@ -3,7 +3,7 @@
 # tapés → « Réessayer sans le texte » (une recherche de plus, à l'initiative de
 # la personne). SerpApi simulée : le mot « introuvable » renvoie zéro
 # proposition ; sans lui, trois.
-appId: com.spottoapp.ios
+appId: com.spottoshop.app
 ---
 - tapOn: "Ajouter une photo"
 - extendedWaitUntil:

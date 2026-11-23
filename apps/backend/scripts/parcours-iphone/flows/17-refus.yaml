@@ -2,7 +2,7 @@
 # moi-même » → curseur, sans IA ni envoi d'image ; ensuite, la question n'est
 # plus posée : « Lancer » ouvre directement le curseur. L'outil a effacé
 # l'accord avant ce parcours (premier usage).
-appId: com.spottoapp.ios
+appId: com.spottoshop.app
 ---
 - tapOn:
     id: "latest-query"
