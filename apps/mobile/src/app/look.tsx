@@ -22,6 +22,8 @@ import { fetchPublicLook, wakeServer } from "@/lib/look-public";
 import { WAKING_NOTICE_AFTER_MS } from "@/lib/root-route";
 import { SpotImage } from "@/components/spot-image";
 import { AffiliateMention } from "@/components/affiliate-mention";
+import { OfferMarkNote } from "@/components/offer-mark";
+import { PUBLIC_WEB_URL } from "@/constants/brand";
 import { ConnectingNotice } from "@/components/connecting";
 import { color, font, radius, serifFont, serifLineHeight, size, space } from "@/theme/tokens";
 import { themedStyles } from "@/theme/themed-styles";
@@ -145,7 +147,7 @@ export default function LookScreen() {
           </View>
         ) : null}
         {state.kind === "found" ? <LookContentView look={state.look} onFindMine={findMine} /> : null}
-        <LookFooter look={state.kind === "found" ? state.look : null} onDocument={(path) => router.push(path)} />
+        <LookFooter look={state.kind === "found" ? state.look : null} token={token} onDocument={(path) => router.push(path)} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -219,19 +221,20 @@ function OfferLines({ offer, searchedOn }: { offer: LookOffer; searchedOn: strin
       <Text style={styles.body}>
         {offer.shop} · {lookPriceText(offer, searchedOn, t.look, t.result.priceOnSite, locale)}
       </Text>
-      {offer.mark ? <Text style={styles.mark}>{t.result.offerMark[offer.mark]}</Text> : null}
+      {/* La mention, touchable comme sur le résultat (même feuille d'explication). */}
+      {offer.mark ? <OfferMarkNote piece={{ offerMark: offer.mark }} /> : null}
       {stock ? <Text style={styles.small}>{stock}</Text> : null}
     </View>
   );
 }
 
-function LookFooter({ look, onDocument }: { look: PublicLook | null; onDocument: (path: "/conditions" | "/confidentialite" | "/aide") => void }) {
+function LookFooter({ look, token, onDocument }: { look: PublicLook | null; token: string | null; onDocument: (path: "/conditions" | "/confidentialite" | "/aide") => void }) {
   const report = useCallback(() => {
-    const pageUrl = Platform.OS === "web" && typeof window !== "undefined" ? window.location.href : "";
-    const mailto = lookReportMailto(CONTACT_EMAIL, pageUrl, t.look);
+    // Le lien de la page, reconstruit depuis le jeton (rien d'autre de l'adresse).
+    const mailto = token ? lookReportMailto(CONTACT_EMAIL, `${PUBLIC_WEB_URL}/look?l=${token}`, t.look) : null;
     if (mailto) Linking.openURL(mailto).catch(() => onDocument("/aide"));
     else onDocument("/aide");
-  }, [onDocument]);
+  }, [onDocument, token]);
   return (
     <View style={styles.footer}>
       {look ? <Text style={styles.small}>{t.look.footer(formatLongDate(look.expiresOn, getActiveLocale()))}</Text> : null}
@@ -268,7 +271,6 @@ const styles = themedStyles(() => ({
   affirmed: { fontWeight: "600" },
   lines: { gap: 2 },
   body: { fontSize: font.secondary, color: color.encre, lineHeight: 21 },
-  mark: { fontSize: font.caption, color: color.vert },
   small: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
   sectionTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, lineHeight: serifLineHeight.body, color: color.encre, marginBottom: space.sm },
   row: { borderTopWidth: 1, borderTopColor: color.filet, paddingVertical: space.sm, gap: 2 },

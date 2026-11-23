@@ -26,6 +26,10 @@ import { verdictSentence } from "../src/lib/verdict";
 import { affiliateMentionForm } from "../src/lib/affiliate-link";
 import { ANALYTICS_EVENTS, sanitizeProps } from "../src/lib/analytics-events";
 import { __setAnalyticsTestHooks, setAnalyticsUser, track } from "../src/lib/analytics";
+import { privacyPolicy } from "../src/legal/confidentialite";
+import { privacyPolicyEn } from "../src/legal/confidentialite.en";
+import { termsOfUse } from "../src/legal/conditions";
+import { termsOfUseEn } from "../src/legal/conditions.en";
 
 // La page look (lot « page look », décisions du fondateur du 23 novembre
 // 2026), côté app : la page publique (app/look.tsx, lib/look-page.ts,
@@ -321,6 +325,35 @@ describe("textes FR et EN", () => {
     expect(en.look.goneTitle).toBe("This page is no longer available");
     expect(fr.look.footer("23 décembre 2026")).toBe("Page partagée par un membre de Spotto. Elle disparaît au plus tard le 23 décembre 2026.");
     for (const text of [fr.look.pageTitle, fr.look.findMineExplain, en.look.pageTitle]) expect(text).not.toMatch(/promotion|authentique|authentic|prix de référence/i);
+  });
+});
+
+describe("textes juridiques (FR et EN, mot pour mot, sans changer de version)", () => {
+  const text = (doc: { sections: readonly { title: string; blocks: readonly unknown[] }[] }, title: RegExp) =>
+    JSON.stringify(doc.sections.find((section) => title.test(section.title))?.blocks ?? []);
+
+  it("la politique : les données, qui voit quoi, combien de temps", () => {
+    expect(text(privacyPolicy, /^Les données que nous utilisons/)).toContain(
+      "Vos pages look : si vous partagez le look d'une pièce, la page que voit toute personne qui a le lien (nom de la pièce, boutiques, prix et stock vus le jour de la recherche, une copie de l'image faite par Spotto), sa date de création et d'expiration."
+    );
+    expect(text(privacyPolicy, /^Qui peut voir quoi/)).toContain(
+      "Une page look est visible par toute personne qui a son lien, même sans compte. Elle ne montre jamais votre photo, votre nom, vos mots ni le lien d'une vidéo. Son adresse est longue et aléatoire, impossible à deviner, et elle n'est pas proposée aux moteurs de recherche ; mais une personne qui a le lien peut le transmettre. Vous pouvez arrêter le partage à tout moment (Réglages → Vos données) ; la page disparaît alors pour tout le monde."
+    );
+    expect(text(privacyPolicy, /^Combien de temps/)).toContain("Une page look disparaît 30 jours après sa création, dès que vous arrêtez le partage, avec la recherche dont elle vient, ou avec votre compte.");
+    expect(text(privacyPolicyEn, /^The data we use/)).toContain(
+      "Your look pages: if you share the look of a piece, the page that anyone with the link sees (the piece's name, shops, prices and stock seen on the day of the search, a copy of the image made by Spotto), its creation and expiry dates."
+    );
+    expect(text(privacyPolicyEn, /^Who can see what/)).toContain(
+      "A look page can be seen by anyone who has its link, even without an account. It never shows your photo, your name, your words or a video link. Its address is long and random, impossible to guess, and it is not offered to search engines; but someone who has the link can pass it on. You can stop sharing at any time (Settings → Your data); the page then disappears for everyone."
+    );
+    expect(text(privacyPolicyEn, /^How long/)).toContain("A look page disappears 30 days after it is created, as soon as you stop sharing it, with the search it comes from, or with your account.");
+  });
+
+  it("les conditions : prix datés, pages signalées et arrêtées par la modération", () => {
+    expect(text(termsOfUse, /^Liens vers les marchands/)).toContain(
+      "Une page look montre des prix et des stocks vus dans les boutiques le jour de la recherche ; ils ont pu changer. Les pages look peuvent être signalées et arrêtées par l'équipe de modération."
+    );
+    expect(text(termsOfUseEn, /^Links to retailers/)).toContain("A look page shows prices and stock seen in the shops on the day of the search; they may have changed. Look pages can be reported and stopped by the moderation team.");
   });
 });
 
