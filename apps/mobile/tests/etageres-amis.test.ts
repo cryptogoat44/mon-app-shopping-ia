@@ -288,8 +288,10 @@ describe("textes FR / EN", () => {
 describe("« toutes vos Envies » / « toutes les pièces » : l'exception de la modération, dite partout", () => {
   const wishesFr = "sauf celles d'une collection masquée par la modération";
   const wishesEn = "except those in a collection hidden by moderation";
-  const vaultFr = "sauf une pièce dont une publication est masquée par la modération";
-  const vaultEn = "except a piece whose post is hidden by moderation";
+  // Le code (vaultPiecesInHiddenPosts) ne retire que la pièce dont la
+  // publication « achat » (posts.vault_item_id) est masquée.
+  const vaultFr = "sauf une pièce dont la publication d'achat est masquée par la modération";
+  const vaultEn = "except a piece whose purchase post is hidden by moderation";
 
   it("permis : chaque phrase qui promet tout aux amis dit l'exception, en FR et en EN", () => {
     for (const text of [fr.friendShelves.settingWishesHelp, fr.friendShelves.confirmWishesBody, fr.wishlist.privateNoteFriends]) expect(text).toContain(wishesFr);
@@ -315,6 +317,12 @@ describe("« toutes vos Envies » / « toutes les pièces » : l'exception de la
     expect(all(privacyPolicyEn)).not.toContain("your friends see all your wishes, including");
     expect(all(privacyPolicy)).not.toContain("vos amis voient chaque pièce de votre Vault, son nom");
     expect(all(privacyPolicyEn)).not.toContain("your friends see each piece in your Vault, its name");
+  });
+
+  it("refusé : l'exception du Vault ne promet plus « une publication » quelconque (seule la publication d'achat est vérifiée)", () => {
+    const vaultTexts = [fr.friendShelves.settingVaultHelp, fr.friendShelves.confirmVaultBody, all(privacyPolicy)];
+    for (const text of vaultTexts) expect(text).not.toContain("dont une publication est masquée");
+    for (const text of [en.friendShelves.settingVaultHelp, en.friendShelves.confirmVaultBody, all(privacyPolicyEn)]) expect(text).not.toContain("piece whose post is hidden");
   });
 });
 
