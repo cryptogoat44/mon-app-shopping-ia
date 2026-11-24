@@ -109,6 +109,7 @@ export function AccountSuggestions({ hiddenIds = [] }: { hiddenIds?: readonly st
           accessibilityRole="list"
           accessibilityLabel={t.forYou.suggestionsTitle}
           showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.row}
           renderItem={({ item: member }) => <SuggestionCard member={member} onOpenProfile={() => router.push({ pathname: "/profil", params: { id: member.id } })} />}
         />

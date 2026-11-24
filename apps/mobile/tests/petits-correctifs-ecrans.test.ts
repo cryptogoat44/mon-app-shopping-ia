@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { fr } from "../src/i18n/fr";
 import { en } from "../src/i18n/en";
+import { profileSearchQuery } from "../src/lib/people-search-query";
 
 // Retours du build 2 (24 novembre 2026), lot « petits correctifs d'écran » :
 // le champ « Identifier des personnes » au-dessus du clavier (et les feuilles
@@ -131,5 +132,41 @@ describe("Fil : une pastille « Rechercher un profil » à la place du lien « P
     expect("profiles" in en.feed).toBe(false);
     expect(Object.keys(en.feed).sort()).toEqual(Object.keys(fr.feed).sort());
     expect(Object.keys(en.peopleSearch).sort()).toEqual(Object.keys(fr.peopleSearch).sort());
+  });
+});
+
+describe("Recherche de profils : l'@ du pseudo et le premier toucher", () => {
+  const search = read("app/(app)/people-search.tsx");
+  const suggestions = read("components/account-suggestions.tsx");
+
+  it("permis : « @marie » cherche « marie », « marie » reste « marie »", () => {
+    expect(profileSearchQuery("@marie")).toBe("marie");
+    expect(profileSearchQuery("  @@marie ")).toBe("marie");
+    expect(profileSearchQuery("marie")).toBe("marie");
+    expect(profileSearchQuery("Marie Dupont")).toBe("Marie Dupont");
+    expect(search).toContain("const q = profileSearchQuery(text);");
+    expect(search).toContain("await searchUsers(q)");
+  });
+
+  it("refusé : un « @ » seul n'envoie rien (comme un champ vide), et le texte brut n'est plus envoyé", () => {
+    expect(profileSearchQuery("@")).toBe("");
+    expect(profileSearchQuery("  @  ")).toBe("");
+    expect(profileSearchQuery("")).toBe("");
+    expect(search).toContain("if (!q) {");
+    expect(search).not.toContain("searchUsers(text.trim())");
+    // Un « @ » seul montre les comptes à découvrir, comme un champ vide.
+    expect(search).toContain('{profileSearchQuery(query) === "" ? (');
+  });
+
+  it("permis : clavier ouvert, le premier toucher sur « Suivre » ou un profil agit (liste de l'écran et liste des suggestions)", () => {
+    expect(search).toContain('<ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">');
+    const list = suggestions.slice(suggestions.indexOf("<FlatList"), suggestions.indexOf("/>", suggestions.indexOf("renderItem")));
+    expect(list).toContain('keyboardShouldPersistTaps="handled"');
+  });
+
+  it("refusé : plus de liste qui avale le premier toucher pour fermer le clavier", () => {
+    expect(search).not.toMatch(/<ScrollView contentContainerStyle=\{styles\.content\}>/);
+    expect(search).not.toContain('keyboardShouldPersistTaps="never"');
+    expect(suggestions).not.toContain('keyboardShouldPersistTaps="never"');
   });
 });
