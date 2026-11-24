@@ -260,7 +260,7 @@ export default function ProfileScreen() {
                 >
                   <View style={styles.thumb}>
                     {item.imageUrl ? (
-                      <SpotImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} style={styles.thumbImage} fit="cover" size="small" accessibilityLabel={item.title} />
+                      <SpotImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} style={styles.thumbImage} fit="cover" size="card" accessibilityLabel={item.title} />
                     ) : (
                       <ClockIcon size={30} tint={color.encre} />
                     )}

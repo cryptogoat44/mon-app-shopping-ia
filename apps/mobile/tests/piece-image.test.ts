@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { imageAfterErrors, imageSources, twoStepSources } from "../src/lib/piece-image";
+import { imageAfterErrors, imageSources, keepHdImage, twoStepLayers, twoStepSources, type TwoStepState } from "../src/lib/piece-image";
 
 // Lot résultats lisibles : la vignette légère de Google d'abord dans une
 // petite case, l'image d'origine du marchand d'abord sur la grande carte ;
@@ -40,9 +40,12 @@ describe("carte des résultats : chargement en deux temps", () => {
     expect(twoStepSources("card", HD, "")).toBeNull();
     expect(twoStepSources("card", HD, HD)).toBeNull();
     expect(imageSources("card", null, THUMB)).toEqual([THUMB]);
-    // Les autres cases ne changent pas.
+    // La petite case ne change pas (grille des résultats : la 4G).
     expect(twoStepSources("small", HD, THUMB)).toBeNull();
-    expect(twoStepSources("large", HD, THUMB)).toBeNull();
+    // Retours du build 2 : la grande carte et les fiches aussi, en deux temps.
+    expect(twoStepSources("large", HD, THUMB)).toEqual({ thumb: THUMB, hd: HD });
+    expect(twoStepSources("large", null, THUMB)).toBeNull();
+    expect(twoStepSources("large", HD, HD)).toBeNull();
   });
 
   it("les cartes « Autres propositions » (et les compléments, mêmes cartes) passent en deux temps", () => {
@@ -51,9 +54,12 @@ describe("carte des résultats : chargement en deux temps", () => {
     expect(card).not.toContain('size="small"');
     const image = readFileSync(join(__dirname, "../src/components/spot-image.tsx"), "utf8");
     // L'originale arrivée remplace la vignette ; bloquée par le marchand, la vignette reste.
-    expect(image).toContain('onLoad={() => update({ hd: "loaded" })}');
+    expect(image).toContain('onLoad={(event) => update({ hd: "loaded", hdWidth: event.source?.width ?? null })}');
     expect(image).toContain('onError={() => update({ hd: "failed" })}');
-    expect(image).toContain('current.hd !== "loaded" && !current.thumbFailed');
+    expect(image).toContain("onLoad={(event) => update({ thumbLoaded: true, thumbWidth: event.source?.width ?? null })}");
+    expect(image).toContain("const { showThumb, showHd } = twoStepLayers(current);");
+    // Les images déjà vues restent en mémoire et sur le disque.
+    expect(image.match(/cachePolicy="memory-disk"/g)?.length).toBeGreaterThanOrEqual(3);
   });
 });
 
@@ -73,5 +79,59 @@ describe("repli en cas d'erreur", () => {
 
   it("aucune image : rien à afficher", () => {
     expect(imageAfterErrors([], 0)).toBeNull();
+  });
+});
+
+// Retours du build 2 (24 novembre 2026) : « quand je reviens dans ma wishlist
+// la qualité est très mauvaise ». La plus nette des deux images, jamais la
+// plus petite ; les grilles des Envies et du Vault en deux temps.
+const state = (patch: Partial<TwoStepState>): TwoStepState => ({ hd: "loading", hdWidth: null, thumbLoaded: false, thumbWidth: null, thumbFailed: false, ...patch });
+
+describe("la plus nette des deux images, jamais la plus petite", () => {
+  it("refusé : une « originale » plus étroite que la vignette ne la remplace pas", () => {
+    expect(keepHdImage(200, 280)).toBe(false);
+    expect(twoStepLayers(state({ hd: "loaded", hdWidth: 200, thumbLoaded: true, thumbWidth: 280 }))).toEqual({ showThumb: true, showHd: false });
+  });
+
+  it("permis : une originale aussi large ou plus large remplace la vignette", () => {
+    expect(keepHdImage(1200, 280)).toBe(true);
+    expect(keepHdImage(280, 280)).toBe(true);
+    expect(twoStepLayers(state({ hd: "loaded", hdWidth: 1200, thumbLoaded: true, thumbWidth: 280 }))).toEqual({ showThumb: false, showHd: true });
+  });
+
+  it("largeur inconnue : l'originale est gardée (jamais retirée sur un doute)", () => {
+    expect(keepHdImage(null, 280)).toBe(true);
+    expect(keepHdImage(1200, undefined)).toBe(true);
+    expect(keepHdImage(0, 0)).toBe(true);
+    expect(twoStepLayers(state({ hd: "loaded", hdWidth: null, thumbLoaded: true, thumbWidth: null }))).toEqual({ showThumb: false, showHd: true });
+  });
+
+  it("la vignette tout de suite ; elle reste sous l'originale tant qu'elle n'est pas arrivée (pour comparer)", () => {
+    expect(twoStepLayers(state({}))).toEqual({ showThumb: true, showHd: true });
+    expect(twoStepLayers(state({ hd: "loaded", hdWidth: 1200 }))).toEqual({ showThumb: true, showHd: true });
+    // Vignette en échec : l'originale seule.
+    expect(twoStepLayers(state({ hd: "loaded", hdWidth: 1200, thumbFailed: true }))).toEqual({ showThumb: false, showHd: true });
+  });
+
+  it("originale bloquée par le marchand : la vignette reste", () => {
+    expect(twoStepLayers(state({ hd: "failed", thumbLoaded: true, thumbWidth: 280 }))).toEqual({ showThumb: true, showHd: false });
+  });
+});
+
+describe("grilles des Envies et du Vault en deux temps ; la grille des résultats ne change pas", () => {
+  const src = (path: string) => readFileSync(join(__dirname, "../src", path), "utf8");
+
+  it("les vignettes des Envies et du Vault du profil : « card » (vignette, puis l'originale si plus nette)", () => {
+    const panel = src("components/wishlist-panel.tsx");
+    expect(panel).toContain('fit="cover" size="card" accessibilityLabel={item.name}');
+    expect(panel).not.toContain('size="small"');
+    const profile = src("app/(app)/(tabs)/profile/index.tsx");
+    expect(profile).toContain('fit="cover" size="card" accessibilityLabel={item.title}');
+  });
+
+  it("la fiche d'une envie : le cadre de la pièce charge en « large » (deux temps), sans taille imposée", () => {
+    const frame = src("components/product-frame.tsx");
+    expect(frame).toContain("<SpotImage");
+    expect(frame).not.toMatch(/size="(small|card)"/);
   });
 });
