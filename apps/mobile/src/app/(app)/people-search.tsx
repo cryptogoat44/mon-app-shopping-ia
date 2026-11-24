@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Keyboard, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -204,7 +204,11 @@ export default function PeopleSearchScreen() {
             key={person.id}
             person={person}
             onToggle={() => {}}
-            onOpenMenu={() => setMenuUserId(person.id)}
+            onOpenMenu={() => {
+              // Clavier ouvert, la feuille « Signaler / Bloquer » serait cachée dessous sur iPhone.
+              Keyboard.dismiss();
+              setMenuUserId(person.id);
+            }}
             onOpenProfile={() => router.push({ pathname: "/profil", params: { id: person.id } })}
           />
         ))}

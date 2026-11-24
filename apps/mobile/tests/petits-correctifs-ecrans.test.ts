@@ -169,4 +169,18 @@ describe("Recherche de profils : l'@ du pseudo et le premier toucher", () => {
     expect(search).not.toContain('keyboardShouldPersistTaps="never"');
     expect(suggestions).not.toContain('keyboardShouldPersistTaps="never"');
   });
+
+  it("permis : le « … » d'un profil ferme d'abord le clavier, puis ouvre « Signaler / Bloquer »", () => {
+    expect(search).toMatch(/import \{[^}]*\bKeyboard\b[^}]*\} from "react-native";/);
+    const handler = search.slice(search.indexOf("onOpenMenu={() => {"), search.indexOf("onOpenProfile="));
+    expect(handler).toContain("Keyboard.dismiss();");
+    expect(handler).toContain("setMenuUserId(person.id);");
+    expect(handler.indexOf("Keyboard.dismiss();")).toBeLessThan(handler.indexOf("setMenuUserId(person.id);"));
+  });
+
+  it("refusé : plus de menu ouvert sous le clavier encore levé", () => {
+    expect(search).not.toContain("onOpenMenu={() => setMenuUserId(person.id)}");
+    // La liste garde le premier toucher pour « Suivre » et les profils.
+    expect(search).toContain('keyboardShouldPersistTaps="handled"');
+  });
 });
