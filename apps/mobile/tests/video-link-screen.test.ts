@@ -141,7 +141,7 @@ describe("écran « vidéo partagée » : l'analyse d'abord, quand le serveur l'
     // (serveur momentanément muet) ; sinon openingPath décide (iPhone, lecteur possible : l'accord puis le lecteur).
     expect(screen.match(/if \(enabled\) return setStage\(\{ kind: "auto" \}\);/g)).toHaveLength(1);
     expect(screen).toContain('if (openingPath({ os: Platform.OS, offered, analysis: enabled }) === "auto") return setStage({ kind: "auto" });');
-    expect(screen).toContain("const next = afterPlayerFailure({ os: Platform.OS, analysis: analysisRef.current });");
+    expect(screen).toContain('const next = afterPlayerFailure({ os: Platform.OS, analysis: analysisRef.current, aiFailed: phaseRef.current === "failed" });');
     // Sans l'analyse, la décision d'avant (lecteur, écran de secours, site).
     expect(screen).toContain("void decide(response);");
     expect(screen).toContain("const [analysisEnabled, setAnalysisEnabled] = useState(false);");
