@@ -1,6 +1,7 @@
 import type { FriendShelvesOpen, FriendVaultPiece, FriendWish, Profile, UserProfile } from "@monapp/shared-types";
 import { getActiveLocale, t } from "../i18n";
 import { sharedItemPrice } from "./collections";
+import type { PieceImageSize } from "./piece-image";
 
 // Étagères des amis (lot « étagères des amis », migration 0058) : la logique
 // pure, sans écran (testée par tests/etageres-amis.test.ts).
@@ -73,4 +74,14 @@ export function shelfCellLabel(entry: ShelfItem): string {
   const detail =
     entry.kind === "wishes" ? sharedItemPrice(entry.item, getActiveLocale()) : (t.vaultLabels.categories[entry.item.category] ?? t.vaultLabels.categories.other);
   return detail ? `${entry.item.title}, ${detail}` : entry.item.title;
+}
+
+/** La taille d'image d'une case de la grille. Une pièce du Vault : « card »,
+ * comme la grille du Vault de son propriétaire (lot Envies et images) — la
+ * vignette de Google d'abord, puis l'image nette par-dessus quand le serveur
+ * en donne une autre. Une envie : « small » — sa vignette est déjà la copie de
+ * 480 px faite par Spotto, assez nette pour la case, sans télécharger en plus
+ * la grande copie sur la 4G. */
+export function shelfCellImageSize(kind: ShelfKind): PieceImageSize {
+  return kind === "vault" ? "card" : "small";
 }

@@ -12,6 +12,7 @@ import {
   friendShelvesSettingShown,
   needsShelfConfirmation,
   profileTabs,
+  shelfCellImageSize,
   shelfCellLabel,
   showsVault,
   showsWishes,
@@ -20,6 +21,7 @@ import {
   wishShareHint,
 } from "../src/lib/friend-shelves";
 import { collectionState, visibilityState } from "../src/lib/collections";
+import { twoStepSources } from "../src/lib/piece-image";
 import { moderationNoticeLines, systemNotificationLines } from "../src/lib/moderation-labels";
 
 // Étagères des amis (lot « étagères des amis », migration 0058) : la logique
@@ -455,5 +457,28 @@ describe("politique de confidentialité : plus de promesse absolue fausse", () =
     ]) {
       expect(enText, words).toContain(words);
     }
+  });
+});
+
+describe("la grille d'un ami : les pièces du Vault aussi nettes que dans la grille de leur propriétaire", () => {
+  const thumb = "https://encrypted-tbn0.gstatic.com/images?q=vignette";
+  const hd = "https://boutique.example/piece-1600.jpg";
+
+  it("permis : une pièce du Vault avec une image nette différente se charge en deux temps", () => {
+    expect(shelfCellImageSize("vault")).toBe("card");
+    expect(twoStepSources(shelfCellImageSize("vault"), hd, thumb)).toEqual({ thumb, hd });
+  });
+
+  it("refusé : sans image nette (repli sur la vignette), une seule image ; une envie reste en petite case", () => {
+    // La case passe `imageHdUrl ?? imageUrl` : sans image nette, les deux adresses sont la même.
+    expect(twoStepSources(shelfCellImageSize("vault"), thumb, thumb)).toBeNull();
+    expect(shelfCellImageSize("wishes")).toBe("small");
+    expect(twoStepSources(shelfCellImageSize("wishes"), hd, thumb)).toBeNull();
+  });
+
+  it("la case utilise ce choix (et non une taille fixe)", () => {
+    const grid = source("components/friend-shelf-grid.tsx");
+    expect(grid).toContain("size={shelfCellImageSize(entry.kind)}");
+    expect(grid).not.toContain('<SpotImage size="small"');
   });
 });

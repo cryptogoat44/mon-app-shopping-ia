@@ -5,7 +5,7 @@ import { getActiveLocale, t } from "@/i18n";
 import { fetchUserVault, fetchUserWishlist } from "@/lib/api";
 import { sharedItemImage, sharedItemPrice } from "@/lib/collections";
 import { loadErrorMessage } from "@/lib/load-error";
-import { shelfCellLabel, type ShelfItem, type ShelfKind } from "@/lib/friend-shelves";
+import { shelfCellImageSize, shelfCellLabel, type ShelfItem, type ShelfKind } from "@/lib/friend-shelves";
 
 export type { ShelfItem } from "@/lib/friend-shelves";
 import { ImageUnavailable } from "@/components/image-unavailable";
@@ -17,7 +17,8 @@ import { themedStyles } from "@/theme/themed-styles";
 // et le Vault d'un ami, en lecture seule, sur son profil. Ni « Garder », ni
 // cloche, ni « Envoyer » : seulement voir, et « Voir chez … » pour une envie.
 // Les images des envies sont toujours la copie faite par Spotto (jamais
-// l'adresse du marchand) ; celles du Vault, l'image que la pièce affiche.
+// l'adresse du marchand) ; celles du Vault, l'image que la pièce affiche
+// (en deux temps, comme la grille du Vault de son propriétaire).
 
 
 export interface FriendShelfState {
@@ -122,7 +123,7 @@ export function FriendShelfCell({ entry, onOpen }: { entry: ShelfItem; onOpen: (
       {thumb === null ? (
         <ImageUnavailable variant="tile" accessible={false} />
       ) : (
-        <SpotImage size="small" hdUri={hd} fallbackUri={thumb} style={styles.fill} fit="cover" recyclingKey={`${entry.kind}-${entry.item.id}`} />
+        <SpotImage size={shelfCellImageSize(entry.kind)} hdUri={hd} fallbackUri={thumb} style={styles.fill} fit="cover" recyclingKey={`${entry.kind}-${entry.item.id}`} />
       )}
     </Pressable>
   );
