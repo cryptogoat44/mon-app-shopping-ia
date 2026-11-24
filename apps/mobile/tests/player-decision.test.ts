@@ -136,4 +136,13 @@ describe("après un lecteur en échec ou refusé (retours du build 2)", () => {
     expect(afterPlayerFailure({ os: "ios", analysis: false })).toBe("screenshot");
     expect(afterPlayerFailure({ os: "web", analysis: true })).toBe("screenshot");
   });
+
+  it("refusé : l'analyse de ce lien a déjà échoué → l'écran de secours, jamais l'échec d'avant réaffiché", () => {
+    expect(afterPlayerFailure({ os: "ios", analysis: true, aiFailed: true })).toBe("screenshot");
+  });
+
+  it("permis : analyse pas encore en échec (ou version sans ce champ) → la recherche automatique", () => {
+    expect(afterPlayerFailure({ os: "ios", analysis: true, aiFailed: false })).toBe("ai");
+    expect(afterPlayerFailure({ os: "ios", analysis: true })).toBe("ai");
+  });
 });

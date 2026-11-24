@@ -56,6 +56,16 @@ describe("écran « vidéo partagée » : la vidéo d'abord sur iPhone", () => {
     expect(screen).toContain("const playerButton = withPlayer && playerBroken === null ? (");
     expect(screen).toContain("AccessibilityInfo.announceForAccessibility(playerBroken === \"snapshot_failed\"");
   });
+
+  it("refusé : lecteur en échec après un échec de l'analyse, ni l'ancien échec réaffiché ni « l'IA peut chercher » dit par VoiceOver ; permis : la phrase dite quand la question s'affiche", () => {
+    const fallbackFn = screen.slice(screen.indexOf("function fallback(reason: FallbackReason)"), screen.indexOf("async function startPlayer("));
+    expect(fallbackFn).toContain('aiFailed: phaseRef.current === "failed"');
+    expect(fallbackFn).toContain('setStage({ kind: "fallback", reason });');
+    expect(screen).toContain("phaseRef.current = auto.phase.kind;");
+    expect(screen).toContain('const playerLeadShown = playerBroken !== null && stage.kind === "auto" && auto.phase.kind === "ask";');
+    expect(screen).toContain("if (playerLeadShown && playerBroken) AccessibilityInfo.announceForAccessibility(");
+    expect(screen).not.toContain("if (playerBroken) AccessibilityInfo.announceForAccessibility(");
+  });
 });
 
 describe("champ du lien toujours visible sur l'accueil (point 6)", () => {

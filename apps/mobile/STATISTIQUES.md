@@ -125,6 +125,8 @@ vous verrez dans PostHog.
     été refusé (`reason`). `next` (nouveau) = ce qui suit : `ai` (la
     recherche automatique prend le relais) ou `screenshot` (l'écran de
     secours « Spottez cette vidéo »). Absent : une version d'avant.
+    Analyse allumée mais déjà en échec pour ce lien (par exemple la limite
+    du jour) : `screenshot`, car l'app montre alors l'écran de secours.
   - **`player_to_ai`** (nouveau) : le membre a touché « Trouver la pièce
     automatiquement » sous le lecteur. `from` = `player` ; `link_platform`
     = `tiktok` ou `instagram`. Jamais le lien, la vidéo ni l'image.

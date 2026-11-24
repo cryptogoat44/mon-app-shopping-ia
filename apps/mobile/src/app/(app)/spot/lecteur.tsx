@@ -179,6 +179,9 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
   const queryRef = useRef("");
   queryRef.current = auto.query;
   const keptQuery = cleanQuery(auto.query);
+  // L'état de l'analyse, lu par fallback() depuis un minuteur ou un message de la vue web.
+  const phaseRef = useRef(auto.phase.kind);
+  phaseRef.current = auto.phase.kind;
 
   useEffect(
     () => () => {
@@ -190,10 +193,12 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
   function fallback(reason: FallbackReason) {
     if (!alive.current) return;
     // App iPhone, analyse allumée : la recherche automatique ; sinon l'écran de secours, comme avant.
-    const next = afterPlayerFailure({ os: Platform.OS, analysis: analysisRef.current });
+    // Analyse déjà en échec (limite du jour, vidéo privée…) : l'écran de secours, qui dit pourquoi.
+    const next = afterPlayerFailure({ os: Platform.OS, analysis: analysisRef.current, aiFailed: phaseRef.current === "failed" });
     if (platform) track("player_unavailable", { platform, reason, next, link_platform: platform });
+    // Le lecteur qui vient d'échouer n'est plus reproposé, même après un retour à l'analyse.
+    if (reason !== "consent_refused") setPlayerBroken(reason);
     if (next === "ai") {
-      if (reason !== "consent_refused") setPlayerBroken(reason);
       setMessage(null);
       return setStage({ kind: "auto" });
     }
@@ -336,10 +341,12 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
   useEffect(() => {
     if (announced) AccessibilityInfo.announceForAccessibility(announced);
   }, [announced]);
-  // Lecteur en échec, l'analyse prend le relais : VoiceOver le dit (la phrase s'affiche au-dessus de la question).
+  // Lecteur en échec, l'analyse prend le relais : VoiceOver le dit, seulement quand la phrase
+  // s'affiche vraiment au-dessus de la question (jamais sur un ancien échec de l'analyse).
+  const playerLeadShown = playerBroken !== null && stage.kind === "auto" && auto.phase.kind === "ask";
   useEffect(() => {
-    if (playerBroken) AccessibilityInfo.announceForAccessibility(playerBroken === "snapshot_failed" ? t.videoLinkAuto.playerLead.snapshot : t.videoLinkAuto.playerLead.notHere);
-  }, [playerBroken]);
+    if (playerLeadShown && playerBroken) AccessibilityInfo.announceForAccessibility(playerBroken === "snapshot_failed" ? t.videoLinkAuto.playerLead.snapshot : t.videoLinkAuto.playerLead.notHere);
+  }, [playerLeadShown, playerBroken]);
 
   function markReady() {
     if (readyRef.current) return;
