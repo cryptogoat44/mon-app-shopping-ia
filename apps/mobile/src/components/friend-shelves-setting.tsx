@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pressable, Switch, Text, View } from "react-native";
+import { AccessibilityInfo, Platform, Pressable, Switch, Text, View } from "react-native";
 import { color, font, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { useAuth } from "@/lib/auth-context";
@@ -17,8 +17,9 @@ type Shelf = "wishes" | "vault";
 // à mes amis », éteints au départ. Allumer demande une confirmation, qui dit
 // clairement ce que les amis verront ; éteindre se fait d'un geste. Caché
 // tant que le serveur n'a pas les réglages (le profil n'en dit alors rien).
-// L'interrupteur bouge tout de suite ; si l'enregistrement échoue, il revient
-// et un message le dit.
+// L'interrupteur reste éteint pendant la confirmation (rien n'est montré tant
+// que le membre n'a pas dit oui) ; la confirmation est annoncée à VoiceOver.
+// Si l'enregistrement échoue, l'interrupteur revient et un message le dit.
 export function FriendShelvesSetting() {
   const { profile, refreshProfile } = useAuth();
   const { showToast } = useToast();
@@ -62,10 +63,18 @@ export function FriendShelvesSetting() {
     }
   }
 
-  function toggle(shelf: Shelf, next: boolean) {
+  function toggle(shelf: Shelf, next: boolean, confirmTitle: string, confirmBody: string) {
     if (saving) return;
-    if (needsShelfConfirmation(next)) setConfirming(shelf);
-    else void save(shelf, false);
+    // Éteindre pendant la confirmation : comme « Annuler », rien n'avait été montré.
+    if (!next && confirming === shelf && !value[shelf]) {
+      setConfirming(null);
+      return;
+    }
+    if (needsShelfConfirmation(next)) {
+      setConfirming(shelf);
+      // iOS n'annonce pas le rôle « alert » : on lit la confirmation à VoiceOver.
+      if (Platform.OS === "ios") AccessibilityInfo.announceForAccessibility(`${confirmTitle} ${confirmBody}`);
+    } else void save(shelf, false);
   }
 
   if (!friendShelvesSettingShown(profile)) return null;
@@ -77,10 +86,10 @@ export function FriendShelvesSetting() {
         <Switch
           accessibilityLabel={title}
           accessibilityHint={help}
-          // Pendant la confirmation, l'interrupteur montre déjà « allumé ».
-          value={value[shelf] || confirming === shelf}
+          // Pendant la confirmation, l'interrupteur reste à la valeur enregistrée.
+          value={value[shelf]}
           disabled={saving}
-          onValueChange={(next) => toggle(shelf, next)}
+          onValueChange={(next) => toggle(shelf, next, confirmTitle, confirmBody)}
           trackColor={{ true: color.vert, false: color.filet }}
           testID={shelf === "wishes" ? "interrupteur-envies-amis" : "interrupteur-vault-amis"}
         />
