@@ -356,6 +356,10 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Trop de demandes en ce moment. Réessayez dans un instant.": "Too many requests right now. Please try again in a moment.",
   "Lien de page look invalide.": "Invalid look page link.",
   "Le lien n'a pas pu être créé pour l'instant. Réessayez plus tard.": "The link couldn't be created right now. Please try again later.",
+  // Étagères des amis (migration 0058).
+  "Montrer ses Envies ou son Vault à ses amis n'est pas encore disponible.": "Showing your Wishlist or your Vault to your friends isn't available yet.",
+  "Trop de pages ouvertes. Réessayez dans un moment.": "Too many pages opened. Please try again in a moment.",
+  "Vous avez changé souvent ce réglage. Réessayez dans une heure.": "You've changed this setting often. Please try again in an hour.",
 };
 
 /** Message dans la langue voulue. Un message inconnu (par exemple un texte

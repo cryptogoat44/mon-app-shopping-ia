@@ -19,6 +19,8 @@ import { CameraIcon } from "@/components/icons";
 import { SpotImage } from "@/components/spot-image";
 import { SegmentedChoice } from "@/components/segmented-choice";
 import { useToast } from "@/lib/toast-context";
+import { useAuth } from "@/lib/auth-context";
+import { vaultFormNote } from "@/lib/friend-shelves";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -38,6 +40,7 @@ const SHEET_LOCKED = { gestureEnabled: false };
 export default function NewVaultItemScreen() {
   const router = useRouter();
   const { showToast } = useToast();
+  const { profile } = useAuth();
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<VaultCategory | null>(null);
@@ -126,7 +129,8 @@ export default function NewVaultItemScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
-        <Text style={styles.note}>{t.vaultForm.privateNote}</Text>
+        {/* Étagères des amis (migration 0058) : la phrase suit « Montrer mon Vault à mes amis ». */}
+        <Text style={styles.note}>{vaultFormNote(profile)}</Text>
 
         {imageUri ? (
           <>

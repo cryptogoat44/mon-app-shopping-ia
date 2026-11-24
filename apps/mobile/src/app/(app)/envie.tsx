@@ -8,6 +8,7 @@ import { PRIVACY_LEVELS, type PrivacyLevel, type WishAlertState, type WishlistIt
 import { ApiError, addVaultItemFromMatch, deleteWishlistItem, fetchWishAlert, fetchWishAlertsStatus, fetchWishlistItem, republishWish } from "@/lib/api";
 import { useToast } from "@/lib/toast-context";
 import { useAuth } from "@/lib/auth-context";
+import { wishShareHint } from "@/lib/friend-shelves";
 import { useMessagesStatus } from "@/lib/use-messages-status";
 import { useCollectionsStatus } from "@/lib/use-collections-status";
 import { useWishAlertsStatus } from "@/lib/use-wish-alerts-status";
@@ -291,7 +292,7 @@ export default function WishlistItemScreen() {
 
           <View style={styles.shareSection}>
             <Text style={styles.sectionTitle} accessibilityRole="header">{t.wishlistItem.shareTitle}</Text>
-            <Text style={styles.hint}>{t.wishlistItem.shareHint}</Text>
+            <Text style={styles.hint}>{wishShareHint(profile)}</Text>
 
             {item.sharedPost ? (
               // Déjà sur le profil : l'état réel, jamais un choix reproposé.

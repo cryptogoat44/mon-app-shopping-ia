@@ -1,7 +1,18 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { MEMBER_LIST_PAGE_SIZE, PINNED_POSTS_MAX, PRIVATE_ACCOUNT_ERROR, type MemberPage, type PublicProfile, type UserPostsPage, type UserProfile } from "@monapp/shared-types";
-import { DatabaseReadError, INVALID_CURSOR, INVALID_ID, cursorQuerySchema, parseDbRows, parseInput, userIdParamsSchema } from "../lib/validation.js";
+import {
+  MEMBER_LIST_PAGE_SIZE,
+  PINNED_POSTS_MAX,
+  PRIVATE_ACCOUNT_ERROR,
+  type FriendVaultPage,
+  type FriendWishPage,
+  type MemberPage,
+  type PublicProfile,
+  type UserPostsPage,
+  type UserProfile,
+  type VaultCategory,
+} from "@monapp/shared-types";
+import { DatabaseReadError, INVALID_CURSOR, INVALID_ID, cursorQuerySchema, parseDbRows, parseInput, userIdParamsSchema, webUrlOrNull } from "../lib/validation.js";
 import { shownPosts, visiblePrivacies } from "../lib/visibility.js";
 import { canSeeAuthorContent, readAudience, readAudienceOf } from "../lib/audience.js";
 import { followStateOf, toMemberRows } from "../lib/memberRows.js";
@@ -9,6 +20,10 @@ import { withoutSuspendedFaces } from "../lib/profileModeration.js";
 import { notInFilter, reportedIdsFor } from "../lib/reportedByViewer.js";
 import { profileExtrasShown } from "../lib/profileExtras.js";
 import { POST_ROWS, hydratePosts, type PostRow } from "./posts.js";
+import { NO_SHELVES, friendShelvesFor, vaultPiecesInHiddenPosts, type FriendShelves } from "../lib/friendShelves.js";
+import { collectionsReady, ownCopyUrl, readCopies, syncFriendCopiesQuietly, wishesInHiddenCollections } from "../lib/collections.js";
+import { fetchAffiliateUrls, isAffiliateLink } from "../lib/affiliateLinks.js";
+import { fetchHdImageUrls } from "../lib/pieceImages.js";
 
 const USER_POSTS_PAGE_SIZE = 18;
 
@@ -24,6 +39,55 @@ const STORED_PROFILE = z
 
 /** Une ligne de `follows`, lue du côté qui intéresse la liste. */
 const FOLLOW_ROWS = z.array(z.object({ follower_id: z.guid(), followee_id: z.guid(), created_at: z.string() }));
+
+// ---- Étagères des amis (migration 0058, lib/friendShelves.ts) ----
+
+/** Envies ou pièces par page, sur le profil d'un ami. */
+const SHELF_PAGE_SIZE = 24;
+/** Le curseur est un simple rang (jamais une date d'ajout). */
+const shelfQuerySchema = z.object({ cursor: z.string().regex(/^\d{1,6}$/).transform(Number).optional() });
+/** Temps laissé aux copies des images d'une page avant de répondre ; les
+ * copies continuent ensuite (elles seront là à la prochaine ouverture). */
+const SHELF_COPY_WAIT_MS = 4_000;
+
+// Ce que les amis peuvent lire d'une envie : jamais image_url (l'adresse du
+// marchand), reference (une note de la personne), ni rien des alertes.
+const FRIEND_WISH_ROWS = z.array(
+  z.object({
+    id: z.guid(),
+    title: z.string(),
+    price_min: z.union([z.string(), z.number()]).nullable(),
+    currency: z.string().nullable(),
+    merchant_name: z.string().nullable(),
+    merchant_url: z.string().nullable(),
+    product_match_id: z.guid().nullable(),
+  })
+);
+// Ce que les amis peuvent lire d'une pièce du Vault : jamais created_at,
+// verified, affiliate_conversion_id. product_match_id sert seulement à
+// retrouver l'image HD, jamais renvoyé.
+const FRIEND_VAULT_ROWS = z.array(
+  z.object({ id: z.guid(), title: z.string(), category: z.string(), image_url: z.string(), product_match_id: z.guid().nullable() })
+);
+
+/** Page vide : la même pour tout refus, et pour un ami qui n'a rien. */
+const emptyShelf = (): FriendWishPage & FriendVaultPage => ({ items: [], nextCursor: null });
+
+/** Attend `work` au plus `ms` millisecondes, sans jamais échouer. */
+async function waitAtMost(work: Promise<unknown>, ms: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([work.catch(() => undefined), new Promise((resolve) => (timer = setTimeout(resolve, ms)))]);
+  if (timer) clearTimeout(timer);
+}
+
+/** Les étagères de `ownerId` ouvertes à `viewerId` (lib/friendShelves.ts).
+ * Les Envies demandent aussi les copies des images (migration 0033) : sans
+ * elles, rien. Toute lecture impossible : DatabaseReadError. */
+async function openShelves(fastify: FastifyInstance, viewerId: string, ownerId: string): Promise<FriendShelves> {
+  const shelves = await friendShelvesFor(fastify, viewerId, ownerId);
+  if (!shelves.wishes && !shelves.vault) return NO_SHELVES;
+  return { wishes: shelves.wishes && (await collectionsReady(fastify)), vault: shelves.vault };
+}
 
 interface ProfileRow {
   id: string;
@@ -109,8 +173,9 @@ export default async function usersRoutes(fastify: FastifyInstance) {
   });
 
   // Profil d'un autre utilisateur (Lot Q, décision 6) : identité, bio et
-  // nombres d'abonnés / d'abonnements. JAMAIS le Vault ni son nombre de
-  // pièces. Un blocage, dans un sens ou dans l'autre, rend le profil
+  // nombres d'abonnés / d'abonnements. JAMAIS le nombre de pièces du Vault ;
+  // le Vault et les Envies seulement par leurs propres routes, et seulement
+  // si leur propriétaire les montre à ses amis (migration 0058, plus bas). Un blocage, dans un sens ou dans l'autre, rend le profil
   // introuvable (404, sans dire pourquoi). Lot « conformité Apple » : la bio
   // et la photo d'un compte suspendu ne sont montrées qu'à lui-même.
   // Lien en bio (migration 0049) : comme la bio, jamais celui d'un compte
@@ -174,6 +239,18 @@ export default async function usersRoutes(fastify: FastifyInstance) {
       // Rien de plus pour qui n'est pas un abonné accepté d'un compte privé (ni même un champ vide).
       ...(withLink && canSeeAuthorContent(audience) ? { linkUrl: row.link_url ?? null } : {}),
     };
+    // Étagères des amis (migration 0058) : annoncées seulement quand au moins
+    // une est ouverte à CE visiteur ; sinon, aucun champ. Lecture impossible :
+    // rien d'annoncé (jamais ouvert par défaut), le profil reste lisible.
+    if (!isMe) {
+      try {
+        const shelves = await openShelves(fastify, viewerId, targetId);
+        if (shelves.wishes || shelves.vault) profile.friendShelves = { wishes: shelves.wishes, vault: shelves.vault };
+      } catch {
+        request.log.warn("Étagères des amis : lecture impossible, aucune annoncée");
+      }
+    }
+    reply.header("Cache-Control", "no-store");
     return reply.send(profile);
   });
 
@@ -258,6 +335,133 @@ export default async function usersRoutes(fastify: FastifyInstance) {
     }
     return parsed.data;
   }
+
+  // Étagères des amis (lot « étagères des amis », migration 0058) : les Envies
+  // et le Vault d'un ami, en lecture seule, s'il a choisi de les montrer à ses
+  // amis. Pour tout autre visiteur (pas ami, simple abonné, blocage dans un
+  // sens ou dans l'autre, compte suspendu, réglage éteint, migration absente) :
+  // une page vide, exactement comme un ami qui n'a rien, sans dire pourquoi.
+  // Relu à chaque page (rien n'est gardé) ; aucune notification, aucune trace
+  // de qui a regardé. Une lecture impossible : erreur, jamais rien d'ouvert.
+  const shelfOptions = {
+    preHandler: [fastify.requireAuth, fastify.rateLimit("friendShelfRead")],
+    config: { rateLimitName: "friendShelfRead" as const },
+  };
+
+  // Ses Envies : titre, copie de l'image faite par Spotto (jamais l'adresse du
+  // marchand), prix, boutique et lien. Jamais sa note, ses alertes, le nom de
+  // ses collections, les pièces reçues ni la recherche d'origine. Les copies
+  // sont faites à la demande, quand un ami ouvre vraiment la page (jamais en
+  // masse quand le réglage est allumé) : au plus SHELF_PAGE_SIZE par page,
+  // une seule fois chacune ; une copie impossible : l'envie sans image.
+  fastify.get("/api/users/:userId/wishlist", shelfOptions, async (request, reply) => {
+    reply.header("Cache-Control", "no-store");
+    const params = parseInput(userIdParamsSchema, request.params, reply, INVALID_ID);
+    if (!params) return;
+    const pageQuery = parseInput(shelfQuerySchema, request.query, reply, INVALID_CURSOR);
+    if (!pageQuery) return;
+    const ownerId = params.userId;
+    if (!(await openShelves(fastify, request.user!.id, ownerId)).wishes) return reply.send(emptyShelf());
+
+    // Une envie rangée dans au moins une collection masquée par la modération
+    // n'est pas montrée, quel que soit le réglage : retirée de la requête
+    // elle-même, pour que le rang (le curseur) ne laisse ni trou ni doublon,
+    // et que rien ne dise qu'elle existe. Elle revient quand la modération
+    // rend la collection. Lecture impossible : erreur, jamais tout montrer.
+    const hiddenWishes = notInFilter([...(await wishesInHiddenCollections(fastify, ownerId))]);
+    const offset = pageQuery.cursor ?? 0;
+    let wishQuery = fastify.supabaseAdmin
+      .from("wishlist_items")
+      .select("id, title, price_min, currency, merchant_name, merchant_url, product_match_id")
+      .eq("user_id", ownerId);
+    if (hiddenWishes) wishQuery = wishQuery.not("id", "in", hiddenWishes);
+    const rows = parseDbRows(
+      FRIEND_WISH_ROWS,
+      await wishQuery
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(offset, offset + SHELF_PAGE_SIZE),
+      "Envies d'un ami"
+    );
+    const hasMore = rows.length > SHELF_PAGE_SIZE;
+    const pageRows = hasMore ? rows.slice(0, SHELF_PAGE_SIZE) : rows;
+    const wishIds = pageRows.map((row) => row.id);
+
+    let copies = await readCopies(fastify, ownerId, wishIds);
+    const missing = wishIds.filter((id) => !copies.has(id));
+    if (missing.length > 0) {
+      await waitAtMost(syncFriendCopiesQuietly(fastify, request.log, ownerId, missing), SHELF_COPY_WAIT_MS);
+      copies = await readCopies(fastify, ownerId, wishIds);
+    }
+    const affiliateUrls = await fetchAffiliateUrls(fastify, [...new Set(pageRows.flatMap((row) => (row.product_match_id ? [row.product_match_id] : [])))]);
+    const page: FriendWishPage = {
+      items: pageRows.map((row) => {
+        const copy = copies.get(row.id);
+        const imageUrl = copy ? ownCopyUrl(copy.image_url, ownerId) : null;
+        const imageThumbUrl = copy ? ownCopyUrl(copy.image_thumb_url, ownerId) : null;
+        const affiliateUrl = row.product_match_id ? (affiliateUrls.get(row.product_match_id) ?? null) : null;
+        return {
+          id: row.id,
+          title: row.title,
+          // Les deux tailles ou aucune : jamais une image à moitié.
+          imageUrl: imageUrl && imageThumbUrl ? imageUrl : null,
+          imageThumbUrl: imageUrl && imageThumbUrl ? imageThumbUrl : null,
+          merchantName: row.merchant_name,
+          merchantUrl: webUrlOrNull(affiliateUrl ?? row.merchant_url),
+          isAffiliate: isAffiliateLink(affiliateUrl, row.merchant_url),
+          priceMin: row.price_min === null ? null : Number(row.price_min),
+          currency: row.currency,
+        };
+      }),
+      nextCursor: hasMore ? String(offset + SHELF_PAGE_SIZE) : null,
+    };
+    return reply.send(page);
+  });
+
+  // Son Vault : nom, catégorie et l'image que la pièce affiche (sa propre
+  // photo, ou l'image du marchand chargée depuis le site du marchand), comme
+  // une publication « achat ». Jamais la date d'ajout, « achat vérifié », la
+  // recherche d'origine ni le nombre de pièces.
+  fastify.get("/api/users/:userId/vault", shelfOptions, async (request, reply) => {
+    reply.header("Cache-Control", "no-store");
+    const params = parseInput(userIdParamsSchema, request.params, reply, INVALID_ID);
+    if (!params) return;
+    const pageQuery = parseInput(shelfQuerySchema, request.query, reply, INVALID_CURSOR);
+    if (!pageQuery) return;
+    const ownerId = params.userId;
+    if (!(await openShelves(fastify, request.user!.id, ownerId)).vault) return reply.send(emptyShelf());
+
+    // Une pièce qu'une publication « achat » de son propriétaire, masquée par
+    // la modération, montre : pas sur l'étagère tant qu'elle reste masquée
+    // (retirée de la requête : le rang reste juste). Lecture impossible :
+    // erreur, jamais tout montrer.
+    const hiddenPieces = notInFilter(await vaultPiecesInHiddenPosts(fastify, ownerId));
+    const offset = pageQuery.cursor ?? 0;
+    let vaultQuery = fastify.supabaseAdmin.from("vault_items").select("id, title, category, image_url, product_match_id").eq("user_id", ownerId);
+    if (hiddenPieces) vaultQuery = vaultQuery.not("id", "in", hiddenPieces);
+    const rows = parseDbRows(
+      FRIEND_VAULT_ROWS,
+      await vaultQuery
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(offset, offset + SHELF_PAGE_SIZE),
+      "Vault d'un ami"
+    );
+    const hasMore = rows.length > SHELF_PAGE_SIZE;
+    const pageRows = hasMore ? rows.slice(0, SHELF_PAGE_SIZE) : rows;
+    const hdUrls = await fetchHdImageUrls(fastify, pageRows);
+    const page: FriendVaultPage = {
+      items: pageRows.map((row, index) => ({
+        id: row.id,
+        title: row.title,
+        category: row.category as VaultCategory,
+        imageUrl: webUrlOrNull(row.image_url),
+        imageHdUrl: webUrlOrNull(hdUrls[index] ?? null),
+      })),
+      nextCursor: hasMore ? String(offset + SHELF_PAGE_SIZE) : null,
+    };
+    return reply.send(page);
+  });
 
   // Listes des abonnés et des abonnements d'un membre (lot « vie sociale »,
   // sans migration), les plus récents d'abord, 30 lignes lues par page.

@@ -1030,6 +1030,8 @@ export const en: Catalog = {
     // Build 2 feedback (compact Wishlist): the "…" button at the end of the chips, for the chosen collection.
     ownOptionsLabel: (name: string) => `Options for the collection ${name}`,
     ownOptionsPosts: "Posts filed here",
+    // Friends' shelves: private collection while "Show my Wishlist to my friends" is on.
+    privateStateFriendsSeeWishes: "Private name: your friends can see its wishes (setting “Show my Wishlist to my friends”), not its name.",
   },
   received: {
     title: "Received pieces",
@@ -1106,6 +1108,7 @@ export const en: Catalog = {
     notFound: "This profile isn't available.",
     loadError: "Unable to load this profile.",
     more: "Report or block",
+    noPostsNamed: (name: string) => `${name} hasn't posted anything yet.`,
   },
   wishlist: {
     title: "Wishlist",
@@ -1144,6 +1147,7 @@ export const en: Catalog = {
     searchClose: "Close search",
     sortShort: { recent: "Recent", price_asc: "Price ↑", price_desc: "Price ↓" },
     sortButtonLabel: (current: string) => `Sort, currently: ${current}`,
+    privateNoteFriends: "Your friends can see your wishes (setting “Show my Wishlist to my friends”). You can turn it off in Settings.",
   },
   profile: {
     vault: "Vault",
@@ -1986,5 +1990,33 @@ export const en: Catalog = {
     moderationField: "Stop a look page (paste the link)",
     moderationStopped: "Page stopped.",
     tapToShare: "The link is ready: tap “Share the look” to send it.",
+  },
+  friendShelves: {
+    settingWishesTitle: "Show my Wishlist to my friends",
+    settingWishesHelp: `Off at first. When on, your friends (members you follow who follow you back) see your wishes, including those in your private collections, without the names of those collections: title, image (a copy made by ${BRAND}), price and the link to the shop. Never your notes, your alerts, the pieces you received or your saved posts.`,
+    settingVaultTitle: "Show my Vault to my friends",
+    settingVaultHelp: "Off at first. When on, your friends see the pieces in your Vault: name, category and photo, including photos you took yourself. Never the date you added them or the “Verified purchase” mark.",
+    confirmWishesTitle: "Show your Wishlist to your friends?",
+    confirmWishesBody: "Your friends will see your wishes, even those in your private collections. No one else will. You can turn this setting off at any time.",
+    confirmVaultTitle: "Show your Vault to your friends?",
+    confirmVaultBody: "Your friends will see the pieces in your Vault, with their photos, including photos you took yourself: check what they show. No one else will. You can make it private again at any time.",
+    confirmCta: "Show to my friends",
+    cancel: "Cancel",
+    wishesShown: "Your friends can now see your Wishlist.",
+    vaultShown: "Your friends can now see your Vault.",
+    wishesPrivateAgain: "Your Wishlist is private again.",
+    wishesPrivateAgainCollections: "Your friends now only see the wishes in a collection shown to your friends.",
+    vaultPrivateAgain: "Your Vault is private again.",
+    settingError: "The setting could not be saved. Please try again.",
+    tabsLabel: "What you can see",
+    shownBecauseFriends: "Visible because you are friends.",
+    emptyWishes: "No wishes yet.",
+    emptyVault: "No pieces yet.",
+    loadError: "These pieces could not be loaded.",
+    loadMoreError: "The next ones could not be loaded.",
+    close: "Close",
+    vaultItemNote: "Your Vault is shown to your friends (Settings); no one else can see it. To show this piece to others, share it in your feed.",
+    vaultFormNote: "Your Vault is shown to your friends: they will see this piece (Settings, “Show my Vault to my friends”).",
+    wishShareHint: "Your friends can see your Wishlist (Settings). Nothing else is shared without your consent.",
   },
 };

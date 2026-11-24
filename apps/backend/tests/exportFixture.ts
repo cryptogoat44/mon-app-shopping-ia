@@ -75,6 +75,9 @@ export function fixture(): ExportData {
       link_url: "https://camille.example.com/lookbook?saison=hiver",
       // Fil « Pour vous » (migration 0050) : réglage éteint.
       discoverable: false,
+      // Étagères des amis (migration 0058) : Envies montrées, Vault non.
+      wishes_shown_to_friends: true,
+      vault_shown_to_friends: false,
     },
     productSearches: [
       {

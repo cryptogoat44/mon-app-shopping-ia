@@ -9,22 +9,28 @@ import { DatabaseReadError } from "./validation.js";
 // profil d'un autre utilisateur.
 
 /** Un blocage dans un sens OU dans l'autre rend les deux comptes
- * mutuellement invisibles. */
+ * mutuellement invisibles. Lot « étagères des amis » (contre-lecture) : une
+ * lecture impossible relève DatabaseReadError, jamais « pas de blocage » par
+ * défaut (avant, une panne de la base valait « pas bloqué »). */
 export async function isBlockedEitherWay(fastify: FastifyInstance, userA: string, userB: string): Promise<boolean> {
-  const [{ data: aBlocksB }, { data: bBlocksA }] = await Promise.all([
+  const [aBlocksB, bBlocksA] = await Promise.all([
     fastify.supabaseAdmin.from("blocks").select("blocker_id").eq("blocker_id", userA).eq("blocked_id", userB).maybeSingle(),
     fastify.supabaseAdmin.from("blocks").select("blocker_id").eq("blocker_id", userB).eq("blocked_id", userA).maybeSingle(),
   ]);
-  return Boolean(aBlocksB || bBlocksA);
+  if (aBlocksB.error || bBlocksA.error) throw new DatabaseReadError("Lecture des blocages impossible");
+  return Boolean(aBlocksB.data || bBlocksA.data);
 }
 
+/** `followerId` suit-il `followeeId` ? Lecture impossible : DatabaseReadError
+ * (jamais une réponse par défaut). */
 export async function isFollowing(fastify: FastifyInstance, followerId: string, followeeId: string): Promise<boolean> {
-  const { data } = await fastify.supabaseAdmin
+  const { data, error } = await fastify.supabaseAdmin
     .from("follows")
     .select("follower_id")
     .eq("follower_id", followerId)
     .eq("followee_id", followeeId)
     .maybeSingle();
+  if (error) throw new DatabaseReadError("Lecture des abonnements impossible");
   return Boolean(data);
 }
 

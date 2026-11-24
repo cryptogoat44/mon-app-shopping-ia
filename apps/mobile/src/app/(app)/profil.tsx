@@ -22,9 +22,20 @@ import { followActionFor, followButton, followStateOf, showsPrivateShell } from 
 import { memberListRoute } from "@/lib/member-lists";
 import { themedStyles } from "@/theme/themed-styles";
 import { Avatar } from "@/components/avatar";
+import { FriendShelfCell, FriendShelfSheet, useFriendShelf, type ShelfItem } from "@/components/friend-shelf-grid";
+import { currentTab, profileTabs, type ProfileTab } from "@/lib/friend-shelves";
 
 /** Entre deux compteurs du profil. */
 const COUNT_SEPARATOR = " · ";
+
+/** Une rangée de la grille : trois publications, ou trois cases d'une étagère. */
+type GridRow = { kind: "posts"; row: Post[] } | { kind: "shelf"; row: ShelfItem[] };
+
+/** Le nom de chaque onglet : les mêmes que sur son propre profil pour les
+ * Envies et le Vault ; « Publications » pour toutes ses publications. */
+function tabLabel(tab: ProfileTab): string {
+  return tab === "wishes" ? t.wishlist.title : tab === "vault" ? t.profile.vault : t.userProfile.posts;
+}
 
 function chunk<T>(items: T[], size: number): T[][] {
   const rows: T[][] = [];
@@ -35,7 +46,10 @@ function chunk<T>(items: T[], size: number): T[][] {
 // Profil d'un autre utilisateur (Lot Q, décision 6) : identité, bio,
 // compteurs, suivre / ne plus suivre, signaler / bloquer, et ses
 // publications — chacune selon sa propre confidentialité (filtrée par le
-// serveur). JAMAIS son Vault, ni même le nombre de pièces qu'il contient.
+// serveur). Jamais le nombre de pièces de son Vault. Étagères des amis
+// (migration 0058) : ses Envies et son Vault, en lecture seule, dans des
+// onglets qui n'apparaissent que si le serveur les annonce (il les a montrés
+// à ses amis, et vous en êtes un) ; sinon, l'écran reste celui d'avant.
 // Compte privé (lot « vie sociale ») : qui n'est pas un abonné accepté ne voit
 // que nom, photo, bio et compteurs, un cadenas et une phrase ; le bouton dit
 // « Suivre », puis « Demandé » (le toucher annule la demande).
@@ -56,6 +70,15 @@ export default function UserProfileScreen() {
   const [menuOpen, setMenuOpen] = useState(false);
   // Lot messages : bouton « Message », seulement si la messagerie est disponible.
   const messages = useMessagesStatus();
+  // Étagères des amis : l'onglet choisi, et la case ouverte en grand.
+  const [tab, setTab] = useState<ProfileTab>("posts");
+  const [openEntry, setOpenEntry] = useState<ShelfItem | null>(null);
+  const tabs = profileTabs(state === "ready" ? profile?.friendShelves : null);
+  const activeTab = currentTab(tab, state === "ready" ? profile : null);
+  const refreshKey = String(profile?.isFollowing ?? "");
+  const wishesShelf = useFriendShelf(id ?? "", "wishes", Boolean(id) && activeTab === "wishes", refreshKey);
+  const vaultShelf = useFriendShelf(id ?? "", "vault", Boolean(id) && activeTab === "vault", refreshKey);
+  const shelf = activeTab === "wishes" ? wishesShelf : activeTab === "vault" ? vaultShelf : null;
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -240,23 +263,71 @@ export default function UserProfileScreen() {
         <>
           {/* Lot collections : ses collections montrées aux amis (rien pour les autres). */}
           <FriendCollections userId={profile.id} displayName={profile.displayName} refreshKey={String(profile.isFollowing)} />
-          <Text style={styles.sectionTitle}>{t.userProfile.posts}</Text>
+          {tabs.length > 1 ? (
+            <>
+              {/* Étagères des amis : les onglets, seulement ceux que le serveur annonce. */}
+              <View style={styles.tabs} accessibilityRole="tablist" accessibilityLabel={t.friendShelves.tabsLabel} testID="onglets-ami">
+                {tabs.map((name) => (
+                  <Pressable
+                    key={name}
+                    style={styles.tab}
+                    onPress={() => setTab(name)}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: activeTab === name }}
+                    testID={`onglet-ami-${name}`}
+                  >
+                    <Text style={[styles.tabLabel, activeTab === name ? styles.tabLabelActive : null]}>{tabLabel(name)}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              {activeTab === "posts" ? null : <Text style={styles.shelfHint}>{t.friendShelves.shownBecauseFriends}</Text>}
+            </>
+          ) : (
+            <Text style={styles.sectionTitle}>{t.userProfile.posts}</Text>
+          )}
         </>
       )}
     </View>
   );
 
+  // Une étagère : chargement, erreur (hors ligne compris, avec « Réessayer ») ou vide.
+  const shelfEmpty = !shelf ? null : shelf.status === "error" ? (
+    <View style={styles.shelfState}>
+      <ErrorMessage style={styles.message}>{shelf.error ?? t.friendShelves.loadError}</ErrorMessage>
+      <Pressable onPress={shelf.reload} style={styles.retry} accessibilityRole="button">
+        <Text style={styles.retryLabel}>{t.common.retry}</Text>
+      </Pressable>
+    </View>
+  ) : shelf.status === "ready" ? (
+    <Text style={styles.empty}>{activeTab === "wishes" ? t.friendShelves.emptyWishes : t.friendShelves.emptyVault}</Text>
+  ) : (
+    <ActivityIndicator color={color.encre} style={styles.footer} />
+  );
+
   return (
     <SafeAreaView style={styles.screen}>
       {nav}
-      <FlatList
-        data={isShell ? [] : chunk(posts ?? [], 3)}
-        keyExtractor={(row) => row.map((post) => post.id).join("-")}
+      <FlatList<GridRow>
+        data={
+          isShell
+            ? []
+            : shelf
+              ? chunk(shelf.items, 3).map((row) => ({ kind: "shelf" as const, row }))
+              : chunk(posts ?? [], 3).map((row) => ({ kind: "posts" as const, row }))
+        }
+        keyExtractor={(item) => (item.kind === "posts" ? item.row.map((post) => post.id).join("-") : item.row.map((entry) => `${entry.kind}-${entry.item.id}`).join("-"))}
         contentContainerStyle={styles.content}
         ListHeaderComponent={header}
-        renderItem={({ item: row }) => (
+        renderItem={({ item }) =>
+          item.kind === "shelf" ? (
+            <View style={styles.gridRow}>
+              {item.row.map((entry) => (
+                <FriendShelfCell key={`${entry.kind}-${entry.item.id}`} entry={entry} onOpen={setOpenEntry} />
+              ))}
+            </View>
+          ) : (
           <View style={styles.gridRow}>
-            {row.map((post) => (
+            {item.row.map((post) => (
               <Pressable
                 key={post.id}
                 style={styles.cell}
@@ -295,12 +366,29 @@ export default function UserProfileScreen() {
               </Pressable>
             ))}
           </View>
-        )}
-        ListEmptyComponent={isShell ? null : <Text style={styles.empty}>{t.userProfile.noPosts}</Text>}
-        onEndReached={isShell ? undefined : handleLoadMore}
+          )
+        }
+        ListEmptyComponent={isShell ? null : shelf ? shelfEmpty : <Text style={styles.empty}>{t.userProfile.noPostsNamed(profile.displayName)}</Text>}
+        onEndReached={isShell ? undefined : shelf ? shelf.loadMore : handleLoadMore}
         onEndReachedThreshold={0.4}
-        ListFooterComponent={loadingMore ? <ActivityIndicator color={color.encre} style={styles.footer} /> : null}
+        ListFooterComponent={
+          shelf ? (
+            shelf.loadingMore ? (
+              <ActivityIndicator color={color.encre} style={styles.footer} />
+            ) : shelf.moreError ? (
+              <View style={styles.shelfState}>
+                <ErrorMessage style={styles.message}>{shelf.moreError}</ErrorMessage>
+                <Pressable onPress={shelf.retryMore} style={styles.retry} accessibilityRole="button">
+                  <Text style={styles.retryLabel}>{t.common.retry}</Text>
+                </Pressable>
+              </View>
+            ) : null
+          ) : loadingMore ? (
+            <ActivityIndicator color={color.encre} style={styles.footer} />
+          ) : null
+        }
       />
+      <FriendShelfSheet entry={openEntry} onClose={() => setOpenEntry(null)} />
       <ReportBlockMenu
         visible={menuOpen}
         onClose={() => setMenuOpen(false)}
@@ -344,5 +432,11 @@ const styles = themedStyles(() => ({
   photosMark: { position: "absolute", top: 6, right: 6, width: 22, height: 22, borderRadius: radius.full, backgroundColor: color.voileImage, alignItems: "center", justifyContent: "center" },
   pinMark: { position: "absolute", top: 6, left: 6, width: 22, height: 22, borderRadius: radius.full, backgroundColor: color.voileImage, alignItems: "center", justifyContent: "center" },
   empty: { fontSize: font.secondary, color: color.acier, textAlign: "center", marginTop: space.md },
+  tabs: { alignSelf: "stretch", flexDirection: "row", flexWrap: "wrap", gap: space.lg, marginTop: space.xl, borderBottomWidth: 1, borderBottomColor: color.filet },
+  tab: { minHeight: 44, justifyContent: "center" },
+  tabLabel: { fontSize: font.body, color: color.acier },
+  tabLabelActive: { color: color.encre, fontWeight: "600" },
+  shelfHint: { alignSelf: "flex-start", fontSize: font.caption, color: color.acier, marginTop: space.sm },
+  shelfState: { alignItems: "center", marginTop: space.md },
   footer: { paddingVertical: space.lg },
 }));

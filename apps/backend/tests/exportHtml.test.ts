@@ -1267,3 +1267,29 @@ describe("export lisible : notifications d'activité de chaque appareil (migrati
     expect(onUnknownColumn).not.toHaveBeenCalled();
   });
 });
+
+describe("export lisible : étagères des amis (migration 0058)", () => {
+  const ws = (text: string) => spaces(text).replace(/\s+/g, " ");
+
+  it("le profil dit oui ou non pour chacun, en français et en anglais ; rien sans les colonnes", () => {
+    const base = fixture();
+    const fr = ws(visibleText(sectionHtml(render({ timeZone: "UTC" }), "account")));
+    expect(fr).toContain("Envies montrées à vos amis Oui");
+    expect(fr).toContain("Vault montré à vos amis Non");
+    const en = ws(visibleText(sectionHtml(render({ locale: "en" }), "account")));
+    expect(en).toContain("Wishlist shown to your friends Yes");
+    expect(en).toContain("Vault shown to your friends No");
+    const { wishes_shown_to_friends: _wishes, vault_shown_to_friends: _vault, ...withoutColumns } = base.profile!;
+    const without = visibleText(sectionHtml(render({}, { ...base, profile: withoutColumns }), "account"));
+    expect(without).not.toContain("montrées à vos amis");
+    expect(without).not.toContain("montré à vos amis");
+  });
+
+  it("les deux colonnes ont leur libellé : aucune « colonne inconnue »", () => {
+    expect(EXPORT_COLUMNS.profile.wishes_shown_to_friends.label).toEqual({ fr: "Envies montrées à vos amis", en: "Wishlist shown to your friends" });
+    expect(EXPORT_COLUMNS.profile.vault_shown_to_friends.label).toEqual({ fr: "Vault montré à vos amis", en: "Vault shown to your friends" });
+    const onUnknownColumn = vi.fn();
+    render({ onUnknownColumn });
+    expect(onUnknownColumn).not.toHaveBeenCalled();
+  });
+});
