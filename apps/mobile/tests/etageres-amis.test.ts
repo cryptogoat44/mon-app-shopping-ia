@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { setActiveLocale, t } from "../src/i18n";
 import { fr } from "../src/i18n/fr";
 import { en } from "../src/i18n/en";
+import { APP_NAME_DISPLAY as BRAND } from "../src/constants/brand";
 import { privacyPolicy } from "../src/legal/confidentialite";
 import { privacyPolicyEn } from "../src/legal/confidentialite.en";
 import {
@@ -193,14 +194,17 @@ describe("les phrases « privé » : exactes dans les deux cas", () => {
     expect(visibilityState("private", false)).toBe("Privée : vous seul la voyez.");
     // Allumé : refusé « vous seul » ; les amis voient ses envies, pas son nom.
     expect(visibilityState("private", true)).not.toContain("vous seul");
-    expect(visibilityState("private", true)).toBe("Nom privé : vos amis voient ses envies, sauf celles aussi rangées dans une collection masquée par la modération, mais pas son nom (réglage « Montrer mes Envies à mes amis »).");
-    // Refusé : la promesse de « ses envies » sans l'exception des collections masquées.
-    expect(visibilityState("private", true)).not.toContain("voient ses envies (réglage");
+    expect(visibilityState("private", true)).toBe("Nom privé : vos amis peuvent voir ses envies (réglage « Montrer mes Envies à mes amis »), pas son nom.");
+    // Refusé : l'exception de la modération dans cette phrase (fausse si l'envie
+    // est aussi dans une autre collection « Mes amis » : la politique la dit).
+    expect(visibilityState("private", true)).not.toContain("masquée par la modération");
+    expect(visibilityState("private", true)).not.toContain("sauf");
     expect(collectionState({ visibility: "private" }, true)).toBe(fr.collections.privateStateFriendsSeeWishes);
     expect(visibilityState("friends", true)).toBe(fr.collections.friendsState);
     setActiveLocale("en");
-    expect(visibilityState("private", true)).toBe("Private name: your friends see its wishes, except those also in a collection hidden by moderation, but not its name (setting “Show my Wishlist to my friends”).");
-    expect(visibilityState("private", true)).not.toContain("see its wishes (setting");
+    expect(visibilityState("private", true)).toBe("Private name: your friends can see its wishes (setting “Show my Wishlist to my friends”), not its name.");
+    expect(visibilityState("private", true)).not.toContain("hidden by moderation");
+    expect(visibilityState("private", true)).not.toContain("except");
     expect(visibilityState("private", false)).toBe(en.collections.privateState);
     expect(source("components/collection-options-sheet.tsx")).toContain("{collectionState(collection, showsWishes(profile))}");
     expect(source("components/collection-settings-sheet.tsx")).toContain("{collectionState(current, showsWishes(profile))}");
@@ -288,54 +292,117 @@ describe("textes FR / EN", () => {
   });
 });
 
-describe("« toutes vos Envies » / « toutes les pièces » : l'exception de la modération, dite partout", () => {
-  const wishesFr = "sauf celles d'une collection masquée par la modération";
-  const wishesEn = "except those in a collection hidden by moderation";
-  // Le code (vaultPiecesInHiddenPosts) ne retire que la pièce dont la
-  // publication « achat » (posts.vault_item_id) est masquée.
-  const vaultFr = "sauf une pièce dont la publication d'achat est masquée par la modération";
-  const vaultEn = "except a piece whose purchase post is hidden by moderation";
+describe("qui voit vos Envies et votre Vault : des phrases courtes qui préviennent, la politique qui dit l'exception une fois", () => {
+  // Règle : une phrase de l'app qui PRÉVIENT ne sous-estime jamais qui voit et
+  // ne dit ni « toutes » ni « chaque » ; elle ne liste pas les exceptions de la
+  // modération (elles ne font que retirer des choses de ce que voient les amis).
+  // La politique les dit une fois, exactement : le serveur (routes/users.ts)
+  // retire de l'étagère une envie rangée dans une collection masquée
+  // (wishesInHiddenCollections) et une pièce dont la publication « achat »
+  // (posts.vault_item_id) est masquée (vaultPiecesInHiddenPosts).
+  const inApp = () => [
+    fr.friendShelves.settingWishesHelp,
+    fr.friendShelves.settingVaultHelp,
+    fr.friendShelves.confirmWishesBody,
+    fr.friendShelves.confirmVaultBody,
+    fr.wishlist.privateNoteFriends,
+    fr.collections.privateStateFriendsSeeWishes,
+  ];
+  const inAppEn = () => [
+    en.friendShelves.settingWishesHelp,
+    en.friendShelves.settingVaultHelp,
+    en.friendShelves.confirmWishesBody,
+    en.friendShelves.confirmVaultBody,
+    en.wishlist.privateNoteFriends,
+    en.collections.privateStateFriendsSeeWishes,
+  ];
 
-  it("permis : chaque phrase qui promet tout aux amis dit l'exception, en FR et en EN", () => {
-    for (const text of [fr.friendShelves.settingWishesHelp, fr.friendShelves.confirmWishesBody, fr.wishlist.privateNoteFriends]) expect(text).toContain(wishesFr);
-    for (const text of [en.friendShelves.settingWishesHelp, en.friendShelves.confirmWishesBody, en.wishlist.privateNoteFriends]) expect(text).toContain(wishesEn);
-    for (const text of [fr.friendShelves.settingVaultHelp, fr.friendShelves.confirmVaultBody]) expect(text).toContain(vaultFr);
-    for (const text of [en.friendShelves.settingVaultHelp, en.friendShelves.confirmVaultBody]) expect(text).toContain(vaultEn);
+  it("permis : les phrases de l'app, mot pour mot, avec leurs avertissements gardés", () => {
+    expect(fr.friendShelves.settingWishesHelp).toBe(
+      `Éteint au départ. Allumé, vos amis (les membres que vous suivez et qui vous suivent) voient vos Envies, y compris celles rangées dans vos collections privées, sans le nom de ces collections : titre, image (une copie faite par ${BRAND}), prix et lien vers la boutique. Jamais vos notes, vos alertes, les pièces reçues ni vos publications enregistrées.`
+    );
+    expect(fr.friendShelves.settingVaultHelp).toBe(
+      "Éteint au départ. Allumé, vos amis voient les pièces de votre Vault : nom, catégorie et photo, y compris les photos que vous avez prises vous-même. Jamais la date d'ajout ni la mention « Achat vérifié »."
+    );
+    expect(fr.friendShelves.confirmWishesBody).toBe("Vos amis verront vos Envies, même celles de vos collections privées. Personne d'autre. Vous pourrez éteindre ce réglage à tout moment.");
+    expect(fr.friendShelves.confirmVaultBody).toBe(
+      "Vos amis verront les pièces de votre Vault, avec leurs photos, y compris celles que vous avez prises vous-même : vérifiez ce qu'elles montrent. Personne d'autre. Vous pourrez le rendre privé à tout moment."
+    );
+    expect(fr.wishlist.privateNoteFriends).toBe("Vos amis voient vos Envies (réglage « Montrer mes Envies à mes amis »). Vous pouvez l'éteindre dans Réglages.");
+    expect(en.friendShelves.settingWishesHelp).toBe(
+      `Off at first. When on, your friends (members you follow who follow you back) see your wishes, including those in your private collections, without the names of those collections: title, image (a copy made by ${BRAND}), price and the link to the shop. Never your notes, your alerts, the pieces you received or your saved posts.`
+    );
+    expect(en.friendShelves.settingVaultHelp).toBe(
+      "Off at first. When on, your friends see the pieces in your Vault: name, category and photo, including photos you took yourself. Never the date you added them or the “Verified purchase” mark."
+    );
+    expect(en.friendShelves.confirmWishesBody).toBe("Your friends will see your wishes, even those in your private collections. No one else will. You can turn this setting off at any time.");
+    expect(en.friendShelves.confirmVaultBody).toBe(
+      "Your friends will see the pieces in your Vault, with their photos, including photos you took yourself: check what they show. No one else will. You can make it private again at any time."
+    );
+    expect(en.wishlist.privateNoteFriends).toBe("Your friends can see your wishes (setting “Show my Wishlist to my friends”). You can turn it off in Settings.");
+  });
+
+  it("refusé : ni « toutes » / « chaque », ni exception de la modération dans les phrases de l'app", () => {
+    for (const text of inApp()) {
+      expect(text).not.toMatch(/(?<!\p{L})(toutes|tous|chaque|toujours)(?!\p{L})/iu);
+      expect(text).not.toContain("modération");
+      expect(text).not.toContain("sauf");
+    }
+    for (const text of inAppEn()) {
+      expect(text).not.toMatch(/\b(all|every|each|always)\b/i);
+      expect(text).not.toContain("moderation");
+      expect(text).not.toContain("except");
+    }
+  });
+
+  it("refusé : « rendre privées » vos Envies dans Réglages (le réglage éteint, une Envie d'une collection « Mes amis » reste visible)", () => {
+    expect(fr.wishlist.privateNoteFriends).not.toContain("rendre privées");
+    expect(fr.friendShelves.confirmWishesBody).not.toContain("rendre privées");
+    expect(en.wishlist.privateNoteFriends).not.toContain("make them private");
+    expect(en.friendShelves.confirmWishesBody).not.toContain("make them private");
+  });
+
+  it("permis : la politique décrit les deux étagères sans « toutes » / « chaque » et dit l'exception une fois, sur ce que font les réglages", () => {
     const frText = all(privacyPolicy);
     const enText = all(privacyPolicyEn);
-    expect(frText).toContain(`vos amis voient toutes vos Envies (${wishesFr}), y compris celles de vos collections privées`);
-    expect(frText).toContain(`vos amis voient chaque pièce de votre Vault (${vaultFr}), son nom`);
-    expect(enText).toContain(`your friends see all your wishes (${wishesEn}), including those in your private collections`);
-    expect(enText).toContain(`your friends see each piece in your Vault (${vaultEn}), its name`);
+    expect(frText).toContain("Réglage des Envies allumé : vos amis voient vos Envies, y compris celles de vos collections privées, sans le nom de ces collections");
+    expect(frText).toContain("Réglage du Vault allumé : vos amis voient les pièces de votre Vault, leur nom, leur catégorie et leur photo telle qu'elle est enregistrée");
+    const frException =
+      "Par exception, ces réglages ne montrent pas une Envie rangée dans une collection masquée par la modération, ni une pièce du Vault dont la publication d'achat est masquée par la modération.";
+    expect(frText.split(frException)).toHaveLength(2);
+    expect(enText).toContain("With the Wishlist setting on, your friends see your wishes, including those in your private collections, without the names of those collections");
+    expect(enText).toContain("With the Vault setting on, your friends see the pieces in your Vault, their name, their category and their photo as stored");
+    const enException =
+      "As an exception, these settings do not show a wish that is in a collection hidden by moderation, nor a Vault piece whose purchase post is hidden by moderation.";
+    expect(enText.split(enException)).toHaveLength(2);
+    // L'effacement de la copie suit la règle du code : une collection « Mes amis » (masquée ou non) la garde.
+    expect(frText).toContain("La copie d'une image est effacée quand vous éteignez le réglage (sauf si l'Envie est rangée dans une collection « Mes amis »)");
+    expect(enText).toContain("The copy of an image is deleted when you turn the setting off (unless the wish is in a “My friends” collection)");
   });
 
-  it("refusé : plus aucune promesse « toutes » sans l'exception", () => {
-    expect(fr.wishlist.privateNoteFriends).not.toContain("Vos amis voient toutes vos Envies (réglage « Montrer mes Envies à mes amis »). ");
-    expect(en.wishlist.privateNoteFriends).not.toContain("Your friends can see all your wishes (setting “Show my Wishlist to my friends”). ");
-    expect(fr.friendShelves.confirmWishesBody).not.toContain("même celles de vos collections privées. ");
-    expect(en.friendShelves.confirmWishesBody).not.toContain("even those in your private collections. ");
-    expect(fr.friendShelves.confirmVaultBody).not.toContain("toutes les pièces de votre Vault, avec");
-    expect(en.friendShelves.confirmVaultBody).not.toContain("every piece in your Vault, with");
-    expect(all(privacyPolicy)).not.toContain("vos amis voient toutes vos Envies, y compris");
-    expect(all(privacyPolicyEn)).not.toContain("your friends see all your wishes, including");
-    expect(all(privacyPolicy)).not.toContain("vos amis voient chaque pièce de votre Vault, son nom");
-    expect(all(privacyPolicyEn)).not.toContain("your friends see each piece in your Vault, its name");
-  });
-
-  it("refusé : l'exception du Vault ne promet plus « une publication » quelconque (seule la publication d'achat est vérifiée)", () => {
-    const vaultTexts = [fr.friendShelves.settingVaultHelp, fr.friendShelves.confirmVaultBody, all(privacyPolicy)];
-    for (const text of vaultTexts) expect(text).not.toContain("dont une publication est masquée");
-    for (const text of [en.friendShelves.settingVaultHelp, en.friendShelves.confirmVaultBody, all(privacyPolicyEn)]) expect(text).not.toContain("piece whose post is hidden");
+  it("refusé : plus de « toutes » / « chaque », ni d'exception entre parenthèses, ni « une publication » quelconque, dans la politique", () => {
+    const frText = all(privacyPolicy);
+    const enText = all(privacyPolicyEn);
+    for (const old of ["vos amis voient toutes vos Envies", "vos amis voient chaque pièce de votre Vault", "(sauf celles d'une collection masquée par la modération)", "(sauf une pièce dont", "dont une publication est masquée"]) {
+      expect(frText).not.toContain(old);
+    }
+    for (const old of ["your friends see all your wishes", "your friends see each piece in your Vault", "(except those in a collection hidden by moderation)", "(except a piece whose", "piece whose post is hidden"]) {
+      expect(enText).not.toContain(old);
+    }
+    // Une collection masquée « Mes amis » garde la copie : « montrée à vos amis » était inexact.
+    expect(frText).not.toContain("(sauf si l'Envie est rangée dans une collection montrée à vos amis)");
+    expect(enText).not.toContain("(unless the wish is in a collection shown to your friends)");
   });
 });
 
 describe("politique : la copie d'image d'une Envie dans une collection masquée par la modération", () => {
-  // La modération masque une collection sans remettre les copies en ordre
-  // (lib/collections.ts, syncFriendCopies) : la politique le dit.
+  // La modération masque une collection sans remettre les copies en ordre, et
+  // friendVisibleWishes compte une collection « Mes amis » masquée : une copie
+  // peut y être gardée, ou faite (envie rangée dans cette collection).
   const frException =
-    "La copie de l'image est effacée dès que l'Envie n'est plus montrée à vos amis, et tout part avec la suppression de votre compte. Exception : si la modération masque une collection, les copies des images de ses Envies peuvent être gardées tant qu'elle reste masquée, même quand ces Envies ne sont plus montrées à vos amis, et au plus tard jusqu'à la suppression de votre compte.";
+    "La copie de l'image est effacée dès que l'Envie n'est plus montrée à vos amis, et tout part avec la suppression de votre compte. Exception : si la modération masque une collection, les copies des images de ses Envies peuvent être faites ou gardées tant qu'elle reste masquée, même quand ces Envies ne sont plus montrées à vos amis, et au plus tard jusqu'à la suppression de votre compte.";
   const enException =
-    "The copy of the image is deleted as soon as the wish is no longer shown to your friends, and everything goes when you delete your account. Exception: if moderation hides a collection, the image copies of its wishes may be kept while it stays hidden, even when those wishes are no longer shown to your friends, and at the latest until you delete your account.";
+    "The copy of the image is deleted as soon as the wish is no longer shown to your friends, and everything goes when you delete your account. Exception: if moderation hides a collection, the image copies of its wishes may be made or kept while it stays hidden, even when those wishes are no longer shown to your friends, and at the latest until you delete your account.";
 
   it("permis : la phrase « effacée dès que » est suivie de l'exception, en FR et en EN", () => {
     expect(all(privacyPolicy)).toContain(frException);
@@ -345,6 +412,11 @@ describe("politique : la copie d'image d'une Envie dans une collection masquée 
   it("refusé : plus de « effacée dès que » sans l'exception juste après", () => {
     expect(all(privacyPolicy)).not.toContain("et tout part avec la suppression de votre compte. Un ami peut signaler une collection");
     expect(all(privacyPolicyEn)).not.toContain("and everything goes when you delete your account. A friend can report a collection");
+  });
+
+  it("refusé : l'exception ne parle plus seulement des copies gardées (le serveur en fait aussi)", () => {
+    expect(all(privacyPolicy)).not.toContain("peuvent être gardées tant qu'elle reste masquée");
+    expect(all(privacyPolicyEn)).not.toContain("may be kept while it stays hidden");
   });
 });
 

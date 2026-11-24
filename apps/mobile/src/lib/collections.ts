@@ -81,9 +81,13 @@ export function selectedCollection(collections: readonly CollectionSummary[] | n
 }
 
 /** Phrase sous les puces : qui voit la collection choisie. Privée alors que
- * « Montrer mes Envies à mes amis » est allumé : les amis voient ses envies
- * (sauf celles aussi rangées dans une collection masquée par la modération),
- * pas son nom (lot « étagères des amis »). */
+ * « Montrer mes Envies à mes amis » est allumé : les amis peuvent voir ses
+ * envies, pas son nom (lot « étagères des amis »). La phrase prévient sans
+ * lister les exceptions de la modération (elles ne font que retirer des
+ * envies de ce que voient les amis) : la politique de confidentialité les
+ * dit, une fois. Seul « pas son nom » est une promesse : l'étagère ne donne
+ * aucun nom de collection, et un ami ne voit que les collections « Mes amis »
+ * non masquées. */
 export function visibilityState(visibility: CollectionVisibility, showsWishesToFriends = false): string {
   if (visibility === "friends") return t.collections.friendsState;
   return showsWishesToFriends ? t.collections.privateStateFriendsSeeWishes : t.collections.privateState;
@@ -91,8 +95,9 @@ export function visibilityState(visibility: CollectionVisibility, showsWishesToF
 
 /** Comme visibilityState, et « masquée par la modération » quand elle l'est :
  * la même phrase quel que soit « Montrer mes Envies à mes amis », car le
- * serveur ne montre jamais aux amis les envies d'une collection masquée
- * (pas même sur l'étagère des amis). */
+ * serveur ne montre plus aux amis la collection masquée, ni ses envies par
+ * cette collection ou par l'étagère des amis (une envie aussi rangée dans
+ * une autre collection « Mes amis » reste visible par celle-là). */
 export function collectionState(collection: Pick<CollectionSummary, "visibility" | "hidden">, showsWishesToFriends = false): string {
   if (collection.hidden === true) return t.collections.hiddenState;
   return visibilityState(collection.visibility, showsWishesToFriends);

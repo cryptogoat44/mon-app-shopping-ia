@@ -1018,7 +1018,7 @@ export const en: Catalog = {
     ownOptionsLabel: (name: string) => `Options for the collection ${name}`,
     ownOptionsPosts: "Posts filed here",
     // Friends' shelves: private collection while "Show my Wishlist to my friends" is on.
-    privateStateFriendsSeeWishes: "Private name: your friends see its wishes, except those also in a collection hidden by moderation, but not its name (setting “Show my Wishlist to my friends”).",
+    privateStateFriendsSeeWishes: "Private name: your friends can see its wishes (setting “Show my Wishlist to my friends”), not its name.",
   },
   received: {
     title: "Received pieces",
@@ -1134,7 +1134,7 @@ export const en: Catalog = {
     searchClose: "Close search",
     sortShort: { recent: "Recent", price_asc: "Price ↑", price_desc: "Price ↓" },
     sortButtonLabel: (current: string) => `Sort, currently: ${current}`,
-    privateNoteFriends: "Your friends can see all your wishes (setting “Show my Wishlist to my friends”), except those in a collection hidden by moderation. You can make them private again in Settings.",
+    privateNoteFriends: "Your friends can see your wishes (setting “Show my Wishlist to my friends”). You can turn it off in Settings.",
   },
   profile: {
     vault: "Vault",
@@ -1980,13 +1980,13 @@ export const en: Catalog = {
   },
   friendShelves: {
     settingWishesTitle: "Show my Wishlist to my friends",
-    settingWishesHelp: `Off at first. When on, your friends (members you follow who follow you back) see all your wishes (except those in a collection hidden by moderation), including those in your private collections, without the names of those collections: title, image (a copy made by ${BRAND}), price and the link to the shop. Never your notes, your alerts, the pieces you received or your saved posts.`,
+    settingWishesHelp: `Off at first. When on, your friends (members you follow who follow you back) see your wishes, including those in your private collections, without the names of those collections: title, image (a copy made by ${BRAND}), price and the link to the shop. Never your notes, your alerts, the pieces you received or your saved posts.`,
     settingVaultTitle: "Show my Vault to my friends",
-    settingVaultHelp: "Off at first. When on, your friends see the pieces in your Vault (except a piece whose purchase post is hidden by moderation): name, category and photo, including photos you took yourself. Never the date you added them or the “Verified purchase” mark.",
+    settingVaultHelp: "Off at first. When on, your friends see the pieces in your Vault: name, category and photo, including photos you took yourself. Never the date you added them or the “Verified purchase” mark.",
     confirmWishesTitle: "Show your Wishlist to your friends?",
-    confirmWishesBody: "Your friends will see all your wishes, even those in your private collections (except those in a collection hidden by moderation). No one else will. You can make them private again at any time.",
+    confirmWishesBody: "Your friends will see your wishes, even those in your private collections. No one else will. You can turn this setting off at any time.",
     confirmVaultTitle: "Show your Vault to your friends?",
-    confirmVaultBody: "Your friends will see every piece in your Vault (except a piece whose purchase post is hidden by moderation), with its photo, including photos you took yourself: check what they show. No one else will. You can make it private again at any time.",
+    confirmVaultBody: "Your friends will see the pieces in your Vault, with their photos, including photos you took yourself: check what they show. No one else will. You can make it private again at any time.",
     confirmCta: "Show to my friends",
     cancel: "Cancel",
     wishesShown: "Your friends can now see your Wishlist.",
