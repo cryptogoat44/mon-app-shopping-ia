@@ -73,11 +73,13 @@ export const fr = {
     whole: "Toute l'image",
   },
   peopleSearch: {
-    placeholder: "Rechercher",
+    placeholder: "Nom ou @pseudo",
     label: "Rechercher un profil",
     empty: "Aucun profil trouvé.",
     error: "La recherche a échoué.",
     following: "Suivi(e)",
+    // Retours du build 2 : titre de l'écran, à côté de « ‹ ».
+    title: "Rechercher un profil",
   },
   completeProfile: {
     title: "Dernière étape",
@@ -1139,10 +1141,12 @@ export const fr = {
       "Il réunira vos publications et celles des personnes que vous suivez. Commencez par identifier une pièce, partager une photo, ou trouver des profils à suivre.",
     emptySpot: "Spotter une pièce",
     emptyPublish: "Publier une photo",
-    emptyFind: "Trouver des profils",
+    emptyFind: "Rechercher des profils",
     title: "Fil",
-    profiles: "Profils",
     loadError: "Impossible de charger le fil.",
+    // Retours du build 2 : la pastille en forme de champ de recherche, en haut du Fil (elle remplace « Profils »).
+    searchProfiles: "Rechercher un profil",
+    searchProfilesHint: "Ouvre la recherche de membres par nom ou @pseudo",
   },
   comments: {
     title: "Commentaires",
@@ -1910,7 +1914,7 @@ export const fr = {
     followersEmptyOther: "Ce compte n'a pas encore d'abonnés.",
     followingEmpty: "Vous ne suivez encore personne.",
     followingEmptyOther: "Ce compte ne suit encore personne.",
-    findPeople: "Trouver des profils",
+    findPeople: "Rechercher des profils",
     loadError: "Impossible de charger cette liste.",
     remove: "Retirer",
     removeLabel: (name: string) => `Retirer ${name} de vos abonnés`,

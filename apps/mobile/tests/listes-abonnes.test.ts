@@ -251,7 +251,7 @@ describe("textes", () => {
       removeNotePublic: "Votre compte est public : cette personne pourra se réabonner. Pour l'en empêcher, bloquez-la.",
       removed: "Abonné retiré.",
       loadMore: "Voir la suite",
-      findPeople: "Trouver des profils",
+      findPeople: "Rechercher des profils",
     });
     expect(en.memberLists).toMatchObject({
       followersTitle: "Followers",
@@ -264,7 +264,7 @@ describe("textes", () => {
       removeNotePublic: "Your account is public: this person can follow you again. To prevent it, block them.",
       removed: "Follower removed.",
       loadMore: "Show more",
-      findPeople: "Find people",
+      findPeople: "Search for profiles",
     });
     expect(Object.keys(en.memberLists).sort()).toEqual(Object.keys(fr.memberLists).sort());
   });

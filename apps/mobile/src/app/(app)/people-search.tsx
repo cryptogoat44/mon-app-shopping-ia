@@ -157,6 +157,10 @@ export default function PeopleSearchScreen() {
         >
           <Text style={styles.back}>‹</Text>
         </Pressable>
+        {/* Retours du build 2 : l'écran dit ce qu'il fait. */}
+        <Text style={styles.navTitle} accessibilityRole="header" numberOfLines={1}>
+          {t.peopleSearch.title}
+        </Text>
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.searchBar}>
@@ -169,6 +173,9 @@ export default function PeopleSearchScreen() {
             onChangeText={handleSearch}
             autoCapitalize="none"
             autoCorrect={false}
+            // On arrive ici en touchant un champ (la pastille du Fil) : le clavier s'ouvre tout de suite.
+            autoFocus
+            returnKeyType="search"
             accessibilityLabel={t.peopleSearch.label}
           />
         </View>
@@ -209,7 +216,8 @@ export default function PeopleSearchScreen() {
 
 const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
-  nav: { height: 47, justifyContent: "center", paddingHorizontal: 12 },
+  nav: { minHeight: 47, flexDirection: "row", alignItems: "center", gap: space.sm, paddingHorizontal: 12 },
+  navTitle: { flexShrink: 1, fontSize: font.body, fontWeight: "600", color: color.encre },
   back: { fontSize: 26, color: color.encre },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   searchBar: {
