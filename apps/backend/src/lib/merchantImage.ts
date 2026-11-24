@@ -76,9 +76,15 @@ function decodeEntities(value: string): string {
   });
 }
 
+/** Une vraie balise <meta> og:image ou twitter:image est bien plus courte :
+ * au-delà, elle est ignorée sans être lue. */
+const MAX_META_TAG_LENGTH = 4096;
+
 function attributesOf(tag: string): Map<string, string> {
   const attributes = new Map<string, string>();
-  for (const match of tag.matchAll(/([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/g)) {
+  // Le nom ne commence qu'après un blanc ou un guillemet ((?<=…)) : il ne peut
+  // pas redémarrer à chaque lettre d'une longue suite sans « = » (lecture linéaire).
+  for (const match of tag.matchAll(/(?<=[\s"'/])([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/g)) {
     const name = match[1]!.toLowerCase();
     if (!attributes.has(name)) attributes.set(name, decodeEntities(match[2] ?? match[3] ?? match[4] ?? "").trim());
   }
@@ -92,6 +98,7 @@ function metaContent(html: string, names: readonly string[]): string | null {
   // [^<>] et non [^>] : une balise jamais fermée s'arrête au « < » suivant,
   // la lecture reste linéaire même sur une page hostile.
   for (const tag of html.match(/<meta\b[^<>]*>/gi) ?? []) {
+    if (tag.length > MAX_META_TAG_LENGTH) continue;
     const attributes = attributesOf(tag);
     const key = (attributes.get("property") ?? attributes.get("name") ?? "").toLowerCase();
     const content = attributes.get("content");
@@ -128,13 +135,20 @@ function firstImage(value: unknown): string | null {
 /** Image du premier « Product » décrit en JSON-LD (blocs, tableaux, @graph). */
 function jsonLdProductImage(html: string): string | null {
   // Seule la balise ouvrante passe par l'expression ([^<>] : linéaire) ; la
-  // fin du bloc est cherchée une seule fois par indexOf, et la boucle s'arrête
-  // dès qu'un bloc n'est jamais fermé (une page hostile ne bloque pas le serveur).
-  const lower = html.toLowerCase();
+  // fin du bloc est cherchée dans html lui-même (sans toLowerCase, qui peut
+  // changer la longueur du texte : « İ »), les balises ouvrantes tombées dans
+  // un bloc déjà lu sont sautées, et la boucle s'arrête dès qu'un bloc n'est
+  // jamais fermé (une page hostile ne bloque pas le serveur).
+  const close = /<\/script\s*>/gi;
+  let resumeAt = 0;
   for (const match of html.matchAll(/<script\b[^<>]*type\s*=\s*["']?application\/ld\+json["']?[^<>]*>/gi)) {
+    if (match.index < resumeAt) continue;
     const start = match.index + match[0].length;
-    const end = lower.indexOf("</script>", start);
-    if (end === -1) break;
+    close.lastIndex = start;
+    const closing = close.exec(html);
+    if (!closing) break;
+    const end = closing.index;
+    resumeAt = close.lastIndex;
     let data: unknown;
     try {
       data = JSON.parse(html.slice(start, end));

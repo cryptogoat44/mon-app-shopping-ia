@@ -125,6 +125,37 @@ describe("adresse de la grande image annoncée par la page", () => {
     }
   });
 
+  it("refusé : une balise <meta> géante (512 Ko de lettres) ou 128 balises de 4 Ko sont lues en moins de 100 ms, sans image", () => {
+    const giant = `<meta ${"a".repeat(512 * 1024)}>`;
+    const many = `<meta ${"a".repeat(4000)}>`.repeat(128);
+    for (const html of [giant, many]) {
+      const started = performance.now();
+      expect(extractMerchantImageUrl(html, PAGE)).toBeNull();
+      expect(performance.now() - started).toBeLessThan(100);
+    }
+  });
+
+  it("permis : og:image est trouvée après une balise <meta> géante, et sans blanc entre les attributs", () => {
+    expect(extractMerchantImageUrl(`<meta ${"a".repeat(512 * 1024)}><meta property="og:image" content="https://cdn.example/g.jpg">`, PAGE)).toBe(
+      "https://cdn.example/g.jpg"
+    );
+    expect(extractMerchantImageUrl(`<meta property="og:image"content='https://cdn.example/h.jpg'/>`, PAGE)).toBe("https://cdn.example/h.jpg");
+  });
+
+  it("refusé : des milliers de blocs JSON-LD ouverts et un seul </script> final sont lus en moins de 100 ms", () => {
+    const opening = `<script type="application/ld+json">`;
+    const html = opening.repeat(Math.floor((512 * 1024 - 9) / opening.length)) + "</script>";
+    const started = performance.now();
+    expect(extractMerchantImageUrl(html, PAGE)).toBeNull();
+    expect(performance.now() - started).toBeLessThan(100);
+  });
+
+  it("permis : un « İ » avant le bloc JSON-LD ne coupe pas le bloc au mauvais endroit ; </script > et </SCRIPT> ferment le bloc", () => {
+    const product = `{"@type":"Product","image":"https://cdn.example/e.jpg"}`;
+    expect(extractMerchantImageUrl(`<p>İİ</p><script type="application/ld+json">${product}</script>`, PAGE)).toBe("https://cdn.example/e.jpg");
+    expect(extractMerchantImageUrl(`<p>İ</p><script type="application/ld+json">${product}</SCRIPT >`, PAGE)).toBe("https://cdn.example/e.jpg");
+  });
+
   it("permis : après un bloc JSON-LD illisible ou une balise <meta coupée, l'image suivante est trouvée", () => {
     expect(
       extractMerchantImageUrl(`<meta property="og:title" content="x"<meta property="og:image" content="https://cdn.example/m.jpg">`, PAGE)
