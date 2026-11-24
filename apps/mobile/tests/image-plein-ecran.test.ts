@@ -99,13 +99,13 @@ describe("où l'image s'ouvre en grand (lecture du code)", () => {
 
 describe("textes", () => {
   it("français et anglais, vrais de l'iPhone comme du site", () => {
-    expect(fr.imageViewer.viewerLabel).toBe("Image de la pièce en grand. Pincez pour zoomer.");
-    expect(en.imageViewer.viewerLabel).toBe("Large image of the piece. Pinch to zoom.");
+    expect(fr.common.imageViewer.viewerLabel).toBe("Image de la pièce en grand. Pincez pour zoomer.");
+    expect(en.common.imageViewer.viewerLabel).toBe("Large image of the piece. Pinch to zoom.");
     // Le site n'a pas de pincement : il ne le promet pas.
-    expect(fr.imageViewer.viewerLabelWeb).not.toContain("Pincez");
-    expect(en.imageViewer.viewerLabelWeb).not.toContain("Pinch");
-    expect(fr.imageViewer.openHint).toBe("Ouvre l'image en grand");
-    expect(en.imageViewer.openHint).toBe("Opens the image full screen");
+    expect(fr.common.imageViewer.viewerLabelWeb).not.toContain("Pincez");
+    expect(en.common.imageViewer.viewerLabelWeb).not.toContain("Pinch");
+    expect(fr.common.imageViewer.openHint).toBe("Ouvre l'image en grand");
+    expect(en.common.imageViewer.openHint).toBe("Opens the image full screen");
   });
 });
 

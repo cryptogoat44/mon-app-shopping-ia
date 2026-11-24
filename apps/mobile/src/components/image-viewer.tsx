@@ -66,7 +66,7 @@ export function EnlargeableImage({
         // Site : « imagebutton » n'a pas d'équivalent (react-native-web n'écrit aucun rôle) ; « button » s'annonce et s'ouvre au clavier.
         accessibilityRole={Platform.OS === "web" ? "button" : "imagebutton"}
         accessibilityLabel={label}
-        accessibilityHint={t.imageViewer.openHint}
+        accessibilityHint={t.common.imageViewer.openHint}
         testID="image-agrandir"
       >
         {children}
@@ -159,8 +159,8 @@ export function ImageViewer({ hdUri, fallbackUri, label, onClose }: { hdUri?: st
           onLayout={onLayout}
           accessible
           accessibilityRole="adjustable"
-          accessibilityLabel={`${label}. ${Platform.OS === "web" ? t.imageViewer.viewerLabelWeb : t.imageViewer.viewerLabel}`}
-          accessibilityValue={{ text: t.imageViewer.zoomValue(zoomPercent) }}
+          accessibilityLabel={`${label}. ${Platform.OS === "web" ? t.common.imageViewer.viewerLabelWeb : t.common.imageViewer.viewerLabel}`}
+          accessibilityValue={{ text: t.common.imageViewer.zoomValue(zoomPercent) }}
           accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
           onAccessibilityAction={(event) => zoomBy(event.nativeEvent.actionName === "increment" ? VIEWER_ZOOM_STEP : -VIEWER_ZOOM_STEP)}
           testID="image-plein-ecran"
@@ -182,7 +182,7 @@ export function ImageViewer({ hdUri, fallbackUri, label, onClose }: { hdUri?: st
             disabled={view.zoom <= VIEWER_MIN_ZOOM}
             style={[styles.round, view.zoom <= VIEWER_MIN_ZOOM ? styles.roundDisabled : null]}
             accessibilityRole="button"
-            accessibilityLabel={t.imageViewer.zoomOut}
+            accessibilityLabel={t.common.imageViewer.zoomOut}
             accessibilityState={{ disabled: view.zoom <= VIEWER_MIN_ZOOM }}
           >
             <MinusIcon size={20} tint={color.surNuit} />
@@ -192,7 +192,7 @@ export function ImageViewer({ hdUri, fallbackUri, label, onClose }: { hdUri?: st
             disabled={view.zoom >= VIEWER_MAX_ZOOM}
             style={[styles.round, view.zoom >= VIEWER_MAX_ZOOM ? styles.roundDisabled : null]}
             accessibilityRole="button"
-            accessibilityLabel={t.imageViewer.zoomIn}
+            accessibilityLabel={t.common.imageViewer.zoomIn}
             accessibilityState={{ disabled: view.zoom >= VIEWER_MAX_ZOOM }}
           >
             <PlusIcon size={20} tint={color.surNuit} />

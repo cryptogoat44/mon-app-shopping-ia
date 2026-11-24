@@ -20,6 +20,14 @@ export const en: Catalog = {
     photoUnavailable: "This photo couldn't be retrieved. If it's stored in iCloud, check your connection, then try again.",
     offline: "You seem to be offline. Check your internet connection, then try again.",
     imageUnavailable: "Image unavailable",
+    imageViewer: {
+      openHint: "Opens the image full screen",
+      viewerLabel: "Large image of the piece. Pinch to zoom.",
+      viewerLabelWeb: "Large image of the piece. Use the buttons to zoom.",
+      zoomValue: (percent: number) => `Zoom ${percent}%`,
+      zoomIn: "Zoom in",
+      zoomOut: "Zoom out",
+    },
   },
   tabs: {
     feed: "Feed",
@@ -1973,13 +1981,5 @@ export const en: Catalog = {
     moderationField: "Stop a look page (paste the link)",
     moderationStopped: "Page stopped.",
     tapToShare: "The link is ready: tap “Share the look” to send it.",
-  },
-  imageViewer: {
-    openHint: "Opens the image full screen",
-    viewerLabel: "Large image of the piece. Pinch to zoom.",
-    viewerLabelWeb: "Large image of the piece. Use the buttons to zoom.",
-    zoomValue: (percent: number) => `Zoom ${percent}%`,
-    zoomIn: "Zoom in",
-    zoomOut: "Zoom out",
   },
 };
