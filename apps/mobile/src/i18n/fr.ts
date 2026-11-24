@@ -25,7 +25,7 @@ export const fr = {
     imageViewer: {
       // Indice lu par VoiceOver sur l'image d'une fiche (iPhone et site).
       openHint: "Ouvre l'image en grand",
-      viewerLabel: "Image de la pièce en grand. Pincez pour zoomer.",
+      viewerLabel: "Image de la pièce en grand. Balayez vers le haut ou le bas pour zoomer.",
       viewerLabelWeb: "Image de la pièce en grand. Utilisez les boutons pour zoomer.",
       zoomValue: (percent: number) => `Zoom ${percent} %`,
       zoomIn: "Zoomer",

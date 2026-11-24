@@ -22,7 +22,7 @@ export const en: Catalog = {
     imageUnavailable: "Image unavailable",
     imageViewer: {
       openHint: "Opens the image full screen",
-      viewerLabel: "Large image of the piece. Pinch to zoom.",
+      viewerLabel: "Large image of the piece. Swipe up or down to zoom.",
       viewerLabelWeb: "Large image of the piece. Use the buttons to zoom.",
       zoomValue: (percent: number) => `Zoom ${percent}%`,
       zoomIn: "Zoom in",

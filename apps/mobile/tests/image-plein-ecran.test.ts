@@ -99,8 +99,12 @@ describe("où l'image s'ouvre en grand (lecture du code)", () => {
 
 describe("textes", () => {
   it("français et anglais, vrais de l'iPhone comme du site", () => {
-    expect(fr.common.imageViewer.viewerLabel).toBe("Image de la pièce en grand. Pincez pour zoomer.");
-    expect(en.common.imageViewer.viewerLabel).toBe("Large image of the piece. Pinch to zoom.");
+    // iPhone : seul VoiceOver lit ce libellé, et VoiceOver ne laisse pas passer le pincement ;
+    // il annonce le geste qui marche (balayer vers le haut ou le bas, rôle « adjustable »).
+    expect(fr.common.imageViewer.viewerLabel).toBe("Image de la pièce en grand. Balayez vers le haut ou le bas pour zoomer.");
+    expect(en.common.imageViewer.viewerLabel).toBe("Large image of the piece. Swipe up or down to zoom.");
+    expect(fr.common.imageViewer.viewerLabel).not.toContain("Pincez");
+    expect(en.common.imageViewer.viewerLabel).not.toContain("Pinch");
     // Le site n'a pas de pincement : il ne le promet pas.
     expect(fr.common.imageViewer.viewerLabelWeb).not.toContain("Pincez");
     expect(en.common.imageViewer.viewerLabelWeb).not.toContain("Pinch");
