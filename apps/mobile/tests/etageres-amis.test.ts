@@ -193,11 +193,14 @@ describe("les phrases « privé » : exactes dans les deux cas", () => {
     expect(visibilityState("private", false)).toBe("Privée : vous seul la voyez.");
     // Allumé : refusé « vous seul » ; les amis voient ses envies, pas son nom.
     expect(visibilityState("private", true)).not.toContain("vous seul");
-    expect(visibilityState("private", true)).toBe("Nom privé : vos amis voient ses envies (réglage « Montrer mes Envies à mes amis »), pas son nom.");
+    expect(visibilityState("private", true)).toBe("Nom privé : vos amis voient ses envies, sauf celles aussi rangées dans une collection masquée par la modération, mais pas son nom (réglage « Montrer mes Envies à mes amis »).");
+    // Refusé : la promesse de « ses envies » sans l'exception des collections masquées.
+    expect(visibilityState("private", true)).not.toContain("voient ses envies (réglage");
     expect(collectionState({ visibility: "private" }, true)).toBe(fr.collections.privateStateFriendsSeeWishes);
     expect(visibilityState("friends", true)).toBe(fr.collections.friendsState);
     setActiveLocale("en");
-    expect(visibilityState("private", true)).toBe("Private name: your friends see its wishes (setting “Show my Wishlist to my friends”), not its name.");
+    expect(visibilityState("private", true)).toBe("Private name: your friends see its wishes, except those also in a collection hidden by moderation, but not its name (setting “Show my Wishlist to my friends”).");
+    expect(visibilityState("private", true)).not.toContain("see its wishes (setting");
     expect(visibilityState("private", false)).toBe(en.collections.privateState);
     expect(source("components/collection-options-sheet.tsx")).toContain("{collectionState(collection, showsWishes(profile))}");
     expect(source("components/collection-settings-sheet.tsx")).toContain("{collectionState(current, showsWishes(profile))}");

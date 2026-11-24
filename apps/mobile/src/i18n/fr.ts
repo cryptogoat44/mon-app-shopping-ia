@@ -1130,7 +1130,7 @@ export const fr = {
     ownOptionsLabel: (name: string) => `Options de la collection ${name}`,
     ownOptionsPosts: "Publications rangées ici",
     // Étagères des amis : collection privée quand « Montrer mes Envies à mes amis » est allumé.
-    privateStateFriendsSeeWishes: "Nom privé : vos amis voient ses envies (réglage « Montrer mes Envies à mes amis »), pas son nom.",
+    privateStateFriendsSeeWishes: "Nom privé : vos amis voient ses envies, sauf celles aussi rangées dans une collection masquée par la modération, mais pas son nom (réglage « Montrer mes Envies à mes amis »).",
   },
   // Lot 5 : pièces reçues (onglet « Reçues » des Envies).
   received: {

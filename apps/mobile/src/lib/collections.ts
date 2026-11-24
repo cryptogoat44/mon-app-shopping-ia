@@ -81,7 +81,8 @@ export function selectedCollection(collections: readonly CollectionSummary[] | n
 }
 
 /** Phrase sous les puces : qui voit la collection choisie. Privée alors que
- * « Montrer mes Envies à mes amis » est allumé : les amis voient ses envies,
+ * « Montrer mes Envies à mes amis » est allumé : les amis voient ses envies
+ * (sauf celles aussi rangées dans une collection masquée par la modération),
  * pas son nom (lot « étagères des amis »). */
 export function visibilityState(visibility: CollectionVisibility, showsWishesToFriends = false): string {
   if (visibility === "friends") return t.collections.friendsState;
