@@ -88,9 +88,12 @@ export function visibilityState(visibility: CollectionVisibility, showsWishesToF
   return showsWishesToFriends ? t.collections.privateStateFriendsSeeWishes : t.collections.privateState;
 }
 
-/** Comme visibilityState, et « masquée par la modération » quand elle l'est. */
+/** Comme visibilityState, et « masquée par la modération » quand elle l'est.
+ * Masquée alors que « Montrer mes Envies à mes amis » est allumé : les amis
+ * ne voient plus son nom, mais toujours ses envies. */
 export function collectionState(collection: Pick<CollectionSummary, "visibility" | "hidden">, showsWishesToFriends = false): string {
-  return collection.hidden === true ? t.collections.hiddenState : visibilityState(collection.visibility, showsWishesToFriends);
+  if (collection.hidden === true) return showsWishesToFriends ? t.collections.hiddenStateFriendsSeeWishes : t.collections.hiddenState;
+  return visibilityState(collection.visibility, showsWishesToFriends);
 }
 
 /** « Mes amis » refusé tant que la modération masque la collection (le

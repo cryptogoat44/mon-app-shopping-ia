@@ -1019,6 +1019,8 @@ export const en: Catalog = {
     ownOptionsPosts: "Posts filed here",
     // Friends' shelves: private collection while "Show my Wishlist to my friends" is on.
     privateStateFriendsSeeWishes: "Private name: your friends see its wishes (setting “Show my Wishlist to my friends”), not its name.",
+    // Friends' shelves: collection hidden by moderation while "Show my Wishlist to my friends" is on.
+    hiddenStateFriendsSeeWishes: "Hidden by moderation: your friends no longer see its name; its wishes stay visible (setting “Show my Wishlist to my friends”).",
   },
   received: {
     title: "Received pieces",

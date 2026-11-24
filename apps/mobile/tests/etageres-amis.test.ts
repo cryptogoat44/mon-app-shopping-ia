@@ -195,12 +195,28 @@ describe("les phrases « privé » : exactes dans les deux cas", () => {
     expect(visibilityState("private", true)).toBe("Nom privé : vos amis voient ses envies (réglage « Montrer mes Envies à mes amis »), pas son nom.");
     expect(collectionState({ visibility: "private" }, true)).toBe(fr.collections.privateStateFriendsSeeWishes);
     expect(visibilityState("friends", true)).toBe(fr.collections.friendsState);
-    expect(collectionState({ visibility: "private", hidden: true }, true)).toBe(fr.collections.hiddenState);
     setActiveLocale("en");
     expect(visibilityState("private", true)).toBe("Private name: your friends see its wishes (setting “Show my Wishlist to my friends”), not its name.");
     expect(visibilityState("private", false)).toBe(en.collections.privateState);
     expect(source("components/collection-options-sheet.tsx")).toContain("{collectionState(collection, showsWishes(profile))}");
     expect(source("components/collection-settings-sheet.tsx")).toContain("{collectionState(current, showsWishes(profile))}");
+  });
+
+  it("collection masquée par la modération : « vos amis ne la voient plus » seulement si les Envies ne sont pas montrées", () => {
+    // Éteint : la phrase d'avant, privée ou « Mes amis ».
+    expect(collectionState({ visibility: "private", hidden: true })).toBe(fr.collections.hiddenState);
+    expect(collectionState({ visibility: "friends", hidden: true }, false)).toBe("Masquée par la modération : vos amis ne la voient plus.");
+    // Allumé : refusé « ne la voient plus » ; ses envies restent visibles.
+    expect(collectionState({ visibility: "private", hidden: true }, true)).not.toBe(fr.collections.hiddenState);
+    expect(collectionState({ visibility: "friends", hidden: true }, true)).toBe(
+      "Masquée par la modération : vos amis ne voient plus son nom ; ses envies restent visibles (réglage « Montrer mes Envies à mes amis »).",
+    );
+    expect(collectionState({ visibility: "private", hidden: true }, true)).toBe(fr.collections.hiddenStateFriendsSeeWishes);
+    setActiveLocale("en");
+    expect(collectionState({ visibility: "friends", hidden: true }, true)).toBe(
+      "Hidden by moderation: your friends no longer see its name; its wishes stay visible (setting “Show my Wishlist to my friends”).",
+    );
+    expect(collectionState({ visibility: "friends", hidden: true }, false)).toBe(en.collections.hiddenState);
   });
 
   it("chaque écran passe par ces phrases", () => {
