@@ -13,7 +13,7 @@ import { bellVisible, priceDropPrices, trackPriceDropsShown } from "@/lib/wish-a
 import { collectionChips, selectedCollection } from "@/lib/collections";
 import { useCollectionsStatus } from "@/lib/use-collections-status";
 import { useAuth } from "@/lib/auth-context";
-import { showsWishes } from "@/lib/friend-shelves";
+import { wishlistPrivacyNote } from "@/lib/friend-shelves";
 import { useToast } from "@/lib/toast-context";
 import { BookmarkIcon, ClockIcon, LockIcon, MoreIcon, PlusIcon } from "@/components/icons";
 import { CollectionOptionsSheet } from "@/components/collection-options-sheet";
@@ -395,7 +395,7 @@ function MyWishlist({ news, switcher, profileHeader }: { news: WishAlertNewsStat
             {t.wishlist.privacyTitle}
           </Text>
           <Text style={styles.sheetBody}>
-            {showsWishes(profile) ? t.wishlist.privateNoteFriends : collectionsAvailable.enabled ? t.wishlist.privateNoteCollections : t.wishlist.privateNote}
+            {wishlistPrivacyNote(profile, collectionsAvailable.enabled)}
           </Text>
           <Pressable style={[styles.sheetButton, styles.sheetPrimary]} onPress={() => setPrivacyOpen(false)} accessibilityRole="button" testID="compris-confidentialite">
             <Text style={[styles.sheetButtonLabel, styles.sheetPrimaryLabel]}>{t.wishlist.privacyOk}</Text>

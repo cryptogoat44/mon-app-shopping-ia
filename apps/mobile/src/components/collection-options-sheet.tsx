@@ -4,8 +4,6 @@ import type { CollectionSummary } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { collectionState } from "@/lib/collections";
-import { useAuth } from "@/lib/auth-context";
-import { showsWishes } from "@/lib/friend-shelves";
 import { afterSheetClose } from "@/lib/after-sheet-close";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -31,7 +29,6 @@ export function CollectionOptionsSheet({
   onPosts: (collection: CollectionSummary) => void;
   onManage: (collection: CollectionSummary) => void;
 }) {
-  const { profile } = useAuth();
   const afterClose = useMemo(() => afterSheetClose(Platform.OS === "web"), []);
   useEffect(() => () => afterClose.cancel(), [afterClose]);
 
@@ -49,7 +46,7 @@ export function CollectionOptionsSheet({
           <Text style={styles.title} accessibilityRole="header" numberOfLines={2}>
             {collection.name}
           </Text>
-          <Text style={styles.body}>{collectionState(collection, showsWishes(profile))}</Text>
+          <Text style={styles.body}>{collectionState(collection)}</Text>
           {/* Les publications enregistrées rangées dans cette collection (vous seul les voyez). */}
           {savedPosts ? (
             <Pressable

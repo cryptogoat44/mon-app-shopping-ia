@@ -1144,8 +1144,8 @@ export const fr = {
     // Retours du build 2 (Envies compactes) : le bouton « … » au bout des puces, pour la collection choisie.
     ownOptionsLabel: (name: string) => `Options de la collection ${name}`,
     ownOptionsPosts: "Publications rangées ici",
-    // Étagères des amis : collection privée quand « Montrer mes Envies à mes amis » est allumé.
-    privateStateFriendsSeeWishes: "Nom privé : vos amis peuvent voir ses envies (réglage « Montrer mes Envies à mes amis »), pas son nom.",
+    // Étagères des amis (refonte) : là où vous rangez une envie, quand « Montrer mes Envies à mes amis » est allumé.
+    privateNotOnShelf: "Une Envie rangée dans une collection « Privée » n'apparaît pas dans les Envies que voient vos amis.",
   },
   // Lot 5 : pièces reçues (onglet « Reçues » des Envies).
   received: {
@@ -1265,7 +1265,9 @@ export const fr = {
     sortShort: { recent: "Récentes", price_asc: "Prix ↑", price_desc: "Prix ↓" },
     sortButtonLabel: (current: string) => `Trier, actuellement : ${current}`,
     // Lot « étagères des amis » : la phrase quand « Montrer mes Envies à mes amis » est allumé.
-    privateNoteFriends: "Vos amis voient vos Envies (réglage « Montrer mes Envies à mes amis »). Vous pouvez l'éteindre dans Réglages.",
+    privateNoteFriends: "Vos amis voient vos Envies, sauf celles rangées dans une collection « Privée ». Vous pouvez l'éteindre dans Réglages.",
+    // Refonte : « Montrer mes Envies à mes amis » éteint.
+    privateNoteOff: "Vous avez éteint « Montrer mes Envies à mes amis » : vos Envies sont privées, sauf celles que vous rangez dans une collection « Mes amis ».",
   },
   profile: {
     vault: "Vault",
@@ -2167,15 +2169,9 @@ export const fr = {
   // Vault à ses amis, si on le décide ; onglets en lecture seule sur le profil d'un ami.
   friendShelves: {
     settingWishesTitle: "Montrer mes Envies à mes amis",
-    settingWishesHelp: `Éteint au départ. Allumé, vos amis (les membres que vous suivez et qui vous suivent) voient vos Envies, y compris celles rangées dans vos collections privées, sans le nom de ces collections : titre, image (une copie faite par ${BRAND}), prix et lien vers la boutique. Jamais vos notes, vos alertes, les pièces reçues ni vos publications enregistrées.`,
+    settingWishesHelp: `Allumé, vos amis (les membres que vous suivez et qui vous suivent) voient vos Envies, sauf celles rangées dans une collection « Privée » : titre, image (une copie faite par ${BRAND}), prix, lien vers la boutique, votre alerte de prix et le nom de vos collections « Mes amis ». Ils ne peuvent rien modifier. Jamais les pièces reçues ni vos publications enregistrées.`,
     settingVaultTitle: "Montrer mon Vault à mes amis",
-    settingVaultHelp: "Éteint au départ. Allumé, vos amis voient les pièces de votre Vault : nom, catégorie et photo, y compris les photos que vous avez prises vous-même. Jamais la date d'ajout ni la mention « Achat vérifié ».",
-    confirmWishesTitle: "Montrer vos Envies à vos amis ?",
-    confirmWishesBody: "Vos amis verront vos Envies, même celles de vos collections privées. Personne d'autre. Vous pourrez éteindre ce réglage à tout moment.",
-    confirmVaultTitle: "Montrer votre Vault à vos amis ?",
-    confirmVaultBody: "Vos amis verront les pièces de votre Vault, avec leurs photos, y compris celles que vous avez prises vous-même : vérifiez ce qu'elles montrent. Personne d'autre. Vous pourrez le rendre privé à tout moment.",
-    confirmCta: "Montrer à mes amis",
-    cancel: "Annuler",
+    settingVaultHelp: "Allumé, vos amis voient les pièces de votre Vault : nom, catégorie, photo (y compris les photos que vous avez prises vous-même), date d'ajout et mention « Achat vérifié ». Ils ne peuvent rien modifier.",
     wishesShown: "Vos amis voient maintenant vos Envies.",
     vaultShown: "Vos amis voient maintenant votre Vault.",
     wishesPrivateAgain: "Vos Envies sont de nouveau privées.",
@@ -2192,8 +2188,26 @@ export const fr = {
     loadMoreError: "Impossible de charger la suite.",
     close: "Fermer",
     // Notes « privé » quand le réglage est allumé (fiche d'une pièce du Vault, ajout d'une pièce, fiche d'une envie).
-    vaultItemNote: "Votre Vault est montré à vos amis (Réglages) ; personne d'autre ne le voit. Pour montrer cette pièce à d'autres, partagez-la dans votre fil.",
-    vaultFormNote: "Votre Vault est montré à vos amis : ils verront cette pièce (Réglages, « Montrer mon Vault à mes amis »).",
-    wishShareHint: "Vos amis voient vos Envies (Réglages). Rien d'autre n'est partagé sans votre accord.",
+    vaultItemNote: "Vos amis voient votre Vault, avec la date d'ajout et la mention « Achat vérifié » (Réglages) ; personne d'autre ne le voit. Pour montrer cette pièce à d'autres, partagez-la dans votre fil.",
+    vaultFormNote: "Vos amis verront cette pièce dans votre Vault (Réglages, « Montrer mon Vault à mes amis »).",
+    wishShareHint: "Vos amis voient vos Envies, sauf celles rangées dans une collection « Privée ». Vous pouvez l'éteindre dans Réglages.",
+    // Refonte (réglages allumés par défaut) : l'information montrée avant que rien ne soit vu, sur votre profil et dans Réglages.
+    noticeTitle: "Ce que vos amis peuvent voir",
+    noticeIntro: "Vos amis (les membres que vous suivez et qui vous suivent) pourront voir sur votre profil, sans rien pouvoir modifier :",
+    noticeWishes: "Vos Envies, avec leur prix, votre alerte de prix et le nom de vos collections « Mes amis ». Une Envie rangée dans une collection « Privée » n'y apparaît pas.",
+    noticeVault: "Les pièces de votre Vault, avec leur photo (y compris celles que vous avez prises vous-même), leur date d'ajout et la mention « Achat vérifié ».",
+    noticeOutro: "Rien n'est montré avant votre réponse. Personne n'est prévenu quand vos amis regardent. Vous pourrez changer d'avis à tout moment dans Réglages.",
+    noticeOk: "Compris",
+    noticeOff: "Éteindre",
+    noticeOkDone: "C'est noté. Vous pouvez l'éteindre à tout moment dans Réglages.",
+    noticeOffDone: "C'est éteint. Vous pouvez le rallumer dans Réglages.",
+    // Réglage allumé avant d'avoir lu l'information : rien n'est encore montré.
+    wishesOnPending: "C'est allumé. Vos amis verront vos Envies quand vous aurez lu « Ce que vos amis peuvent voir ».",
+    vaultOnPending: "C'est allumé. Vos amis verront votre Vault quand vous aurez lu « Ce que vos amis peuvent voir ».",
+    // Profil d'un ami : ce qu'il voit en plus sur la petite feuille d'une pièce.
+    priceAlertOn: "Alerte de prix allumée",
+    priceAlertBelow: (price: string) => `Alerte de prix : sous ${price}`,
+    inCollections: (names: string) => `Dans ses collections : ${names}`,
+    addedOn: (date: string) => `Ajoutée au Vault le ${date}`,
   },
 } as const;

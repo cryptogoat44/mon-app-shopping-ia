@@ -8,6 +8,8 @@ import { ApiError, fetchCollections, fetchWishCollections, setWishCollections } 
 import { selectionChanged, toggleSelection } from "@/lib/collections";
 import { loadErrorMessage } from "@/lib/load-error";
 import { useToast } from "@/lib/toast-context";
+import { useAuth } from "@/lib/auth-context";
+import { showsWishes } from "@/lib/friend-shelves";
 import { CollectionNameSheet } from "@/components/collection-name-sheet";
 import { ErrorMessage } from "@/components/error-message";
 import { PlusIcon } from "@/components/icons";
@@ -16,8 +18,13 @@ import { themedStyles } from "@/theme/themed-styles";
 // « Ajouter à une collection » (lot collections), depuis une envie : ses
 // collections, à cocher (une envie peut être dans plusieurs), et « Nouvelle
 // collection ». Les collections marquées « Amis » sont visibles par ses amis.
+// Étagères des amis (refonte) : quand « Montrer mes Envies à mes amis » est
+// allumé, une phrase dit qu'une envie rangée dans une collection « Privée »
+// n'est pas dans les Envies que voient ses amis (une nouvelle collection est
+// « Privée » au départ).
 export function AddToCollectionSheet({ wishId, visible, onClose }: { wishId: string; visible: boolean; onClose: () => void }) {
   const { showToast } = useToast();
+  const { profile } = useAuth();
   const [collections, setCollections] = useState<CollectionSummary[] | null>(null);
   const [initial, setInitial] = useState<string[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
@@ -73,6 +80,11 @@ export function AddToCollectionSheet({ wishId, visible, onClose }: { wishId: str
           {t.collections.sheetTitle}
         </Text>
         <Text style={styles.hint}>{t.collections.sheetHint}</Text>
+        {showsWishes(profile) ? (
+          <Text style={styles.hint} testID="collection-privee-hors-etagere">
+            {t.collections.privateNotOnShelf}
+          </Text>
+        ) : null}
         <ScrollView contentContainerStyle={styles.list}>
           {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
           {collections === null && !error ? <ActivityIndicator color={color.encre} /> : null}

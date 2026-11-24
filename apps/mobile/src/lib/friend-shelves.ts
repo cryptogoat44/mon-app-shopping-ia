@@ -1,7 +1,9 @@
 import type { FriendShelvesOpen, FriendVaultPiece, FriendWish, Profile, UserProfile } from "@monapp/shared-types";
 import { getActiveLocale, t } from "../i18n";
 import { sharedItemPrice } from "./collections";
+import { formatLongDate, formatPrice } from "./format";
 import type { PieceImageSize } from "./piece-image";
+import type { Locale } from "./preferences";
 
 // Étagères des amis (lot « étagères des amis », migration 0058) : la logique
 // pure, sans écran (testée par tests/etageres-amis.test.ts).
@@ -9,8 +11,12 @@ import type { PieceImageSize } from "./piece-image";
 // - Les onglets du profil d'un ami n'apparaissent que si le serveur annonce
 //   au moins une étagère ouverte à ce visiteur ; sinon, l'écran reste celui
 //   d'avant (« Publications » seules).
-// - Les phrases « privé » de l'app changent seulement quand le réglage est
-//   allumé ; éteint ou inconnu : la phrase d'avant, mot pour mot.
+// - Refonte (décisions du fondateur) : les deux réglages sont allumés par
+//   défaut, mais rien n'est montré aux amis avant que le membre ait vu
+//   l'information « Ce que vos amis peuvent voir » (`friendShelvesInformed`).
+// - Les phrases « privé » de l'app disent « vos amis voient » seulement quand
+//   c'est vrai maintenant (réglage allumé ET information vue) ; sinon, la
+//   phrase d'avant, mot pour mot (ou, réglage éteint, la phrase qui le dit).
 
 export type ProfileTab = "posts" | "wishes" | "vault";
 export type ShelfKind = "wishes" | "vault";
@@ -47,26 +53,105 @@ export function showsVault(profile: Pick<Profile, "showVaultToFriends"> | null |
   return profile?.showVaultToFriends === true;
 }
 
-/** Allumer demande une confirmation ; éteindre, jamais. */
-export function needsShelfConfirmation(next: boolean): boolean {
-  return next;
+type ShelvesProfile = Pick<Profile, "showWishesToFriends" | "showVaultToFriends" | "friendShelvesInformed">;
+
+/** Le membre a-t-il vu l'information ? Seulement un vrai oui du serveur. */
+export function friendShelvesInformed(profile: Pick<Profile, "friendShelvesInformed"> | null | undefined): boolean {
+  return profile?.friendShelvesInformed === true;
 }
 
-// ---- Les phrases « privé », exactes dans les deux cas (langue active à l'appel) ----
+/** Mes Envies sont-elles montrées à mes amis MAINTENANT (réglage allumé et information vue) ? */
+export function wishesShownNow(profile: Pick<Profile, "showWishesToFriends" | "friendShelvesInformed"> | null | undefined): boolean {
+  return showsWishes(profile) && friendShelvesInformed(profile);
+}
+
+/** Mon Vault est-il montré à mes amis MAINTENANT (réglage allumé et information vue) ? */
+export function vaultShownNow(profile: Pick<Profile, "showVaultToFriends" | "friendShelvesInformed"> | null | undefined): boolean {
+  return showsVault(profile) && friendShelvesInformed(profile);
+}
+
+/** L'information « Ce que vos amis peuvent voir » : seulement si le serveur
+ * connaît la fonction (réglages et `friendShelvesInformed` renvoyés), que le
+ * membre ne l'a pas encore vue (un vrai « non »), et qu'au moins un réglage
+ * est allumé (sinon, rien ne serait montré : rien à annoncer). */
+export function needsFriendShelvesNotice(profile: ShelvesProfile | null | undefined): boolean {
+  return friendShelvesSettingShown(profile) && profile?.friendShelvesInformed === false && (showsWishes(profile) || showsVault(profile));
+}
+
+/** Les lignes de l'information, selon les réglages allumés (langue active à l'appel). */
+export function friendShelvesNoticeLines(profile: ShelvesProfile | null | undefined): string[] {
+  return [
+    t.friendShelves.noticeIntro,
+    ...(showsWishes(profile) ? [t.friendShelves.noticeWishes] : []),
+    ...(showsVault(profile) ? [t.friendShelves.noticeVault] : []),
+    t.friendShelves.noticeOutro,
+  ];
+}
+
+/** Ce que la réponse à l'information envoie au serveur : « Compris » note
+ * seulement la date ; « Éteindre » éteint les deux réglages et note la date. */
+export function noticeAnswer(choice: "ok" | "off"): { informed: true; wishes?: false; vault?: false } {
+  return choice === "ok" ? { informed: true } : { wishes: false, vault: false, informed: true };
+}
+
+/** Le message court après un réglage changé dans Réglages (langue active à l'appel). */
+export function shelfToast(shelf: ShelfKind, next: boolean, informed: boolean, collectionsEnabled: boolean): string {
+  if (shelf === "wishes") {
+    if (next) return informed ? t.friendShelves.wishesShown : t.friendShelves.wishesOnPending;
+    return collectionsEnabled ? t.friendShelves.wishesPrivateAgainCollections : t.friendShelves.wishesPrivateAgain;
+  }
+  if (next) return informed ? t.friendShelves.vaultShown : t.friendShelves.vaultOnPending;
+  return t.friendShelves.vaultPrivateAgain;
+}
+
+// ---- Les phrases « privé », exactes dans chaque état (langue active à l'appel) ----
 
 /** Fiche d'une pièce du Vault. */
-export function vaultItemNote(profile: Pick<Profile, "showVaultToFriends"> | null | undefined): string {
-  return showsVault(profile) ? t.friendShelves.vaultItemNote : t.vaultItem.privateNote;
+export function vaultItemNote(profile: Pick<Profile, "showVaultToFriends" | "friendShelvesInformed"> | null | undefined): string {
+  return vaultShownNow(profile) ? t.friendShelves.vaultItemNote : t.vaultItem.privateNote;
 }
 
 /** Ajout d'une pièce au Vault. */
-export function vaultFormNote(profile: Pick<Profile, "showVaultToFriends"> | null | undefined): string {
-  return showsVault(profile) ? t.friendShelves.vaultFormNote : t.vaultForm.privateNote;
+export function vaultFormNote(profile: Pick<Profile, "showVaultToFriends" | "friendShelvesInformed"> | null | undefined): string {
+  return vaultShownNow(profile) ? t.friendShelves.vaultFormNote : t.vaultForm.privateNote;
 }
 
 /** Fiche d'une envie, sous « Partager ». */
-export function wishShareHint(profile: Pick<Profile, "showWishesToFriends"> | null | undefined): string {
-  return showsWishes(profile) ? t.friendShelves.wishShareHint : t.wishlistItem.shareHint;
+export function wishShareHint(profile: Pick<Profile, "showWishesToFriends" | "friendShelvesInformed"> | null | undefined): string {
+  return wishesShownNow(profile) ? t.friendShelves.wishShareHint : t.wishlistItem.shareHint;
+}
+
+/** La feuille « Qui voit vos Envies », trois états : montrées à vos amis
+ * (réglage allumé et information vue) ; réglage éteint ; fonction absente (ou
+ * information pas encore vue : rien n'est montré, la phrase d'avant est vraie). */
+export function wishlistPrivacyNote(profile: ShelvesProfile | null | undefined, collectionsEnabled: boolean): string {
+  if (wishesShownNow(profile)) return t.wishlist.privateNoteFriends;
+  if (friendShelvesSettingShown(profile) && !showsWishes(profile)) return t.wishlist.privateNoteOff;
+  return collectionsEnabled ? t.wishlist.privateNoteCollections : t.wishlist.privateNote;
+}
+
+/** Ce qu'un ami voit en plus sur la petite feuille d'une pièce, en lecture
+ * seule : l'alerte de prix et les collections « Mes amis » d'une envie ; la
+ * date d'ajout et « Achat vérifié » d'une pièce du Vault. Rien si le serveur
+ * (plus ancien) ne l'envoie pas. */
+export function friendShelfDetails(entry: ShelfItem, locale: Locale): string[] {
+  const lines: string[] = [];
+  if (entry.kind === "wishes") {
+    const alert = entry.item.priceAlert;
+    if (alert) {
+      lines.push(
+        alert.targetPrice !== null && alert.targetCurrency !== null
+          ? t.friendShelves.priceAlertBelow(formatPrice(alert.targetPrice, alert.targetCurrency, locale))
+          : t.friendShelves.priceAlertOn
+      );
+    }
+    const names = (entry.item.collections ?? []).filter((name) => name.trim().length > 0);
+    if (names.length > 0) lines.push(t.friendShelves.inCollections(names.join(", ")));
+  } else {
+    if (entry.item.createdAt) lines.push(t.friendShelves.addedOn(formatLongDate(entry.item.createdAt, locale)));
+    if (entry.item.verified === true) lines.push(t.profile.verified);
+  }
+  return lines;
 }
 
 /** Le libellé VoiceOver d'une case : nom, puis prix (envie) ou catégorie (pièce du Vault). */

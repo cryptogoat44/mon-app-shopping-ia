@@ -5,7 +5,7 @@ import { getActiveLocale, t } from "@/i18n";
 import { fetchUserVault, fetchUserWishlist } from "@/lib/api";
 import { sharedItemImage, sharedItemPrice } from "@/lib/collections";
 import { loadErrorMessage } from "@/lib/load-error";
-import { shelfCellImageSize, shelfCellLabel, type ShelfItem, type ShelfKind } from "@/lib/friend-shelves";
+import { friendShelfDetails, shelfCellImageSize, shelfCellLabel, type ShelfItem, type ShelfKind } from "@/lib/friend-shelves";
 
 export type { ShelfItem } from "@/lib/friend-shelves";
 import { ImageUnavailable } from "@/components/image-unavailable";
@@ -130,13 +130,17 @@ export function FriendShelfCell({ entry, onOpen }: { entry: ShelfItem; onOpen: (
 }
 
 /** La petite feuille d'une case : l'image en grand, le nom, puis le prix et
- * « Voir chez … » (envie) ou la catégorie (pièce du Vault). Lecture seule. */
+ * « Voir chez … » (envie) ou la catégorie (pièce du Vault), et ce que le
+ * membre voit lui-même (refonte) : son alerte de prix et ses collections
+ * « Mes amis » (envie), la date d'ajout et « Achat vérifié » (Vault). Lecture
+ * seule : rien ne se modifie, ne se garde ni ne s'allume ici. */
 export function FriendShelfSheet({ entry, onClose }: { entry: ShelfItem | null; onClose: () => void }) {
   if (!entry) return null;
   const large = entry.kind === "wishes" ? (entry.item.imageUrl ?? entry.item.imageThumbUrl) : (entry.item.imageHdUrl ?? entry.item.imageUrl);
   const small = entry.kind === "wishes" ? sharedItemImage(entry.item) : entry.item.imageUrl;
   const price = entry.kind === "wishes" ? sharedItemPrice(entry.item, getActiveLocale()) : null;
   const meta = entry.kind === "wishes" ? [entry.item.merchantName, price].filter(Boolean).join(" · ") : (t.vaultLabels.categories[entry.item.category] ?? t.vaultLabels.categories.other);
+  const details = friendShelfDetails(entry, getActiveLocale());
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.avoider}>
@@ -155,6 +159,11 @@ export function FriendShelfSheet({ entry, onClose }: { entry: ShelfItem | null; 
               {entry.item.title}
             </Text>
             {meta ? <Text style={styles.meta}>{meta}</Text> : null}
+            {details.map((line) => (
+              <Text key={line} style={styles.meta}>
+                {line}
+              </Text>
+            ))}
             {/* La mention « Lien affilié » est affichée par le bouton lui-même. */}
             {entry.kind === "wishes" && entry.item.merchantUrl ? (
               <MerchantLinkButton url={entry.item.merchantUrl} merchantName={entry.item.merchantName} matchId={null} context="received" isAffiliate={entry.item.isAffiliate} />

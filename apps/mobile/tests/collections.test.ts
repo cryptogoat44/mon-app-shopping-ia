@@ -63,8 +63,8 @@ describe("cachées quand les collections ne sont pas disponibles", () => {
     const panel = source("components/wishlist-panel.tsx");
     expect(panel).toContain("collectionChips(collectionsAvailable, collections)");
     expect(panel).toMatch(/\{chips \? \(/);
-    // Étagères des amis (migration 0058) : la phrase des amis passe devant quand le réglage est allumé.
-    expect(panel).toContain("showsWishes(profile) ? t.wishlist.privateNoteFriends : collectionsAvailable.enabled ? t.wishlist.privateNoteCollections : t.wishlist.privateNote");
+    // Étagères des amis (refonte) : trois états, dans lib/friend-shelves.ts (tests/etageres-amis.test.ts).
+    expect(panel).toContain("wishlistPrivacyNote(profile, collectionsAvailable.enabled)");
     const wish = source("app/(app)/envie.tsx");
     expect(wish).toMatch(/\{collections\.enabled \? \(\s*<Pressable[\s\S]*?t\.collections\.addToCollection/);
     expect(wish).toContain("{collections.enabled ? <AddToCollectionSheet");
@@ -121,7 +121,7 @@ describe("écran Envies : « Toutes » puis une puce par collection", () => {
     expect(panel.slice(panel.indexOf("function choose("), panel.indexOf("function changeSort("))).toContain("setOptionsOpen(false);");
     const options = source("components/collection-options-sheet.tsx");
     expect(options).toContain("t.collections.manageLabel(collection.name)");
-    expect(options).toContain("{collectionState(collection, showsWishes(profile))}");
+    expect(options).toContain("{collectionState(collection)}");
     // Jamais deux fenêtres à la fois : « Gérer » attend que la feuille soit fermée.
     expect(options).toContain("onDismiss={() => afterClose.flush()}");
     expect(options).toContain("onPress={() => then(() => onManage(collection))}");

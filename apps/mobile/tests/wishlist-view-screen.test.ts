@@ -153,8 +153,8 @@ describe("ce qui est affiché : la puce, puis la recherche, puis le tri", () => 
   it("« Qui voit vos Envies » : la phrase de confidentialité, mot pour mot, dans une feuille qui se ferme", () => {
     const sheet = panel.slice(panel.indexOf("<Modal visible={privacyOpen}"), panel.indexOf("</Modal>"));
     expect(sheet).toContain("{t.wishlist.privacyTitle}");
-    // Réglage « Montrer mes Envies à mes amis » allumé (migration 0058) : la phrase des amis ; sinon, celle d'avant, mot pour mot.
-    expect(sheet).toContain("{showsWishes(profile) ? t.wishlist.privateNoteFriends : collectionsAvailable.enabled ? t.wishlist.privateNoteCollections : t.wishlist.privateNote}");
+    // Étagères des amis (refonte) : trois états (montrées, éteint, absent), dans lib/friend-shelves.ts ; fonction absente : celle d'avant, mot pour mot.
+    expect(sheet).toContain("{wishlistPrivacyNote(profile, collectionsAvailable.enabled)}");
     expect(sheet).toContain("onRequestClose={() => setPrivacyOpen(false)}");
     expect(sheet).toContain("{t.wishlist.privacyOk}");
   });
