@@ -54,8 +54,10 @@ describe("0055 : vérification et registre", () => {
     expect(VERIFICATION).toContain("Résultat attendu : une seule ligne, true | true | true");
   });
 
-  it("le registre a sa ligne « à appliquer », ses fichiers, et ce que fait le serveur sans elle ; entre 0054 et 0056", () => {
-    expect(REGISTRY).toMatch(/\| 0055 \| Verdict : [^\n]*\| \*\*à appliquer\*\* \(sur spotto-dev-2 d'abord ; ne demande que 0001/);
+  it("le registre a sa ligne « appliquée en production », ses fichiers, et ce que fait le serveur sans elle ; entre 0054 et 0056", () => {
+    expect(REGISTRY).toMatch(/\| 0055 \| Verdict : [^\n]*\| appliquée en production \(ne demande que 0001 ; le fichier de la migration, après une copie de secours complète ; vérification juste, [a-z]+ `true`\) \| 24 nov\. 2026 \|/);
+    // Appliquée en production le 24 novembre 2026 : plus jamais « à appliquer ».
+    expect(REGISTRY).not.toMatch(/\| 0055 \| [^\n]*\*\*à appliquer\*\*/);
     expect(REGISTRY).toContain("| 0055 | le fichier de la migration lui-même | `supabase/verifications/0055-verification.sql` (une ligne, trois `true`) | en tête du fichier de la migration |");
     expect(REGISTRY).toContain("Sans 0055, aucune phrase de verdict n'est montrée en tête des résultats (sonde du schéma, lib/verdictColumn.ts).");
     const line = REGISTRY.split("\n").find((text) => text.startsWith("| 0055 | Verdict"))!;

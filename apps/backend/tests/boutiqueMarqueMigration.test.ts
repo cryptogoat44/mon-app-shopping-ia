@@ -52,8 +52,10 @@ describe("0054 : vérification et registre", () => {
     expect(VERIFICATION).toContain("Résultat attendu : une seule ligne, true | true");
   });
 
-  it("le registre a sa ligne « à appliquer », ses fichiers, et ce que fait le serveur sans elle", () => {
-    expect(REGISTRY).toMatch(/\| 0054 \| Ordre des boutiques : [^\n]*\| \*\*à appliquer\*\* \(sur spotto-dev-2 d'abord ; ne demande que 0001/);
+  it("le registre a sa ligne « appliquée en production », ses fichiers, et ce que fait le serveur sans elle", () => {
+    expect(REGISTRY).toMatch(/\| 0054 \| Ordre des boutiques : [^\n]*\| appliquée en production \(ne demande que 0001 ; le fichier de la migration, après une copie de secours complète ; vérification juste, [a-z]+ `true`\) \| 24 nov\. 2026 \|/);
+    // Appliquée en production le 24 novembre 2026 : plus jamais « à appliquer ».
+    expect(REGISTRY).not.toMatch(/\| 0054 \| [^\n]*\*\*à appliquer\*\*/);
     expect(REGISTRY).toContain("| 0054 | le fichier de la migration lui-même | `supabase/verifications/0054-verification.sql` (une ligne, deux `true`) | en tête du fichier de la migration |");
     expect(REGISTRY).toContain("Sans 0054, aucune boutique officielle ne passe en tête de « Cette pièce dans d'autres boutiques » : chacune y est rangée comme une boutique connue (remontée de 2 places au plus), avec sa mention");
     // La ligne du tableau dit, en clair, qu'elle est facultative, et ce qui change pour les membres avant et après.
