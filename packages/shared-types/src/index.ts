@@ -45,6 +45,10 @@ export interface Profile {
   linkUrl?: string | null;
   /** « Proposer mon compte aux autres membres » (migration 0050) ; absent tant que la migration manque : l'app cache alors le réglage. */
   discoverable?: boolean;
+  /** « Montrer mes Envies à mes amis » (migration 0058), éteint au départ ; absent tant que la migration manque : l'app cache alors le réglage. */
+  showWishesToFriends?: boolean;
+  /** « Montrer mon Vault à mes amis » (migration 0058), éteint au départ ; absent tant que la migration manque : l'app cache alors le réglage. */
+  showVaultToFriends?: boolean;
 }
 
 /** Réglage « Qui peut m'envoyer des pièces » : les comptes que je suis (par
@@ -823,8 +827,10 @@ export interface PublicProfile {
   followState?: FollowState;
 }
 
-/** Profil d'un autre utilisateur (Lot Q, décision 6). Jamais son Vault,
- * ni même le nombre de pièces qu'il contient. */
+/** Profil d'un autre utilisateur (Lot Q, décision 6). Jamais le nombre de
+ * pièces de son Vault. Son Vault et ses Envies seulement s'il a choisi de les
+ * montrer à ses amis et que le visiteur en est un (`friendShelves`, migration
+ * 0058), par leurs propres routes. */
 export interface UserProfile {
   id: string;
   username: string;
@@ -847,6 +853,11 @@ export interface UserProfile {
    * suspendu ; absent sans 0049, et pour qui n'est pas un abonné accepté de
    * son compte privé (qui ne reçoit que nom, photo, bio et compteurs). */
   linkUrl?: string | null;
+  /** Étagères des amis (migration 0058) : présent seulement quand au moins
+   * une étagère est ouverte à CE visiteur (amis, sans blocage, compte non
+   * suspendu, réglage allumé) ; absent dans tous les autres cas, sans dire
+   * pourquoi. */
+  friendShelves?: FriendShelvesOpen;
 }
 
 /** « wish » (lot 5) : une envie republiée sur son profil — jamais un achat,
@@ -3197,3 +3208,62 @@ export const LOOK_NOT_READY_ERROR = "look_not_ready";
 export const LOOK_LIMIT_ERROR = "look_limit";
 /** 503 (création) ou 404 (liste, arrêt) : pages look indisponibles (0057 absente ou interrupteur coupé). */
 export const LOOK_PAGES_UNAVAILABLE_ERROR = "look_pages_unavailable";
+
+// ---- Étagères des amis (migration 0058) ----
+
+/** Les étagères d'un membre ouvertes au visiteur (GET /api/users/:userId). */
+export interface FriendShelvesOpen {
+  wishes: boolean;
+  vault: boolean;
+}
+
+/** Une envie d'un ami, en lecture seule : jamais sa note, l'image du
+ * marchand, une alerte, le nom d'une collection ni la recherche d'origine.
+ * L'image est la copie faite par Spotto (les deux tailles ou aucune). */
+export interface FriendWish {
+  id: string;
+  title: string;
+  imageUrl: string | null;
+  imageThumbUrl: string | null;
+  merchantName: string | null;
+  /** Lien à ouvrir : affilié s'il existe, sinon le lien marchand ; null sans lien web. */
+  merchantUrl: string | null;
+  /** Lien affilié (mention obligatoire). */
+  isAffiliate: boolean;
+  priceMin: number | null;
+  currency: string | null;
+}
+
+/** GET /api/users/:userId/wishlist : les plus récentes d'abord. `nextCursor`
+ * est un simple rang (aucune date). Page vide pour tout visiteur à qui
+ * l'étagère n'est pas ouverte. */
+export interface FriendWishPage {
+  items: FriendWish[];
+  nextCursor: string | null;
+}
+
+/** Une pièce du Vault d'un ami, en lecture seule : jamais la date d'ajout,
+ * la mention « achat vérifié » ni la recherche d'origine. L'image est celle
+ * que la pièce affiche (sa propre photo, ou l'image du marchand). */
+export interface FriendVaultPiece {
+  id: string;
+  title: string;
+  category: VaultCategory;
+  imageUrl: string | null;
+  imageHdUrl: string | null;
+}
+
+/** GET /api/users/:userId/vault : comme FriendWishPage. */
+export interface FriendVaultPage {
+  items: FriendVaultPiece[];
+  nextCursor: string | null;
+}
+
+/** PUT /api/me/friend-shelves : un réglage absent reste inchangé. */
+export interface UpdateFriendShelvesRequest {
+  wishes?: boolean;
+  vault?: boolean;
+}
+
+/** 404 : les étagères des amis ne sont pas encore disponibles (migration 0058 absente). */
+export const FRIEND_SHELVES_UNAVAILABLE_ERROR = "friend_shelves_unavailable";

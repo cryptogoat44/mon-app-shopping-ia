@@ -137,6 +137,9 @@ export const EXPORT_COLUMNS = {
     link_url: shown("Lien affiché sur votre profil", "Link shown on your profile"),
     // Fil « Pour vous » (migration 0050) : oui / non.
     discoverable: shown("Compte proposé aux autres membres", "Account suggested to other members"),
+    // Étagères des amis (migration 0058) : oui / non.
+    wishes_shown_to_friends: shown("Envies montrées à vos amis", "Wishlist shown to your friends"),
+    vault_shown_to_friends: shown("Vault montré à vos amis", "Vault shown to your friends"),
     created_at: shown("Compte créé le", "Account created on"),
     updated_at: shown("Profil modifié le", "Profile updated on"),
   },
