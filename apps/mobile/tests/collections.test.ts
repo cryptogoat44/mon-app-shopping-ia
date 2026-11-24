@@ -106,13 +106,25 @@ describe("écran Envies : « Toutes » puis une puce par collection", () => {
     expect(selectedCollection(null, "c1")).toBeNull();
   });
 
-  it("sous les puces : qui voit la collection choisie, et « Gérer »", () => {
+  it("« … » de la collection choisie : qui la voit, et « Gérer »", () => {
     expect(visibilityState("private")).toBe("Privée : vous seul la voyez.");
     expect(visibilityState("friends")).toBe("Visible par vos amis (les membres que vous suivez et qui vous suivent).");
     const panel = source("components/wishlist-panel.tsx");
     expect(panel).toContain("getCollectionWishlist(selectedKey, cursor)");
-    expect(panel).toContain("t.collections.manageLabel(selected.name)");
     expect(panel).toContain("<CollectionSettingsSheet");
+    // Retours du build 2 : un bouton « … » nommé, seulement quand une collection est choisie, hors des onglets.
+    expect(panel).toMatch(/\{selected \? \(\s*<Pressable[\s\S]*?onPress=\{\(\) => setOptionsOpen\(true\)\}[\s\S]*?accessibilityLabel=\{t\.collections\.ownOptionsLabel\(selected\.name\)\}/);
+    expect(panel.indexOf('testID="options-collection"')).toBeGreaterThan(panel.indexOf("</ScrollView>"));
+    expect(panel).toContain("onManage={setManaging}");
+    // Changer de puce ferme la feuille.
+    expect(panel.slice(panel.indexOf("function choose("), panel.indexOf("function changeSort("))).toContain("setOptionsOpen(false);");
+    const options = source("components/collection-options-sheet.tsx");
+    expect(options).toContain("t.collections.manageLabel(collection.name)");
+    expect(options).toContain("{collectionState(collection)}");
+    // Jamais deux fenêtres à la fois : « Gérer » attend que la feuille soit fermée.
+    expect(options).toContain("onDismiss={() => afterClose.flush()}");
+    expect(options).toContain("onPress={() => then(() => onManage(collection))}");
+    expect(options).toMatch(/function then\(run: \(\) => void\) \{\s*onClose\(\);\s*afterClose\.schedule\(run\);/);
   });
 });
 

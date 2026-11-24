@@ -148,7 +148,9 @@ describe("collection masquée, vue par son auteur", () => {
     expect(chips[1]).toMatchObject({ hidden: true, shared: false, accessibilityLabel: "Cadeaux, masquée par la modération" });
     const panel = source("components/wishlist-panel.tsx");
     expect(panel).toContain("{chip.hidden ? ` · ${t.collections.hiddenBadge}` : chip.shared ? ` · ${t.collections.sharedBadge}` : \"\"}");
-    expect(panel).toContain("{collectionState(selected)}");
+    // Retours du build 2 : l'état de la collection choisie se lit dans sa feuille « … ».
+    expect(source("components/collection-options-sheet.tsx")).toContain("{collectionState(collection)}");
+    expect(panel).toContain("<CollectionOptionsSheet");
   });
 
   it("« Mes amis » refusé tant qu'elle est masquée (le serveur le refuse aussi) ; « Privée » reste possible", () => {

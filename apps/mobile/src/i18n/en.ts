@@ -1002,6 +1002,9 @@ export const en: Catalog = {
     hiddenChipLabel: (name: string) => `${name}, hidden by moderation`,
     hiddenState: "Hidden by moderation: your friends can no longer see it.",
     hiddenCannotShare: "This collection was hidden by moderation: you can't show it to your friends.",
+    // Build 2 feedback (compact Wishlist): the "…" button at the end of the chips, for the chosen collection.
+    ownOptionsLabel: (name: string) => `Options for the collection ${name}`,
+    ownOptionsPosts: "Posts filed here",
   },
   received: {
     title: "Received pieces",
@@ -1107,6 +1110,13 @@ export const en: Catalog = {
     totalLoading: "Adding up the total…",
     // Beyond 500 wishes, or when a page could not be loaded.
     partialNote: (n: number) => `Based on the ${n} wishes loaded so far: scroll down to see more.`,
+    // Build 2 feedback (compact Wishlist): the privacy sentence behind a lock, search behind a magnifier,
+    // sort in a button. Neutral title: it stays true the day your friends can see your Wishlist.
+    privacyTitle: "Who can see your Wishlist",
+    privacyOk: "Got it",
+    searchClose: "Close search",
+    sortShort: { recent: "Recent", price_asc: "Price ↑", price_desc: "Price ↓" },
+    sortButtonLabel: (current: string) => `Sort, currently: ${current}`,
   },
   profile: {
     vault: "Vault",
