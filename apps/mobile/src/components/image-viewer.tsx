@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Modal, PanResponder, Platform, Pressable, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
 import { SpotImage } from "@/components/spot-image";
 import { MinusIcon, PlusIcon } from "@/components/icons";
 import { t } from "@/i18n";
@@ -34,7 +35,8 @@ import {
 // Native que le recadrage de la photo de profil (PanResponder), aucune
 // dépendance. Jamais sur les images des grilles : seulement là où
 // EnlargeableImage est posé. Même image que l'écran qui l'ouvre (la plus
-// nette des deux, SpotImage « large ») : rien de plus n'est téléchargé.
+// nette des deux, SpotImage « large ») : rien de plus n'est téléchargé ;
+// sur iPhone elle est seulement décodée en pleine taille (fullResolution).
 
 // Site : le doigt déplace l'image, jamais la page ; la main montre qu'on peut la saisir.
 const WEB_GESTURE_STYLE: ViewStyle | null =
@@ -149,6 +151,8 @@ export function ImageViewer({ hdUri, fallbackUri, label, onClose }: { hdUri?: st
   return (
     <Modal visible animationType="fade" onRequestClose={onClose} supportedOrientations={["portrait", "landscape"]}>
       <SafeAreaView style={styles.screen} accessibilityViewIsModal>
+        {/* Fond sombre dans les deux thèmes : heure et batterie claires (comme spot-waiting.tsx). */}
+        <StatusBar style="light" />
         <View style={styles.nav}>
           <Pressable onPress={onClose} hitSlop={8} style={styles.close} accessibilityRole="button" accessibilityLabel={t.common.close} testID="image-fermer">
             <Text style={styles.closeLabel}>{t.common.close}</Text>
@@ -170,6 +174,8 @@ export function ImageViewer({ hdUri, fallbackUri, label, onClose }: { hdUri?: st
               hdUri={hdUri}
               fallbackUri={fallbackUri}
               fit="contain"
+              // Décodée en entier (iPhone) : le zoom montre les vrais détails de la photo.
+              fullResolution
               style={{ width: frame.width, height: frame.height, transform: [{ translateX: view.x }, { translateY: view.y }, { scale: view.zoom }] }}
             />
           ) : null}

@@ -81,6 +81,28 @@ describe("où l'image s'ouvre en grand (lecture du code)", () => {
     expect(read("src/components/product-frame.tsx")).toContain("enlargeable = false");
   });
 
+  it("plein écran : image décodée en entier (zoom net) ; fiches et grilles : réduite comme avant", () => {
+    const viewer = read("src/components/image-viewer.tsx");
+    expect(viewer).toMatch(/<SpotImage\s[^>]*\n\s*fullResolution\n/);
+    const spotImage = read("src/components/spot-image.tsx");
+    expect(spotImage).toContain("fullResolution = false");
+    // Les trois images d'expo-image (deux temps et une seule) suivent la demande.
+    expect(spotImage.match(/allowDownscaling=\{!fullResolution\}/g)).toHaveLength(3);
+    // Refusé : aucun autre écran ne décode en pleine taille.
+    for (const path of ["src/components/product-frame.tsx", "src/components/wishlist-panel.tsx", "src/components/proposal-card.tsx", "src/app/(app)/spot/result.tsx"]) {
+      expect(read(path), path).not.toContain("fullResolution");
+    }
+  });
+
+  it("barre d'état claire sur le fond sombre, dans le plein écran seulement", () => {
+    const viewer = read("src/components/image-viewer.tsx");
+    expect(viewer).toContain('<StatusBar style="light" />');
+    expect(viewer.indexOf('<StatusBar style="light" />')).toBeGreaterThan(viewer.indexOf("<Modal "));
+    // Refusé : la vignette qui ouvre l'image ne change pas la barre d'état de l'écran.
+    const enlargeable = viewer.slice(viewer.indexOf("export function EnlargeableImage"), viewer.indexOf("export function ImageViewer"));
+    expect(enlargeable).not.toContain("StatusBar");
+  });
+
   it("« Fermer », Échap sur le site (onRequestClose), gestes de React Native seulement, VoiceOver", () => {
     const source = read("src/components/image-viewer.tsx");
     expect(source).toContain("onRequestClose={onClose}");

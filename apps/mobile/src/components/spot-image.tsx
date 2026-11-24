@@ -25,6 +25,7 @@ export function SpotImage({
   fit = "contain",
   recyclingKey,
   size = "large",
+  fullResolution = false,
 }: {
   hdUri?: string | null;
   /** Vignette légère (Google, ou image déjà réduite) : en premier dans une
@@ -37,10 +38,15 @@ export function SpotImage({
    * ligne quand la liste réutilise ses éléments. */
   recyclingKey?: string;
   size?: PieceImageSize;
+  /** Plein écran avec zoom seulement : l'image est décodée en entier, sans
+   * être réduite à la taille du cadre (iPhone, allowDownscaling d'expo-image),
+   * pour que le zoom montre les vrais détails. Les fiches et grilles gardent
+   * la réduction (mémoire). */
+  fullResolution?: boolean;
 }) {
   const twoStep = twoStepSources(size, hdUri, fallbackUri);
-  if (twoStep) return <TwoStepImage {...twoStep} style={style} fit={fit} accessibilityLabel={accessibilityLabel} recyclingKey={recyclingKey} />;
-  return <OneImage hdUri={hdUri} fallbackUri={fallbackUri} style={style} fit={fit} accessibilityLabel={accessibilityLabel} recyclingKey={recyclingKey} size={size} />;
+  if (twoStep) return <TwoStepImage {...twoStep} style={style} fit={fit} accessibilityLabel={accessibilityLabel} recyclingKey={recyclingKey} fullResolution={fullResolution} />;
+  return <OneImage hdUri={hdUri} fallbackUri={fallbackUri} style={style} fit={fit} accessibilityLabel={accessibilityLabel} recyclingKey={recyclingKey} size={size} fullResolution={fullResolution} />;
 }
 
 /** Deux temps : la vignette tout de suite, l'originale par-dessus, en fondu,
@@ -57,6 +63,7 @@ function TwoStepImage({
   fit,
   accessibilityLabel,
   recyclingKey,
+  fullResolution,
 }: {
   thumb: string;
   hd: string;
@@ -64,6 +71,7 @@ function TwoStepImage({
   fit: "contain" | "cover";
   accessibilityLabel?: string;
   recyclingKey?: string;
+  fullResolution: boolean;
 }) {
   const key = `${thumb}\n${hd}`;
   const fresh: TwoStepState & { key: string } = { key, hd: "loading", hdWidth: null, thumbLoaded: false, thumbWidth: null, thumbFailed: false };
@@ -81,6 +89,7 @@ function TwoStepImage({
           contentFit={fit}
           cachePolicy="memory-disk"
           recyclingKey={recyclingKey}
+          allowDownscaling={!fullResolution}
           onLoad={(event) => update({ thumbLoaded: true, thumbWidth: event.source?.width ?? null })}
           onError={() => update({ thumbFailed: true })}
         />
@@ -93,6 +102,7 @@ function TwoStepImage({
           cachePolicy="memory-disk"
           recyclingKey={recyclingKey}
           transition={180}
+          allowDownscaling={!fullResolution}
           onLoad={(event) => update({ hd: "loaded", hdWidth: event.source?.width ?? null })}
           onError={() => update({ hd: "failed" })}
         />
@@ -110,6 +120,7 @@ function OneImage({
   fit,
   recyclingKey,
   size,
+  fullResolution,
 }: {
   hdUri?: string | null;
   fallbackUri: string;
@@ -118,6 +129,7 @@ function OneImage({
   fit: "contain" | "cover";
   recyclingKey?: string;
   size: PieceImageSize;
+  fullResolution: boolean;
 }) {
   const sources = imageSources(size, hdUri, fallbackUri);
   const key = sources.join("\n");
@@ -135,6 +147,7 @@ function OneImage({
       // arrière dans le fil ne les recharge pas.
       cachePolicy="memory-disk"
       recyclingKey={recyclingKey}
+      allowDownscaling={!fullResolution}
       onError={() => setErrors((previous) => ({ key, count: (previous.key === key ? previous.count : 0) + 1 }))}
       accessibilityLabel={accessibilityLabel}
     />
