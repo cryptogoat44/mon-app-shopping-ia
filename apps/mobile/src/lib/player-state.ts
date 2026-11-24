@@ -79,12 +79,13 @@ export function isPlaybackSignal(message: HostMessage): boolean {
 }
 
 /** Le lecteur a répondu (retours du build 2) : prêt, état, temps, son, code
- * Instagram chargé ou sa taille, ou lecture automatique refusée (3002 : il
- * attend un toucher). Il n'est alors plus remplacé au bout de 12 s. Toute
- * autre erreur, ou un message non prévu : non. */
+ * Instagram chargé, ou lecture automatique refusée (3002 : il attend un
+ * toucher). Il n'est alors plus remplacé au bout de 12 s. Toute autre erreur,
+ * un message non prévu, ou la taille Instagram (envoyée par la page d'accueil
+ * avant même que le code d'Instagram soit chargé) : non. */
 export function isPlayerAnswer(message: HostMessage): boolean {
   if (message.kind === "error") return tiktokErrorAction(message.code) === "tap_to_play";
-  return message.kind !== "other";
+  return message.kind !== "other" && message.kind !== "size";
 }
 
 /** Moment de la vidéo envoyé avec un spot : secondes entières, arrondies vers le bas ; null s'il n'est pas connu. */

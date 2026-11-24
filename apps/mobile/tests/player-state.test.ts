@@ -128,17 +128,17 @@ describe("taille du lecteur (9:16, « Spotter ce moment » visible, jamais sous 
 });
 
 describe("le lecteur a répondu (retours du build 2) : plus de remplacement au bout de 12 s", () => {
-  it("permis : prêt, état, temps, code Instagram chargé, taille, lecture automatique refusée (il attend un toucher)", () => {
+  it("permis : prêt, état, temps, code Instagram chargé, lecture automatique refusée (il attend un toucher)", () => {
     expect(isPlayerAnswer({ kind: "ready" })).toBe(true);
     expect(isPlayerAnswer({ kind: "state", state: "paused" })).toBe(true);
     expect(isPlayerAnswer({ kind: "time", currentTime: 1, duration: 9 })).toBe(true);
     expect(isPlayerAnswer({ kind: "muted", muted: true })).toBe(true);
     expect(isPlayerAnswer({ kind: "embedReady" })).toBe(true);
-    expect(isPlayerAnswer({ kind: "size", height: 600 })).toBe(true);
     expect(isPlayerAnswer({ kind: "error", code: 3002, errorType: null })).toBe(true);
   });
 
-  it("refusé : une autre erreur, ou un message non prévu", () => {
+  it("refusé : une autre erreur, un message non prévu, ou la taille Instagram (envoyée avant le code d'Instagram)", () => {
+    expect(isPlayerAnswer({ kind: "size", height: 600 })).toBe(false);
     expect(isPlayerAnswer({ kind: "error", code: 1001, errorType: null })).toBe(false);
     expect(isPlayerAnswer({ kind: "error", code: 2001, errorType: null })).toBe(false);
     expect(isPlayerAnswer({ kind: "other", type: "onVolumeChange", origin: "" })).toBe(false);
