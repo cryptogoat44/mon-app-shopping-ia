@@ -122,8 +122,9 @@ describe("ce qui est affiché : la puce, puis la recherche, puis le tri", () => 
       expect(outside).not.toContain(part);
     }
     // « Mes envies » : la liste seule ; « Reçues » : les sous-onglets en haut de sa propre liste.
-    expect(panel).toContain("<MyWishlist news={news} switcher={switcher} />");
-    expect(panel).toMatch(/<ScrollView>\s*<View style=\{styles\.switcher\}>\{switcher\}<\/View>\s*<ReceivedPieces \/>/);
+    // Lot « navigation » : l'en-tête du profil (header) passe tout en haut de chacune des deux listes.
+    expect(panel).toContain("<MyWishlist news={news} switcher={switcher} profileHeader={header} />");
+    expect(panel).toMatch(/<ScrollView>\s*\{header\}\s*<View style=\{styles\.switcher\}>\{switcher\}<\/View>\s*<ReceivedPieces \/>/);
     // Chargement compris : une seule liste, l'en-tête n'est jamais recréé quand une puce est choisie.
     expect(panel.match(/<FlatList/g)).toHaveLength(1);
     expect(panel).not.toContain("{loading ? (\n        <View");

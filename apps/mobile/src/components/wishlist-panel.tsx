@@ -68,7 +68,9 @@ function chunk<T>(items: T[], size: number): T[][] {
 // avec le signet des publications enregistrées et le cadenas « Qui voit vos
 // Envies » ; les puces, avec « … » pour la collection choisie ; le total,
 // la loupe et le tri (wishlist-tools.tsx).
-export function WishlistPanel({ news }: { news: WishAlertNewsState }) {
+// Lot « navigation » : `header`, l'en-tête du profil (photo, compteurs,
+// onglets), posé tout en haut de la liste : il défile lui aussi.
+export function WishlistPanel({ news, header }: { news: WishAlertNewsState; header?: ReactNode }) {
   const [view, setView] = useState<"mine" | "received">("mine");
   const switcher = (
     <SegmentedChoice
@@ -82,16 +84,17 @@ export function WishlistPanel({ news }: { news: WishAlertNewsState }) {
     />
   );
   return view === "mine" ? (
-    <MyWishlist news={news} switcher={switcher} />
+    <MyWishlist news={news} switcher={switcher} profileHeader={header} />
   ) : (
     <ScrollView>
+      {header}
       <View style={styles.switcher}>{switcher}</View>
       <ReceivedPieces />
     </ScrollView>
   );
 }
 
-function MyWishlist({ news, switcher }: { news: WishAlertNewsState; switcher: ReactNode }) {
+function MyWishlist({ news, switcher, profileHeader }: { news: WishAlertNewsState; switcher: ReactNode; profileHeader?: ReactNode }) {
   const router = useRouter();
   const { showToast } = useToast();
   // Envies lues pour la puce choisie, dans l'ordre récent, et le curseur de
@@ -283,6 +286,8 @@ function MyWishlist({ news, switcher }: { news: WishAlertNewsState; switcher: Re
   // en ligne, jamais un composant créé ici : le champ de recherche garderait mal le clavier.
   const header = (
     <>
+      {/* L'en-tête du profil : la liste a ses marges, il les annule pour garder toute la largeur. */}
+      {profileHeader ? <View style={styles.profileHeader}>{profileHeader}</View> : null}
       <View style={styles.topRow}>
         <View style={styles.topSwitcher}>{switcher}</View>
         <View style={styles.topIcons}>
@@ -520,6 +525,8 @@ function MyWishlist({ news, switcher }: { news: WishAlertNewsState; switcher: Re
 
 const styles = themedStyles(() => ({
   switcher: { paddingHorizontal: space.lg, paddingTop: space.sm, maxWidth: 640, alignSelf: "center", width: "100%" },
+  // En-tête du profil en haut de la liste (lot « navigation ») : sans les marges de la grille, avec l'écart d'avant dessous.
+  profileHeader: { marginHorizontal: -space.lg, marginTop: -space.sm, marginBottom: space.sm },
   // Ligne 1 : « Mes envies | Reçues », puis le signet et le cadenas (passe à la ligne en grand texte).
   topRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: space.xs, paddingBottom: space.xs },
   topSwitcher: { flexShrink: 1 },
