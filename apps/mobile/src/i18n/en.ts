@@ -70,11 +70,13 @@ export const en: Catalog = {
     whole: "The whole image",
   },
   peopleSearch: {
-    placeholder: "Search",
+    placeholder: "Name or @username",
     label: "Search for a profile",
     empty: "No profiles found.",
     error: "The search didn't go through.",
     following: "Following",
+    // Build 2 feedback: the screen's title, next to “‹”.
+    title: "Search for a profile",
   },
   completeProfile: {
     title: "One last step",
@@ -1026,10 +1028,12 @@ export const en: Catalog = {
       "It will bring together your posts and those of the people you follow. Start by identifying a piece, sharing a photo, or finding profiles to follow.",
     emptySpot: "Spot a piece",
     emptyPublish: "Post a photo",
-    emptyFind: "Find profiles",
+    emptyFind: "Search for profiles",
     title: "Feed",
-    profiles: "Profiles",
     loadError: "Unable to load the feed.",
+    // Build 2 feedback: the search-field pill at the top of the Feed (it replaces “Profiles”).
+    searchProfiles: "Search for a profile",
+    searchProfilesHint: "Opens the member search by name or @username",
   },
   comments: {
     title: "Comments",
@@ -1753,7 +1757,7 @@ export const en: Catalog = {
     followersEmptyOther: "This account has no followers yet.",
     followingEmpty: "You are not following anyone yet.",
     followingEmptyOther: "This account is not following anyone yet.",
-    findPeople: "Find people",
+    findPeople: "Search for profiles",
     loadError: "Couldn't load this list.",
     remove: "Remove",
     removeLabel: (name: string) => `Remove ${name} from your followers`,

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Keyboard, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -15,6 +15,7 @@ import { themedStyles } from "@/theme/themed-styles";
 import { t } from "@/i18n";
 import { Avatar } from "@/components/avatar";
 import { AccountSuggestions } from "@/components/account-suggestions";
+import { profileSearchQuery } from "@/lib/people-search-query";
 
 function PersonRow({
   person,
@@ -117,8 +118,12 @@ export default function PeopleSearchScreen() {
   function handleSearch(text: string) {
     setQuery(text);
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    // « @marie » cherche « marie » : un pseudo ne contient pas d'@.
+    const q = profileSearchQuery(text);
 
-    if (!text.trim()) {
+    if (!q) {
+      // Le champ est vide (ou ne contient qu'un « @ ») : on oublie la recherche en cours.
+      requestIdRef.current++;
       setResults(null);
       setLoading(false);
       return;
@@ -129,7 +134,7 @@ export default function PeopleSearchScreen() {
     debounceRef.current = setTimeout(async () => {
       const thisRequestId = ++requestIdRef.current;
       try {
-        const data = await searchUsers(text.trim());
+        const data = await searchUsers(q);
         // Ignore les réponses obsolètes si l'utilisateur a retapé entre-temps.
         if (thisRequestId === requestIdRef.current) {
           setResults(data);
@@ -157,8 +162,13 @@ export default function PeopleSearchScreen() {
         >
           <Text style={styles.back}>‹</Text>
         </Pressable>
+        {/* Retours du build 2 : l'écran dit ce qu'il fait. */}
+        <Text style={styles.navTitle} accessibilityRole="header" numberOfLines={1}>
+          {t.peopleSearch.title}
+        </Text>
       </View>
-      <ScrollView contentContainerStyle={styles.content}>
+      {/* Le clavier est ouvert à l'arrivée : un toucher sur « Suivre » ou un profil agit tout de suite. */}
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
         <View style={styles.searchBar}>
           <SearchIcon size={18} tint={color.acier} strokeWidth={1.6} />
           <TextInput
@@ -169,12 +179,15 @@ export default function PeopleSearchScreen() {
             onChangeText={handleSearch}
             autoCapitalize="none"
             autoCorrect={false}
+            // On arrive ici en touchant un champ (la pastille du Fil) : le clavier s'ouvre tout de suite.
+            autoFocus
+            returnKeyType="search"
             accessibilityLabel={t.peopleSearch.label}
           />
         </View>
 
         {/* Lot « découverte » : tant que le champ est vide, des comptes à découvrir. */}
-        {query.trim() === "" ? (
+        {profileSearchQuery(query) === "" ? (
           <View style={styles.suggestions}>
             <AccountSuggestions hiddenIds={blockedIds} />
           </View>
@@ -191,7 +204,11 @@ export default function PeopleSearchScreen() {
             key={person.id}
             person={person}
             onToggle={() => {}}
-            onOpenMenu={() => setMenuUserId(person.id)}
+            onOpenMenu={() => {
+              // Clavier ouvert, la feuille « Signaler / Bloquer » serait cachée dessous sur iPhone.
+              Keyboard.dismiss();
+              setMenuUserId(person.id);
+            }}
             onOpenProfile={() => router.push({ pathname: "/profil", params: { id: person.id } })}
           />
         ))}
@@ -209,7 +226,8 @@ export default function PeopleSearchScreen() {
 
 const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
-  nav: { height: 47, justifyContent: "center", paddingHorizontal: 12 },
+  nav: { minHeight: 47, flexDirection: "row", alignItems: "center", gap: space.sm, paddingHorizontal: 12 },
+  navTitle: { flexShrink: 1, fontSize: font.body, fontWeight: "600", color: color.encre },
   back: { fontSize: 26, color: color.encre },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   searchBar: {

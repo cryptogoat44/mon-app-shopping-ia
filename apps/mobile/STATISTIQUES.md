@@ -552,6 +552,19 @@ aucune page en particulier. **Les vues ne sont pas comptées** : on ne sait
 pas combien de personnes ouvrent un lien (décision n° 3, rien n'est
 enregistré sur des inconnus).
 
+## « Envoyer à un ami » : `from` (retours du build 2)
+
+**`piece_sent_to_friend`** est envoyé quand une proposition de l'écran
+Résultat part dans une conversation. `from` dit d'où elle est partie. Depuis
+les retours du build 2 (24 novembre 2026), « Envoyer à un ami » n'est plus
+que sur la grande carte de la pièce choisie : la nouvelle version n'envoie
+plus que `from` = `big_card`. Les valeurs `section` (carte d'une grille) et
+`price_list` (ligne de la liste triée par prix) peuvent encore arriver des
+builds déjà installés, jusqu'à leur mise à jour : ne comparez pas ces
+origines d'une semaine à l'autre. Jamais la pièce, le texte ni la personne.
+
+« Plus disponible ? » n'envoie aucune statistique, avant comme après.
+
 ## Les limites
 
 - **Un parcours n'a pas d'identifiant à lui** : les entonnoirs se font par

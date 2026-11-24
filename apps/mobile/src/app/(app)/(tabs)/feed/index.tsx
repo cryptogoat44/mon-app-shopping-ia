@@ -9,6 +9,7 @@ import { appendUnique, fetchUntilShown, forYouShown, noteForYouFailure, remember
 import { SegmentedChoice } from "@/components/segmented-choice";
 import { LoadFailure } from "@/components/load-failure";
 import { AccountSuggestions } from "@/components/account-suggestions";
+import { SearchIcon } from "@/components/icons";
 import { color, font, radius, serifDisplayLetterSpacing, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { Skeleton } from "@/components/skeleton";
 import { ReportBlockMenu } from "@/components/report-block-menu";
@@ -182,11 +183,22 @@ export default function FeedScreen() {
     <SafeAreaView style={styles.screen}>
       <View style={styles.header}>
         <Text style={styles.title} accessibilityRole="header">{t.feed.title}</Text>
-        <View style={styles.headerActions}>
-          <Pressable accessibilityRole="button" onPress={() => router.push("/people-search")} hitSlop={12}>
-            <Text style={styles.headerLink}>{t.feed.profiles}</Text>
-          </Pressable>
-        </View>
+        {/* Retours du build 2 : une pastille en forme de champ de recherche, dans la même ligne que le titre
+            (aucune hauteur perdue) ; elle ouvre la recherche de profils, clavier ouvert. */}
+        <Pressable
+          style={styles.searchPill}
+          accessibilityRole="button"
+          accessibilityLabel={t.feed.searchProfiles}
+          accessibilityHint={t.feed.searchProfilesHint}
+          onPress={() => router.push("/people-search")}
+          hitSlop={{ top: 4, bottom: 4 }}
+          testID="fil-rechercher-profil"
+        >
+          <SearchIcon size={16} tint={color.acierSurPlinthe} strokeWidth={1.6} />
+          <Text style={styles.searchPillLabel} numberOfLines={1}>
+            {t.feed.searchProfiles}
+          </Text>
+        </Pressable>
       </View>
       {withForYou ? (
         <View style={styles.segments}>
@@ -308,7 +320,8 @@ export default function FeedScreen() {
                     <Pressable style={styles.emptySecondary} onPress={() => router.push("/post-item/new")} accessibilityRole="button">
                       <Text style={styles.emptySecondaryLabel}>{t.feed.emptyPublish}</Text>
                     </Pressable>
-                    <Pressable style={styles.emptySecondary} onPress={() => router.push("/people-search")} accessibilityRole="button">
+                    <Pressable style={[styles.emptySecondary, styles.emptyFind]} onPress={() => router.push("/people-search")} accessibilityRole="button">
+                      <SearchIcon size={18} tint={color.encre} strokeWidth={1.6} />
                       <Text style={styles.emptySecondaryLabel}>{t.feed.emptyFind}</Text>
                     </Pressable>
                   </View>
@@ -347,8 +360,20 @@ const styles = themedStyles(() => ({
     paddingBottom: space.sm,
   },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, lineHeight: serifLineHeight.display, letterSpacing: serifDisplayLetterSpacing, color: color.encre },
-  headerActions: { flexDirection: "row", alignItems: "center", gap: space.md },
-  headerLink: { fontSize: font.secondary, color: color.acier, fontWeight: "600" },
+  // Pastille « Rechercher un profil » : même forme que le champ de people-search.tsx ; texte acierSurPlinthe (seul gris lisible sur plinthe).
+  searchPill: {
+    flex: 1,
+    maxWidth: 260,
+    minHeight: 40,
+    marginLeft: space.md,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: color.plinthe,
+    borderRadius: radius.full,
+    paddingHorizontal: space.md,
+  },
+  searchPillLabel: { flexShrink: 1, fontSize: font.secondary, color: color.acierSurPlinthe },
   // « Abonnements | Pour vous », puis la phrase qui explique le classement.
   segments: { paddingHorizontal: space.lg, paddingBottom: space.sm, gap: space.sm, maxWidth: 480, alignSelf: "center", width: "100%" },
   how: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
@@ -364,6 +389,8 @@ const styles = themedStyles(() => ({
   emptyPrimaryLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
   emptySecondary: { alignSelf: "stretch", minHeight: 50, borderRadius: radius.md, borderWidth: 1, borderColor: color.filet, alignItems: "center", justifyContent: "center", marginTop: space.sm },
   emptySecondaryLabel: { color: color.encre, fontSize: font.body, fontWeight: "600" },
+  // « Rechercher des profils » : la loupe avant le texte, comme la pastille du haut.
+  emptyFind: { flexDirection: "row", gap: 8 },
   // Squelette de chargement (mêmes proportions qu'une publication).
   post: { paddingHorizontal: space.lg, paddingBottom: 26 },
   author: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },

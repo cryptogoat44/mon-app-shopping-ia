@@ -195,7 +195,8 @@ describe("les écrans, lus comme du texte", () => {
     expect(followingEmpty).toContain("<AccountSuggestions hiddenIds={blockedIds} />");
     expect(feed).not.toContain("viendront au lot 7");
     const search = read("app/(app)/people-search.tsx");
-    expect(search).toContain('{query.trim() === "" ? (');
+    // Champ vide (ou un « @ » seul, qui ne cherche rien) : les comptes à découvrir.
+    expect(search).toContain('{profileSearchQuery(query) === "" ? (');
     expect(search).toContain("<AccountSuggestions hiddenIds={blockedIds} />");
   });
 
