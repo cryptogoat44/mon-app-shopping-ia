@@ -94,6 +94,7 @@ describe("0050 : retour en arrière, vérification, registre", () => {
     expect(REGISTRY).toContain("Sans 0050, le fil « Pour vous » et les suggestions de comptes sont cachés, comme le réglage « Proposer mon compte aux autres membres » : personne n'y est proposé sans pouvoir refuser");
     expect(REGISTRY).not.toContain("tous les comptes publics y sont proposés");
     expect(REGISTRY.indexOf("| 0049 | Épingles et lien en bio")).toBeLessThan(REGISTRY.indexOf("| 0050 | Fil « Pour vous »"));
-    expect(REGISTRY).toContain("État au 20 novembre 2026.");
+    // La date d'état du registre avance à chaque migration appliquée : elle doit exister, pas rester au 20 novembre.
+    expect(REGISTRY).toMatch(/État au \d{1,2}(?:er)? [a-zéû]+ 2026\./);
   });
 });
