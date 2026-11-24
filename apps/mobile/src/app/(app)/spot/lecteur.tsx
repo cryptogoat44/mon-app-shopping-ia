@@ -646,9 +646,11 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
         <Pressable style={styles.primary} onPress={() => void acceptConsent()} accessibilityRole="button">
           <Text style={styles.primaryLabel}>{t.player.gate.play}</Text>
         </Pressable>
-        {/* Analyse allumée : « Non merci » mène à la recherche automatique (fallback → afterPlayerFailure). */}
+        {/* Le libellé suit la même règle que fallback() : « chercher automatiquement » seulement si « Non merci » y mène (analyse allumée, pas déjà en échec). */}
         <Pressable style={styles.secondary} onPress={refuseConsent} accessibilityRole="button">
-          <Text style={styles.secondaryLabel}>{analysisEnabled ? t.player.gate.refuseAuto : t.player.gate.refuse}</Text>
+          <Text style={styles.secondaryLabel}>
+            {afterPlayerFailure({ os: Platform.OS, analysis: analysisEnabled, aiFailed: auto.phase.kind === "failed" }) === "ai" ? t.player.gate.refuseAuto : t.player.gate.refuse}
+          </Text>
         </Pressable>
         {memory}
       </View>

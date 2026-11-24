@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { sanitizeProps } from "../src/lib/analytics-events";
+import { afterPlayerFailure } from "../src/lib/player-decision";
 import { en } from "../src/i18n/en";
 import { fr } from "../src/i18n/fr";
 
@@ -46,9 +47,18 @@ describe("écran « vidéo partagée » : la vidéo d'abord sur iPhone", () => {
 
   it("accord : analyse allumée, « Non merci, chercher automatiquement » (vers l'analyse) ; coupée, « Non merci » (écran de secours)", () => {
     const consent = screen.slice(screen.indexOf('stage.kind === "consent"'), screen.indexOf('stage.kind === "fallback"'));
-    expect(consent).toContain("{analysisEnabled ? t.player.gate.refuseAuto : t.player.gate.refuse}");
+    expect(consent).toContain('{afterPlayerFailure({ os: Platform.OS, analysis: analysisEnabled, aiFailed: auto.phase.kind === "failed" }) === "ai" ? t.player.gate.refuseAuto : t.player.gate.refuse}');
     expect(consent).not.toContain("{autoLink}");
     expect(screen).toContain('if (reason !== "consent_refused") setPlayerBroken(reason);');
+  });
+
+  it("refusé : « Non merci, chercher automatiquement » après un échec de l'analyse (le refus mène à l'écran de secours) ; permis : ce libellé quand l'analyse n'a pas échoué", () => {
+    const consent = screen.slice(screen.indexOf('stage.kind === "consent"'), screen.indexOf('stage.kind === "fallback"'));
+    // Le libellé ne se choisit plus sur la seule analyse allumée.
+    expect(consent).not.toContain("{analysisEnabled ? t.player.gate.refuseAuto");
+    // Même règle que fallback() : refus → écran de secours quand l'analyse a déjà échoué.
+    expect(afterPlayerFailure({ os: "ios", analysis: true, aiFailed: true })).toBe("screenshot");
+    expect(afterPlayerFailure({ os: "ios", analysis: true, aiFailed: false })).toBe("ai");
   });
 
   it("l'écran de l'analyse dit pourquoi il prend le relais, et ne repropose pas le lecteur qui vient d'échouer", () => {
