@@ -30,6 +30,9 @@ export function useSearchHistory() {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [status, setStatus] = useState<HistoryStatus>("idle");
   const [ended, setEnded] = useState(false);
+  // La fin VUE : une page vide. Une page faite seulement de lignes déjà là (un
+  // serveur plus ancien ignore `before`) arrête la suite sans rien dire.
+  const [endConfirmed, setEndConfirmed] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [empty, setEmpty] = useState<boolean | null>(null);
   // Chaque demande porte un numéro : une réponse arrivée après une autre demande est ignorée.
@@ -65,6 +68,7 @@ export function useSearchHistory() {
       } else {
         setEntries(page);
         setEnded(false);
+        setEndConfirmed(false);
       }
       setStatus("idle");
       if (q === null) {
@@ -102,8 +106,12 @@ export function useSearchHistory() {
       if (request !== requestRef.current) return;
       const merged = mergeHistoryPage(stateRef.current.entries, page);
       setEntries(merged.entries);
-      // Rien de nouveau : la fin de l'historique (ou un serveur qui ignore `before`).
-      if (merged.added === 0) setEnded(true);
+      // Page vide : la fin de l'historique. Rien de nouveau sans page vide : un
+      // serveur plus ancien ignore `before` — la suite s'arrête, sans « Fin ».
+      if (page.length === 0) {
+        setEnded(true);
+        setEndConfirmed(true);
+      } else if (merged.added === 0) setEnded(true);
       setStatus("idle");
     } catch (error) {
       if (request !== requestRef.current) return;
@@ -130,6 +138,7 @@ export function useSearchHistory() {
       setQuery(next);
       setEntries([]);
       setEnded(false);
+      setEndConfirmed(false);
       setStatus("loading");
       stateRef.current = { ...stateRef.current, query: next, entries: [], ended: false, status: "loading" };
       void load(next);
@@ -166,6 +175,7 @@ export function useSearchHistory() {
     entries,
     status,
     ended,
+    endConfirmed,
     loaded,
     empty: empty === true,
     reload,

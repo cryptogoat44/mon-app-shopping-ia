@@ -110,9 +110,19 @@ describe("l'accueil de Spotter : une liste, l'historique en descendant", () => {
     const more = hook.slice(hook.indexOf("const loadMore = useCallback("), hook.indexOf("const retry = useCallback("));
     expect(more).toContain('if (busyRef.current || current.ended || current.status !== "idle" || before === null) return;');
     expect(more).toContain("getHistoryPage({ before, q: current.query })");
-    expect(more).toContain("if (merged.added === 0) setEnded(true);");
+    expect(more).toContain("} else if (merged.added === 0) setEnded(true);");
     // Seule la réponse de la dernière demande compte.
     expect(hook.match(/if \(request !== requestRef\.current\) return;/g)?.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("« Fin de votre historique » : refusé quand la page ne rapporte que des lignes déjà là (serveur plus ancien qui ignore `before`) ; permis après une page vide", () => {
+    const more = hook.slice(hook.indexOf("const loadMore = useCallback("), hook.indexOf("const retry = useCallback("));
+    expect(more).toContain("if (page.length === 0) {\n        setEnded(true);\n        setEndConfirmed(true);\n      } else if (merged.added === 0) setEnded(true);");
+    expect(more.match(/setEndConfirmed\(true\)/g)).toHaveLength(1);
+    expect(home).toContain("if (history.endConfirmed && entries.length > 0) return <Text style={styles.historyEnd}>{t.retrouverPieces.historyEnd}</Text>;");
+    expect(home).not.toContain("history.ended &&");
+    // Chaque nouveau départ (autre mode, autre recherche) oublie la fin vue.
+    expect(hook.match(/setEnded\(false\);\n\s+setEndConfirmed\(false\);/g)).toHaveLength(2);
   });
 
   it("la recherche : 350 ms après la dernière frappe ; la croix rend tout l'historique tout de suite ; les mots ne sont gardés nulle part", () => {

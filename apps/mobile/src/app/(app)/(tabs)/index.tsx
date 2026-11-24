@@ -279,7 +279,7 @@ function HistoryFooter({ history }: { history: ReturnType<typeof useSearchHistor
   }
   if (status === "unavailable") return <Text style={styles.historyEnd} accessibilityLiveRegion="polite">{t.retrouverPieces.historyUnavailable}</Text>;
   if (query !== null && entries.length === 0) return <Text style={styles.historyEnd} accessibilityLiveRegion="polite">{t.retrouverPieces.historyNoMatch(query)}</Text>;
-  if (history.ended && entries.length > 0) return <Text style={styles.historyEnd}>{t.retrouverPieces.historyEnd}</Text>;
+  if (history.endConfirmed && entries.length > 0) return <Text style={styles.historyEnd}>{t.retrouverPieces.historyEnd}</Text>;
   return null;
 }
 
