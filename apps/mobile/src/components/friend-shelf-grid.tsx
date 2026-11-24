@@ -28,6 +28,7 @@ export interface FriendShelfState {
   moreError: string | null;
   reload: () => void;
   loadMore: () => void;
+  retryMore: () => void;
 }
 
 /** Une étagère d'un ami : lue seulement quand `active` (l'onglet est ouvert,
@@ -84,8 +85,11 @@ export function useFriendShelf(userId: string, kind: ShelfKind, active: boolean,
     reload();
   }, [active, reload, refreshKey]);
 
-  const loadMore = useCallback(() => {
+  // `retry` : seulement le bouton « Réessayer ». Après une erreur, la fin de
+  // liste (onEndReached) ne relance plus rien toute seule.
+  const fetchMore = useCallback((retry: boolean) => {
     if (!active || !cursor || loadingMore || status !== "ready") return;
+    if (moreError !== null && !retry) return;
     const mine = generation.current;
     setLoadingMore(true);
     setMoreError(null);
@@ -101,9 +105,12 @@ export function useFriendShelf(userId: string, kind: ShelfKind, active: boolean,
       .finally(() => {
         if (mine === generation.current) setLoadingMore(false);
       });
-  }, [active, cursor, fetchPage, loadingMore, status]);
+  }, [active, cursor, fetchPage, loadingMore, moreError, status]);
 
-  return { items, status, error, loadingMore, moreError, reload, loadMore };
+  const loadMore = useCallback(() => fetchMore(false), [fetchMore]);
+  const retryMore = useCallback(() => fetchMore(true), [fetchMore]);
+
+  return { items, status, error, loadingMore, moreError, reload, loadMore, retryMore };
 }
 
 /** Une case de la grille (3 par rangée) : l'image seule ; le nom est dans le libellé. */

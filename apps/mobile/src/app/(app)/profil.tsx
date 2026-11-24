@@ -376,7 +376,12 @@ export default function UserProfileScreen() {
             shelf.loadingMore ? (
               <ActivityIndicator color={color.encre} style={styles.footer} />
             ) : shelf.moreError ? (
-              <ErrorMessage style={styles.empty}>{shelf.moreError}</ErrorMessage>
+              <View style={styles.shelfState}>
+                <ErrorMessage style={styles.message}>{shelf.moreError}</ErrorMessage>
+                <Pressable onPress={shelf.retryMore} style={styles.retry} accessibilityRole="button">
+                  <Text style={styles.retryLabel}>{t.common.retry}</Text>
+                </Pressable>
+              </View>
             ) : null
           ) : loadingMore ? (
             <ActivityIndicator color={color.encre} style={styles.footer} />
