@@ -283,11 +283,13 @@ Quatre interrupteurs indépendants :
   `plugins/lecteur-integre.js` l'exclut du Podfile) ;
 - **deux interrupteurs du serveur** (réponse de `/api/video-links/lookup`) :
   ils ne peuvent que **couper** un lecteur présent dans le build (l'écran
-  « Spottez cette vidéo » prend sa place), jamais en allumer un absent.
+  « Spottez cette vidéo » prend sa place, ou l'analyse automatique si elle est
+  allumée, voir ci-dessous), jamais en allumer un absent.
 
 Un lecteur coupé, un accord refusé ou une vidéo qui ne se lit pas mènent à
 l'écran de secours « Spottez cette vidéo » (capture d'écran, puis « Recherche
-d'image » d'iOS 26 ou Partager → l'app). L'accord préalable (traceurs des
+d'image » d'iOS 26 ou Partager → l'app), ou à l'analyse automatique si elle
+est allumée (voir « La vidéo d'abord » ci-dessous). L'accord préalable (traceurs des
 lecteurs) est demandé avant le premier lecteur, et se retire dans Réglages.
 
 **La vidéo d'abord** (retours du build 2, 24 novembre 2026, sans nouveau

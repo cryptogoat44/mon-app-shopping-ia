@@ -71,10 +71,12 @@ const envSchema = z.object({
     .optional()
     .transform((value) => value === "true"),
   // Lecteurs TikTok et Instagram de l'app (mission « liens vidéo ») : ils ne
-  // peuvent que COUPER un lecteur déjà compilé dans l'app (elle retombe alors
-  // sur l'écran de secours), jamais faire apparaître une fonction absente.
-  // Allumés par défaut ; seule la valeur exacte « false » coupe. Lus par
-  // lib/videoPlayers.ts. Voir docs/liens-video/interrupteurs.md.
+  // peuvent que COUPER un lecteur déjà compilé dans l'app (elle passe alors à
+  // la recherche automatique si VIDEO_LINK_ANALYSIS_ENABLED est allumée et
+  // prête, sinon à l'écran de secours « Spottez cette vidéo »), jamais faire
+  // apparaître une fonction absente. Allumés par défaut ; seule la valeur
+  // exacte « false » coupe. Lus par lib/videoPlayers.ts. Voir
+  // apps/mobile/BUILD-IPHONE.md (« La vidéo d'abord »).
   TIKTOK_PLAYER_ENABLED: z
     .string()
     .optional()
