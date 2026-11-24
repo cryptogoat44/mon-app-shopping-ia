@@ -1019,8 +1019,6 @@ export const en: Catalog = {
     ownOptionsPosts: "Posts filed here",
     // Friends' shelves: private collection while "Show my Wishlist to my friends" is on.
     privateStateFriendsSeeWishes: "Private name: your friends see its wishes (setting “Show my Wishlist to my friends”), not its name.",
-    // Friends' shelves: collection hidden by moderation while "Show my Wishlist to my friends" is on.
-    hiddenStateFriendsSeeWishes: "Hidden by moderation: your friends no longer see its name; its wishes stay visible (setting “Show my Wishlist to my friends”).",
   },
   received: {
     title: "Received pieces",
@@ -1466,8 +1464,6 @@ export const en: Catalog = {
     moderationOther: "A moderation decision concerns you.",
     moderationReason: (reason: string) => `Reason: ${reason}`,
     moderationNote: (note: string) => `Details: ${note}`,
-    moderationHiddenCollectionFriendsSeeWishes:
-      "One of your collections was hidden by moderation: your friends no longer see its name; its wishes stay visible (setting “Show my Wishlist to my friends”).",
   },
   searchLimits: {
     pausedTitle: (until: string) => `Spotter is taking a break ${until}.`,

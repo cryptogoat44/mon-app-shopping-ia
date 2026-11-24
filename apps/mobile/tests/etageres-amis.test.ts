@@ -203,43 +203,48 @@ describe("les phrases « privé » : exactes dans les deux cas", () => {
     expect(source("components/collection-settings-sheet.tsx")).toContain("{collectionState(current, showsWishes(profile))}");
   });
 
-  it("collection masquée par la modération : « vos amis ne la voient plus » seulement si les Envies ne sont pas montrées", () => {
-    // Éteint : la phrase d'avant, privée ou « Mes amis ».
-    expect(collectionState({ visibility: "private", hidden: true })).toBe(fr.collections.hiddenState);
-    expect(collectionState({ visibility: "friends", hidden: true }, false)).toBe("Masquée par la modération : vos amis ne la voient plus.");
-    // Allumé : refusé « ne la voient plus » ; ses envies restent visibles.
-    expect(collectionState({ visibility: "private", hidden: true }, true)).not.toBe(fr.collections.hiddenState);
-    expect(collectionState({ visibility: "friends", hidden: true }, true)).toBe(
-      "Masquée par la modération : vos amis ne voient plus son nom ; ses envies restent visibles (réglage « Montrer mes Envies à mes amis »).",
-    );
-    expect(collectionState({ visibility: "private", hidden: true }, true)).toBe(fr.collections.hiddenStateFriendsSeeWishes);
+  it("collection masquée par la modération : « vos amis ne la voient plus » dans tous les cas, réglage Envies allumé compris", () => {
+    // Permis : la phrase d'origine, privée ou « Mes amis », réglage éteint, inconnu ou allumé.
+    for (const visibility of ["private", "friends"] as const) {
+      for (const on of [undefined, false, true]) {
+        expect(collectionState({ visibility, hidden: true }, on), `${visibility} ${String(on)}`).toBe("Masquée par la modération : vos amis ne la voient plus.");
+      }
+    }
+    // Refusé : aucune phrase qui dirait que ses envies restent visibles (la variante est retirée).
+    expect("hiddenStateFriendsSeeWishes" in fr.collections).toBe(false);
+    expect("hiddenStateFriendsSeeWishes" in en.collections).toBe(false);
+    expect(source("lib/collections.ts")).not.toContain("hiddenStateFriendsSeeWishes");
+    // Une collection non masquée garde sa phrase propre au réglage.
+    expect(collectionState({ visibility: "private", hidden: false }, true)).toBe(fr.collections.privateStateFriendsSeeWishes);
     setActiveLocale("en");
-    expect(collectionState({ visibility: "friends", hidden: true }, true)).toBe(
-      "Hidden by moderation: your friends no longer see its name; its wishes stay visible (setting “Show my Wishlist to my friends”).",
-    );
-    expect(collectionState({ visibility: "friends", hidden: true }, false)).toBe(en.collections.hiddenState);
+    expect(collectionState({ visibility: "friends", hidden: true }, true)).toBe("Hidden by moderation: your friends can no longer see it.");
+    expect(collectionState({ visibility: "private", hidden: true }, false)).toBe(en.collections.hiddenState);
   });
 
-  it("notification de collection masquée : « vos amis ne la voient plus » seulement si les Envies ne sont pas montrées", () => {
+  it("notification de collection masquée : la phrase d'origine pour tous, sans le réglage", () => {
     const hide = { action: "hide" as const, targetType: "collection" as const, reason: null, note: null };
     const notification = { id: "n1", type: "moderation" as const, actor: null, createdAt: "2026-11-24T10:00:00.000Z", read: false, postId: null, moderation: hide, reportedType: null };
-    // Éteint (ou non dit) : la phrase d'avant.
+    // Permis : la phrase d'origine, mot pour mot.
     expect(moderationNoticeLines(hide)).toEqual(["Une de vos collections a été masquée par la modération : vos amis ne la voient plus."]);
-    expect(systemNotificationLines(notification, false)).toEqual([fr.notifications.moderationHiddenCollection]);
-    // Allumé : refusé « ne la voient plus » ; ses envies restent visibles.
-    expect(systemNotificationLines(notification, true)).not.toEqual([fr.notifications.moderationHiddenCollection]);
-    expect(systemNotificationLines(notification, true)).toEqual([
-      "Une de vos collections a été masquée par la modération : vos amis ne voient plus son nom ; ses envies restent visibles (réglage « Montrer mes Envies à mes amis »).",
-    ]);
-    // Le rétablissement ne change pas.
-    expect(moderationNoticeLines({ ...hide, action: "restore" }, true)).toEqual([fr.notifications.moderationRestoredCollection]);
+    expect(systemNotificationLines(notification)).toEqual([fr.notifications.moderationHiddenCollection]);
+    expect(moderationNoticeLines({ ...hide, action: "restore" })).toEqual([fr.notifications.moderationRestoredCollection]);
     setActiveLocale("en");
-    expect(systemNotificationLines(notification, true)).toEqual([
-      "One of your collections was hidden by moderation: your friends no longer see its name; its wishes stay visible (setting “Show my Wishlist to my friends”).",
-    ]);
-    expect(systemNotificationLines(notification, false)).toEqual(["One of your collections was hidden by moderation: your friends can no longer see it."]);
-    // L'onglet Activité passe le réglage.
-    expect(source("app/(app)/(tabs)/activite.tsx")).toContain("systemNotificationLines(notification, showsWishes(profile))");
+    expect(systemNotificationLines(notification)).toEqual(["One of your collections was hidden by moderation: your friends can no longer see it."]);
+    // Refusé : plus de variante ni de réglage passé par l'onglet Activité.
+    expect("moderationHiddenCollectionFriendsSeeWishes" in fr.notifications).toBe(false);
+    expect("moderationHiddenCollectionFriendsSeeWishes" in en.notifications).toBe(false);
+    expect(source("lib/moderation-labels.ts")).not.toContain("showsWishesToFriends");
+    expect(source("app/(app)/(tabs)/activite.tsx")).toContain("systemNotificationLines(notification)");
+    expect(source("app/(app)/(tabs)/activite.tsx")).not.toContain("showsWishes(profile)");
+  });
+
+  it("ces phrases sont vraies parce que le serveur retire ce que la modération masque des étagères des amis", () => {
+    const users = readFileSync(join(__dirname, "../../backend/src/routes/users.ts"), "utf8");
+    // Envies d'une collection masquée : retirées de la page de l'étagère ; Vault : pièce d'une publication masquée.
+    expect(users).toContain("wishesInHiddenCollections(fastify, ownerId)");
+    expect(users).toContain('wishQuery.not("id", "in", hiddenWishes)');
+    expect(users).toContain("vaultPiecesInHiddenPosts(fastify, ownerId)");
+    expect(users).toContain('vaultQuery.not("id", "in", hiddenPieces)');
   });
 
   it("chaque écran passe par ces phrases", () => {

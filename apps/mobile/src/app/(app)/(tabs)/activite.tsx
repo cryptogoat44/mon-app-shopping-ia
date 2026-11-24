@@ -13,7 +13,6 @@ import { useAuth } from "@/lib/auth-context";
 import { knownNotifications, notificationActionText, notificationTarget, pendingRequestsCount } from "@/lib/follow-state";
 import { loadErrorMessage } from "@/lib/load-error";
 import { systemNotificationLines } from "@/lib/moderation-labels";
-import { showsWishes } from "@/lib/friend-shelves";
 import { showsActivity } from "@/lib/push-state";
 import { timeAgo } from "@/lib/format";
 import { BellIcon, CommentIcon, LockIcon } from "@/components/icons";
@@ -194,7 +193,7 @@ export default function NotificationsScreen() {
   }
 
   function renderNotification(notification: AppNotification) {
-    const lines = systemNotificationLines(notification, showsWishes(profile));
+    const lines = systemNotificationLines(notification);
     const actor = notification.actor;
     if (lines || !actor) return <SystemNotificationRow key={notification.id} notification={notification} lines={lines ?? [t.notifications.moderationOther]} />;
     // « J'aime » et commentaire : la publication ; abonnement et demande

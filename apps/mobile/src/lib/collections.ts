@@ -88,11 +88,12 @@ export function visibilityState(visibility: CollectionVisibility, showsWishesToF
   return showsWishesToFriends ? t.collections.privateStateFriendsSeeWishes : t.collections.privateState;
 }
 
-/** Comme visibilityState, et « masquée par la modération » quand elle l'est.
- * Masquée alors que « Montrer mes Envies à mes amis » est allumé : les amis
- * ne voient plus son nom, mais toujours ses envies. */
+/** Comme visibilityState, et « masquée par la modération » quand elle l'est :
+ * la même phrase quel que soit « Montrer mes Envies à mes amis », car le
+ * serveur ne montre jamais aux amis les envies d'une collection masquée
+ * (pas même sur l'étagère des amis). */
 export function collectionState(collection: Pick<CollectionSummary, "visibility" | "hidden">, showsWishesToFriends = false): string {
-  if (collection.hidden === true) return showsWishesToFriends ? t.collections.hiddenStateFriendsSeeWishes : t.collections.hiddenState;
+  if (collection.hidden === true) return t.collections.hiddenState;
   return visibilityState(collection.visibility, showsWishesToFriends);
 }
 
