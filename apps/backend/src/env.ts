@@ -128,6 +128,18 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((value) => value === "true"),
+  // Grande image lue sur la page publique de la boutique (retours du build 2,
+  // lib/merchantImage.ts), ÉTEINTE par défaut. Même règle que la voie C :
+  // seule la valeur exacte "true" l'allume ; toute autre valeur la laisse
+  // éteinte, sans jamais arrêter le serveur. Allumée : pour une pièce gardée
+  // ou achetée qui n'a qu'une petite image, le serveur lit une fois la page
+  // publique de la boutique (rien du membre n'est envoyé) et range l'adresse
+  // de la grande image si elle manque. Lu seulement par lib/merchantImage.ts ;
+  // le fondateur seul le règle, à la main, dans Render.
+  MERCHANT_IMAGE_UPGRADE_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value === "true"),
   // Facultatif : jeton d'accès d'Expo, seulement si la « sécurité renforcée
   // des notifications » est activée dans le compte Expo. Absent : les
   // notifications partent sans jeton (le service d'Expo est gratuit). Une

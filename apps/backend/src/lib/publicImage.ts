@@ -167,14 +167,14 @@ export async function resolvePublicHost(hostname: string, resolver: Resolver = d
   return (await resolvePublicAddresses(hostname, resolver))[0]!;
 }
 
-function request(url: URL, target: ResolvedAddress, signal: AbortSignal): Promise<IncomingMessage> {
+function request(url: URL, target: ResolvedAddress, signal: AbortSignal, headers: Readonly<Record<string, string>>): Promise<IncomingMessage> {
   return new Promise((resolve, reject) => {
     const req = https.request(
       url,
       {
         method: "GET",
         signal,
-        headers: IMAGE_REQUEST_HEADERS,
+        headers,
         // Connexion sur l'adresse déjà vérifiée : aucune nouvelle résolution.
         lookup: (_hostname, options, callback) => {
           if (options.all) callback(null, [{ address: target.address, family: target.family }]);
@@ -191,11 +191,16 @@ function request(url: URL, target: ResolvedAddress, signal: AbortSignal): Promis
 /** Se connecte à la première adresse qui répond, parmi celles déjà
  * vérifiées (un serveur injoignable parmi plusieurs ne fait plus échouer la
  * copie) ; jamais au-delà du délai total. */
-async function connect(url: URL, targets: ResolvedAddress[], signal: AbortSignal): Promise<IncomingMessage> {
+async function connect(
+  url: URL,
+  targets: ResolvedAddress[],
+  signal: AbortSignal,
+  headers: Readonly<Record<string, string>>
+): Promise<IncomingMessage> {
   for (const target of targets) {
     if (signal.aborted) break;
     try {
-      return await request(url, target, signal);
+      return await request(url, target, signal, headers);
     } catch {
       // Adresse suivante.
     }
@@ -223,13 +228,20 @@ async function readBody(response: IncomingMessage): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-/** Télécharge une image publique (garde-fous ci-dessus). Le contenu n'est
- * jamais cru sur parole : l'appelant le décode et le ré-encode (sharp). */
-export async function downloadPublicImage(rawUrl: string, resolver: Resolver = defaultResolver): Promise<Buffer> {
-  const signal = AbortSignal.timeout(TIMEOUT_MS);
+/** Ouvre une adresse publique avec les garde-fous ci-dessus (https, adresses
+ * publiques revérifiées et épinglées à chaque redirection, 3 redirections au
+ * plus) et rend la réponse 200 et son adresse finale. Partagé par la copie
+ * d'une image (ci-dessous) et la lecture de la page d'une boutique
+ * (lib/merchantImage.ts) : mêmes protections, même identité de robot. */
+export async function openPublicUrl(
+  rawUrl: string,
+  headers: Readonly<Record<string, string>>,
+  signal: AbortSignal,
+  resolver: Resolver = defaultResolver
+): Promise<{ response: IncomingMessage; url: URL }> {
   let url = checkImageUrl(rawUrl);
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-    const response = await connect(url, await resolvePublicAddresses(url.hostname, resolver), signal);
+    const response = await connect(url, await resolvePublicAddresses(url.hostname, resolver), signal, headers);
     const status = response.statusCode ?? 0;
     if (status >= 300 && status < 400) {
       const location = response.headers.location;
@@ -242,16 +254,24 @@ export async function downloadPublicImage(rawUrl: string, resolver: Resolver = d
       response.resume();
       throw new PublicImageError(`Image indisponible (${status})`, status);
     }
-    if (!String(response.headers["content-type"] ?? "").toLowerCase().startsWith("image/")) {
-      response.resume();
-      throw new PublicImageError("Ce n'est pas une image");
-    }
-    try {
-      return await readBody(response);
-    } catch (error) {
-      if (error instanceof PublicImageError) throw error;
-      throw new PublicImageError("Image injoignable");
-    }
+    return { response, url };
   }
   throw new PublicImageError("Trop de redirections");
+}
+
+/** Télécharge une image publique (garde-fous ci-dessus). Le contenu n'est
+ * jamais cru sur parole : l'appelant le décode et le ré-encode (sharp). */
+export async function downloadPublicImage(rawUrl: string, resolver: Resolver = defaultResolver): Promise<Buffer> {
+  const signal = AbortSignal.timeout(TIMEOUT_MS);
+  const { response } = await openPublicUrl(rawUrl, IMAGE_REQUEST_HEADERS, signal, resolver);
+  if (!String(response.headers["content-type"] ?? "").toLowerCase().startsWith("image/")) {
+    response.resume();
+    throw new PublicImageError("Ce n'est pas une image");
+  }
+  try {
+    return await readBody(response);
+  } catch (error) {
+    if (error instanceof PublicImageError) throw error;
+    throw new PublicImageError("Image injoignable");
+  }
 }
