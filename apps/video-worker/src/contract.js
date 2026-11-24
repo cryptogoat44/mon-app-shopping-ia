@@ -76,11 +76,12 @@ export const LIMITS = Object.freeze({
   jpegQscale: 2,
   /** Une image : 1 Mo au plus (le client refuse au-delà). */
   maxFrameBytes: 1_000_000,
-  /** Toutes les images : 11 Mo au plus (≈ 14,7 Mo en base64 ; le serveur lit
-   * 16 Mio depuis les retours du build 2, 12 Mio avant : le serveur doit être
-   * déployé AVANT ce service). Avant : 8 Mo, trop peu pour 16 images moins
-   * compressées (les plus lourdes seraient retirées). */
-  maxTotalFrameBytes: 11_000_000,
+  /** Toutes les images : 9 Mo au plus (≈ 12,0 Mo en base64, plus quelques Ko
+   * de JSON). Tient sous les 12 Mio que lit le serveur en ligne aujourd'hui
+   * comme sous les 16 Mio du nouveau : serveur et service vidéo se déploient
+   * donc dans n'importe quel ordre. Avant : 8 Mo (au-delà, les images les
+   * plus lourdes sont retirées). */
+  maxTotalFrameBytes: 9_000_000,
   /** Images candidates examinées au plus (une toutes les 0,5 s au moins). */
   maxCandidates: 40,
   minCandidateSpacingSeconds: 0.5,

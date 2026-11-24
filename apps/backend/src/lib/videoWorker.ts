@@ -170,9 +170,9 @@ export function workerVideoUrl(link: VideoLink): string | null {
 /** Délai de toute la demande au service vidéo (lui-même s'arrête à 25 s). */
 export const VIDEO_WORKER_TIMEOUT_MS = 30_000;
 /** Réponse lue au plus. Retours du build 2 : images moins compressées par le
- * service vidéo (-q:v 2), 11 Mo d'images au plus, ≈ 14,7 Mo en base64 ; 16 Mio
- * (12 avant). À déployer AVANT le service vidéo : un serveur qui lit encore
- * 12 Mio refuserait ses réponses les plus lourdes. Rien à régler chez Render. */
+ * service vidéo (-q:v 2), 9 Mo d'images au plus, ≈ 12,0 Mo en base64 ; 16 Mio
+ * (12 avant), une marge. Les 9 Mo tiennent aussi sous l'ancien plafond : serveur
+ * et service vidéo se déploient dans n'importe quel ordre. Rien à régler chez Render. */
 export const VIDEO_WORKER_MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 /** Une erreur tient en quelques octets. */
 const MAX_ERROR_BYTES = 4 * 1024;

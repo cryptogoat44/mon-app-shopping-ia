@@ -276,7 +276,7 @@ secret, jamais la sortie brute de yt-dlp ou de ffmpeg.
 - **Mémoire** :
   - corps de la demande limité à 4 Ko, JSON de yt-dlp à 8 Mo, fichier vidéo
     à 64 Mo (effacé dès l'extraction finie), images de ffmpeg à 48 Mo ;
-  - une image rendue pèse 1 Mo au plus, l'ensemble 11 Mo au plus (le serveur, déployé avant ce service, en lit 16 Mio) ;
+  - une image rendue pèse 1 Mo au plus, l'ensemble 9 Mo au plus (≈ 12 Mo en base64 : le serveur, ancien ou nouveau, lit toute la réponse, dans n'importe quel ordre de mise en ligne) ;
   - les tampons sont effacés après la réponse.
 - **Conteneur** :
   - utilisateur sans droits (`node`) ;

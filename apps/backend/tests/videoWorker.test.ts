@@ -345,16 +345,17 @@ describe("client du service vidéo (fetchVideoFrames)", () => {
     expect((await failure(fetchVideoFrames(config(), request, { maxResponseBytes: 1024 }))).kind).toBe("invalid_response");
   });
 
-  it("retours du build 2 : le plafond de lecture couvre les images moins compressées du service vidéo (déployé après le serveur)", () => {
+  it("retours du build 2 : le plafond de lecture couvre les images moins compressées du service vidéo, dans n'importe quel ordre de déploiement", () => {
     const contract = readFileSync(join(__dirname, "../../video-worker/src/contract.js"), "utf8");
     const total = Number(/maxTotalFrameBytes: ([\d_]+),/.exec(contract)?.[1]?.replaceAll("_", ""));
-    expect(total).toBe(11_000_000);
+    expect(total).toBe(9_000_000);
     const base64 = Math.ceil(total / 3) * 4;
-    // Permis : base64 et un peu de JSON tiennent sous le plafond actuel.
+    // Permis : base64 et un peu de JSON tiennent sous le plafond actuel ET sous celui du serveur en ligne (12 Mio).
     expect(base64 + 64 * 1024).toBeLessThan(VIDEO_WORKER_MAX_RESPONSE_BYTES);
     expect(VIDEO_WORKER_MAX_RESPONSE_BYTES).toBe(16 * 1024 * 1024);
-    // Refusé : l'ancien plafond (12 Mio) n'aurait pas suffi.
-    expect(base64).toBeGreaterThan(12 * 1024 * 1024);
+    expect(base64 + 64 * 1024).toBeLessThan(12 * 1024 * 1024);
+    // Refusé : 11 Mo d'images n'auraient pas tenu sous l'ancien plafond (12 Mio).
+    expect(Math.ceil(11_000_000 / 3) * 4).toBeGreaterThan(12 * 1024 * 1024);
     expect(contract).toContain("jpegQscale: 2,");
   });
 

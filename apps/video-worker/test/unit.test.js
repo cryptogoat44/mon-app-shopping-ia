@@ -37,10 +37,14 @@ describe("contrat : codes d'erreur et statuts HTTP", () => {
     assert.equal(LIMITS.minFrames, 6);
     assert.equal(LIMITS.maxFrames, 16);
     assert.equal(LIMITS.maxFrameEdge, 1280);
-    // Retours du build 2 : images moins compressées, total relevé ; en base64 (+ un peu de JSON), sous les 16 Mio que lit le serveur.
+    // Retours du build 2 : images moins compressées, total relevé à 9 Mo ; en base64 (+ un peu de JSON),
+    // sous les 12 Mio que lit le serveur en ligne aujourd'hui (et donc sous les 16 Mio du nouveau) : tout ordre de déploiement.
     assert.equal(LIMITS.jpegQscale, 2);
-    assert.equal(LIMITS.maxTotalFrameBytes, 11_000_000);
-    assert.ok(Math.ceil(LIMITS.maxTotalFrameBytes / 3) * 4 + 64 * 1024 < 16 * 1024 * 1024);
+    assert.equal(LIMITS.maxTotalFrameBytes, 9_000_000);
+    // Permis : 9 Mo tiennent sous l'ancien plafond.
+    assert.ok(Math.ceil(LIMITS.maxTotalFrameBytes / 3) * 4 + 64 * 1024 < 12 * 1024 * 1024);
+    // Refusé : 11 Mo ne tiendraient pas sous l'ancien plafond (le service vidéo devrait attendre le serveur).
+    assert.ok(Math.ceil(11_000_000 / 3) * 4 > 12 * 1024 * 1024);
     assert.ok(LIMITS.maxFrameBytes <= 1024 * 1024);
   });
 });
