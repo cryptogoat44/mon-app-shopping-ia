@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { HOST_MESSAGE_SOURCE } from "../src/lib/player-host-page";
+import type { FrameSample } from "../src/lib/frame-sample";
 import {
   TIKTOK_MIN_SIZE,
   embedHeight,
+  isBlankFrame,
   isPlaybackSignal,
+  isPlayerAnswer,
   momentSeconds,
   parseHostMessage,
   parsePlayerConsent,
@@ -121,5 +124,50 @@ describe("taille du lecteur (9:16, « Spotter ce moment » visible, jamais sous 
     expect(embedHeight(450.2, 600)).toEqual({ height: 451, scroll: false });
     expect(embedHeight(120, 600)).toEqual({ height: 200, scroll: false });
     expect(embedHeight(900, 600)).toEqual({ height: 600, scroll: true });
+  });
+});
+
+describe("le lecteur a répondu (retours du build 2) : plus de remplacement au bout de 12 s", () => {
+  it("permis : prêt, état, temps, code Instagram chargé, lecture automatique refusée (il attend un toucher)", () => {
+    expect(isPlayerAnswer({ kind: "ready" })).toBe(true);
+    expect(isPlayerAnswer({ kind: "state", state: "paused" })).toBe(true);
+    expect(isPlayerAnswer({ kind: "time", currentTime: 1, duration: 9 })).toBe(true);
+    expect(isPlayerAnswer({ kind: "muted", muted: true })).toBe(true);
+    expect(isPlayerAnswer({ kind: "embedReady" })).toBe(true);
+    expect(isPlayerAnswer({ kind: "error", code: 3002, errorType: null })).toBe(true);
+  });
+
+  it("refusé : une autre erreur, un message non prévu, ou la taille Instagram (envoyée avant le code d'Instagram)", () => {
+    expect(isPlayerAnswer({ kind: "size", height: 600 })).toBe(false);
+    expect(isPlayerAnswer({ kind: "error", code: 1001, errorType: null })).toBe(false);
+    expect(isPlayerAnswer({ kind: "error", code: 2001, errorType: null })).toBe(false);
+    expect(isPlayerAnswer({ kind: "other", type: "onVolumeChange", origin: "" })).toBe(false);
+  });
+});
+
+describe("image noire ou blanche refusée (retours du build 2, contrôle repris du commit 93ba4d1)", () => {
+  const W = 96;
+  const H = 171;
+  const frame = (pixel: (x: number, y: number) => number): FrameSample => {
+    const gray = new Uint8Array(W * H);
+    for (let y = 0; y < H; y += 1) for (let x = 0; x < W; x += 1) gray[y * W + x] = pixel(x, y);
+    return { gray, width: W, height: H, colors: [] };
+  };
+
+  it("refusé : vidéo noire sous les boutons blancs du lecteur TikTok (en-tête, colonne, bouton lecture)", () => {
+    expect(isBlankFrame(frame((x, y) => (y < 20 || x > 80 || (Math.abs(x - 48) < 8 && Math.abs(y - 85) < 8) ? 255 : 0)))).toBe(true);
+  });
+
+  it("refusé : noir bruité (≤ 24/255), rectangle blanc, image minuscule", () => {
+    expect(isBlankFrame(frame((x, y) => (x + y) % 20))).toBe(true);
+    expect(isBlankFrame(frame(() => 250))).toBe(true);
+    expect(isBlankFrame({ gray: new Uint8Array(4), width: 2, height: 2, colors: [] })).toBe(true);
+  });
+
+  it("permis : vraie image, même sombre ; mur uni bien éclairé ; fond de studio noir avec une personne", () => {
+    expect(isBlankFrame(frame((x, y) => (((x >> 2) + (y >> 2)) % 2 ? 200 : 60)))).toBe(false);
+    expect(isBlankFrame(frame((x, y) => ((x * 13 + y * 7) % 50) + 10))).toBe(false);
+    expect(isBlankFrame(frame(() => 182))).toBe(false);
+    expect(isBlankFrame(frame((x, y) => (x > 50 && x < 74 && y > 30 && y < 150 ? 140 : 12)))).toBe(false);
   });
 });

@@ -54,7 +54,11 @@ export function EntryTiles({
 }
 
 /** Dernière vidéo de la galerie (app iPhone) : il ne reste qu'à taper
- * quelques mots et « Lancer ». Trop longue : on le dit tout de suite. */
+ * quelques mots et « Lancer ». Trop longue : on le dit tout de suite.
+ * Retours du build 2 : repliée sur une ligne (vignette, « Votre dernière
+ * vidéo · 0:27 », croix) ; toucher la ligne déplie le champ des mots et
+ * « Rechercher ». La croix éteint la proposition (comme Réglages) ; si
+ * l'enregistrement échoue, la carte reste avec le message d'erreur. */
 export function LatestVideoCard({
   video,
   query,
@@ -62,6 +66,11 @@ export function LatestVideoCard({
   onLaunch,
   onAddVideo,
   busy,
+  expanded,
+  onToggle,
+  onDismiss,
+  dismissing,
+  dismissFailed,
 }: {
   video: LatestVideo;
   query: string;
@@ -69,31 +78,54 @@ export function LatestVideoCard({
   onLaunch: () => void;
   onAddVideo: () => void;
   busy: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+  onDismiss: () => void;
+  dismissing: boolean;
+  dismissFailed: boolean;
 }) {
   const duration = video.durationMs === null ? null : formatClock(video.durationMs);
   const tooLong = videoRejection({ durationMs: video.durationMs, sizeBytes: null }) === "too_long";
   const linkInQuery = containsLink(query);
   const valid = query.trim().length >= VIDEO_AI.queryMinLength && !linkInQuery;
+  const title = duration ? `${t.spotter.latestVideo} · ${duration}` : t.spotter.latestVideo;
+  // Trop longue : rien à déplier, la phrase qui le dit tient lieu de geste.
+  const canExpand = !(tooLong && video.durationMs !== null);
+  const open = expanded && canExpand;
   return (
     <View style={styles.card}>
       <View style={styles.cardHead}>
-        <Image
-          source={{ uri: video.id }}
-          style={styles.thumb}
-          contentFit="cover"
-          accessible
-          accessibilityLabel={duration ? t.spotter.latestVideoLabel(duration) : t.spotter.latestVideo}
-        />
-        <View style={styles.cardText}>
-          <Text style={styles.cardTitle} accessibilityRole="header">
-            {t.spotter.latestVideo}
-          </Text>
-          {duration ? <Text style={styles.cardMeta}>{duration}</Text> : null}
-        </View>
+        <Pressable
+          style={styles.cardRow}
+          onPress={onToggle}
+          disabled={!canExpand}
+          accessibilityRole="button"
+          accessibilityLabel={title}
+          accessibilityHint={canExpand ? t.spotter.latestVideoExpand : undefined}
+          accessibilityState={{ expanded: open, disabled: !canExpand }}
+        >
+          <Image source={{ uri: video.id }} style={styles.thumb} contentFit="cover" accessible={false} />
+          <View style={styles.cardText}>
+            <Text style={styles.cardTitle} numberOfLines={2}>
+              {title}
+            </Text>
+            {canExpand && !open ? <Text style={styles.cardMeta}>{t.spotter.latestVideoExpand} ›</Text> : null}
+          </View>
+        </Pressable>
+        <Pressable
+          onPress={onDismiss}
+          disabled={dismissing}
+          style={styles.dismiss}
+          accessibilityRole="button"
+          accessibilityLabel={t.spotter.latestVideoDismiss}
+          accessibilityState={{ disabled: dismissing, busy: dismissing }}
+        >
+          {dismissing ? <ActivityIndicator color={color.acier} /> : <Text style={styles.dismissLabel}>×</Text>}
+        </Pressable>
       </View>
-      {tooLong && video.durationMs !== null ? (
-        <Text style={styles.cardNote}>{t.video.tooLong(formatClock(video.durationMs))}</Text>
-      ) : (
+      {dismissFailed ? <ErrorMessage style={styles.notice}>{t.spotter.latestVideoChoiceFailed}</ErrorMessage> : null}
+      {!canExpand && video.durationMs !== null ? <Text style={styles.cardNote}>{t.video.tooLong(formatClock(video.durationMs))}</Text> : null}
+      {open ? (
         <>
           <QueryInput value={query} onChangeText={onQuery} onSubmit={() => valid && !busy && onLaunch()} testID="latest-query" style={styles.input} />
           {linkInQuery ? <LinkNotice style={styles.notice} onAddVideo={onAddVideo} link={query} /> : null}
@@ -108,7 +140,23 @@ export function LatestVideoCard({
             <Text style={[styles.primaryLabel, valid ? null : styles.primaryLabelDisabled]}>{t.launch.launch}</Text>
           </Pressable>
         </>
-      )}
+      ) : null}
+    </View>
+  );
+}
+
+/** Après la croix de la carte « Votre dernière vidéo » : une note courte pour
+ * cette visite, annoncée à VoiceOver, et le chemin vers Réglages pour la réactiver. */
+export function LatestVideoDismissedNote({ onSettings }: { onSettings: () => void }) {
+  useEffect(() => {
+    if (Platform.OS === "ios") AccessibilityInfo.announceForAccessibility(t.spotter.latestVideoDismissed);
+  }, []);
+  return (
+    <View style={styles.dismissedNote} accessibilityLiveRegion="polite">
+      <Text style={styles.cardNoteTight}>{t.spotter.latestVideoDismissed}</Text>
+      <Pressable onPress={onSettings} style={styles.settingsLink} accessibilityRole="link">
+        <Text style={styles.settingsLinkLabel}>{t.spotter.latestVideoSettingsLink}</Text>
+      </Pressable>
     </View>
   );
 }
@@ -165,8 +213,15 @@ const styles = themedStyles(() => ({
   },
   tileLabel: { color: color.encre, fontSize: font.secondary, fontWeight: "600", textAlign: "center" },
   card: { marginTop: space.lg, borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md },
-  cardHead: { flexDirection: "row", alignItems: "center", gap: space.md },
-  thumb: { width: 72, height: 96, borderRadius: radius.sm, backgroundColor: color.plinthe },
+  cardHead: { flexDirection: "row", alignItems: "center", gap: space.sm },
+  cardRow: { flex: 1, flexDirection: "row", alignItems: "center", gap: space.md, minHeight: 64 },
+  thumb: { width: 48, height: 64, borderRadius: radius.sm, backgroundColor: color.plinthe },
+  dismiss: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  dismissLabel: { fontSize: 24, lineHeight: 26, color: color.acier },
+  dismissedNote: { marginTop: space.lg },
+  cardNoteTight: { fontSize: font.secondary, color: color.acier, lineHeight: 21 },
+  settingsLink: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start" },
+  settingsLinkLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600", textDecorationLine: "underline" },
   cardText: { flex: 1 },
   cardTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, lineHeight: serifLineHeight.body, color: color.encre },
   cardMeta: { fontSize: font.caption, color: color.acier, marginTop: 4, fontVariant: ["tabular-nums"] },

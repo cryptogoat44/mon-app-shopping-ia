@@ -118,6 +118,18 @@ vous verrez dans PostHog.
   proposées (une image chacune) et `rank` désigne la pièce lancée (1 = la
   première, déjà choisie). Une valeur absente vient des versions d'avant :
   elle veut dire `words`. Détail plus bas, « Les propositions de l'IA ».
+- **La vidéo d'abord** (retours du build 2, app iPhone) : quand le lecteur
+  officiel peut s'ouvrir, l'écran montre d'abord l'accord puis le lecteur,
+  même analyse allumée.
+  - **`player_unavailable`** : le lecteur n'a pas pu s'ouvrir, a échoué ou a
+    été refusé (`reason`). `next` (nouveau) = ce qui suit : `ai` (la
+    recherche automatique prend le relais) ou `screenshot` (l'écran de
+    secours « Spottez cette vidéo »). Absent : une version d'avant.
+    Analyse allumée mais déjà en échec pour ce lien (par exemple la limite
+    du jour) : `screenshot`, car l'app montre alors l'écran de secours.
+  - **`player_to_ai`** (nouveau) : le membre a touché « Trouver la pièce
+    automatiquement » sous le lecteur. `from` = `player` ; `link_platform`
+    = `tiktok` ou `instagram`. Jamais le lien, la vidéo ni l'image.
 
 ### 3b. Depuis une vidéo du téléphone
 
@@ -577,6 +589,7 @@ origines d'une semaine à l'autre. Jamais la pièce, le texte ni la personne.
   événements d'avant qui avaient une `platform` TikTok ou Instagram : PostHog
   ne reçoit que celle de l'appareil. Dans `player_opened`,
   `player_unavailable`, `player_fallback`, `player_consent`, `player_spot`,
+  `player_to_ai`,
   `video_link_ai_started` et `video_link_ai_moment_chosen`, l'ancienne
   propriété `platform` montre donc l'appareil : pour TikTok ou Instagram,
   utilisez `link_platform` (nouveau), comme dans `journey_started`,

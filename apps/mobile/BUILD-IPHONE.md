@@ -290,6 +290,22 @@ l'écran de secours « Spottez cette vidéo » (capture d'écran, puis « Recher
 d'image » d'iOS 26 ou Partager → l'app). L'accord préalable (traceurs des
 lecteurs) est demandé avant le premier lecteur, et se retire dans Réglages.
 
+**La vidéo d'abord** (retours du build 2, 24 novembre 2026, sans nouveau
+build) : sur l'app iPhone, quand le lecteur peut s'ouvrir, il passe AVANT
+l'analyse automatique du lien, même quand celle-ci est allumée
+(`VIDEO_LINK_ANALYSIS_ENABLED`) ; « Trouver la pièce automatiquement » reste
+un bouton sous « Spotter ce moment ». Analyse allumée, un lecteur coupé,
+refusé (« Non merci, chercher automatiquement ») ou en échec mène à
+l'analyse au lieu de l'écran de secours (sauf si l'analyse de ce lien vient
+déjà d'échouer, par exemple la limite du jour : l'écran de secours). Une image noire, blanche ou
+illisible prise par « Spotter ce moment » est refusée par un contrôle fait
+dans l'app (en JS, il marche donc aussi avec les builds 1 et 2) : l'app passe
+alors à l'analyse, ou à l'écran de secours. **Si l'image sort noire sur votre
+iPhone** : mettez `TIKTOK_PLAYER_ENABLED=false` (ou
+`INSTAGRAM_PLAYER_ENABLED=false`) chez Render ; les liens de cette plateforme
+repartent vers la recherche automatique si l'analyse est allumée (sinon
+vers l'écran de secours « Spottez cette vidéo »), sans nouveau build.
+
 **Décision à confirmer avant tout envoi à Apple** (règles 5.2.2 et 5.2.3) :
 la mission remet le lecteur et la prise d'image, actifs par défaut. Pour
 envoyer un build sans eux : les deux variables à `false` chez Expo, puis un

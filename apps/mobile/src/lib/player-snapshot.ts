@@ -8,11 +8,21 @@
 // méthode de capture ne peut être ajoutée sans la décision du fondateur.
 // L'écran de secours « Spottez cette vidéo » reste le chemin.
 //
+// Retours du build 2 : l'image rendue est CONTRÔLÉE (ce n'est pas une autre
+// méthode de capture) : noire ou blanche (contrôle repris du commit 93ba4d1,
+// player-state.ts isBlankFrame), ou illisible, elle est effacée et refusée ;
+// l'écran passe alors à la recherche automatique ou à l'écran de secours
+// (snapshot_failed). Le contrôle est fait ici, en JS, et non dans le module
+// natif : il marche aussi avec les builds 1 et 2 déjà installés.
+//
 // Module absent de l'app installée (les deux lecteurs coupés au build, ou
 // Expo Go) : `snapshotAvailable` vaut false, et l'écran montre le secours.
 // Version site : player-snapshot.web.ts (jamais de capture sur le site).
 import { requireOptionalNativeModule } from "expo";
+import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { Image } from "react-native";
+import { isBlankFrame } from "./player-state";
+import { base64ToBytes, decodePngSample } from "./png-pixels";
 import { discardLocalFile } from "./video-frames";
 
 /** Nom du module natif local (modules/spotto-player-snapshot/ios). */
@@ -39,16 +49,37 @@ function imageSize(uri: string): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => Image.getSize(uri, (width, height) => resolve({ width, height }), reject));
 }
 
+/** Côté de la petite copie examinée, en pixels (comme l'ancien contrôle). */
+const BLANK_CHECK_EDGE = 96;
+
+/** Petite copie PNG (96 px), décodée dans l'app comme video-frames.ts : noire
+ * ou blanche ? Sa copie est effacée aussitôt. Illisible : traitée comme vide. */
+async function looksBlank(uri: string): Promise<boolean> {
+  try {
+    const context = ImageManipulator.manipulate(uri);
+    context.resize({ width: BLANK_CHECK_EDGE });
+    const rendered = await context.renderAsync();
+    const saved = await rendered.saveAsync({ format: SaveFormat.PNG, base64: true });
+    discardLocalFile(saved.uri);
+    if (!saved.base64) return true;
+    return isBlankFrame(decodePngSample(base64ToBytes(saved.base64)));
+  } catch {
+    return true;
+  }
+}
+
 /** Instantané du conteneur natif `viewTag` (celui qui entoure la vue web du
  * lecteur). Le fichier est à effacer par l'appelant (discardLocalFile) dès
  * que la recherche est partie, ou si elle est abandonnée. Taille illisible :
- * le fichier est effacé ici, avant l'erreur (son adresse serait perdue). */
+ * le fichier est effacé ici, avant l'erreur (son adresse serait perdue).
+ * Image noire, blanche ou illisible : effacée ici, puis « blank_frame ». */
 export async function snapshotPlayer(viewTag: number): Promise<PlayerSnapshot> {
   if (!native) throw new Error("player snapshot module missing");
   const uri = await native.snapshot(viewTag);
   if (typeof uri !== "string" || !uri.startsWith("file://")) throw new Error("player snapshot: unexpected answer");
   try {
     const { width, height } = await imageSize(uri);
+    if (await looksBlank(uri)) throw new Error("blank_frame");
     return { uri, width, height };
   } catch (error) {
     discardLocalFile(uri);

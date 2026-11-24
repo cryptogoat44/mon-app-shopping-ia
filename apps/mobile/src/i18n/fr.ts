@@ -114,7 +114,6 @@ export const fr = {
       `Sans l'accès complet à vos photos, ${BRAND} ne peut pas repérer votre dernière vidéo : choisissez-la avec « Ajouter une vidéo ». L'accès se modifie dans les Réglages de l'iPhone.`,
     latestVideoEmpty: "Aucune vidéo dans votre galerie pour l'instant : la plus récente apparaîtra ici.",
     latestVideoChoiceFailed: "Votre réponse n'a pas pu être enregistrée. Réessayez.",
-    linkQuestion: "Vous avez un lien TikTok, Instagram ou Pinterest ?",
     recentlySpotted: "Récemment spottées",
     detected: {
       tiktok: "Vidéo TikTok reconnue",
@@ -133,6 +132,12 @@ export const fr = {
     prepareError: "La préparation a échoué. Vérifiez votre connexion, puis réessayez.",
     networkError: "Connexion impossible. Vérifiez votre connexion internet, puis réessayez.",
     serverError: `${BRAND} ne répond pas pour le moment. Réessayez dans une minute.`,
+    // Retours du build 2 : la carte « Votre dernière vidéo » repliée sur une ligne, et sa croix
+    // (elle éteint la proposition, exactement comme l'interrupteur de Réglages).
+    latestVideoExpand: "Rechercher dans cette vidéo",
+    latestVideoDismiss: "Ne plus proposer ma dernière vidéo",
+    latestVideoDismissed: "C'est noté : votre dernière vidéo ne vous sera plus proposée. Vous pouvez réactiver cette proposition dans Réglages.",
+    latestVideoSettingsLink: "Ouvrir Réglages",
   },
   // Lot 4 : choix d'une image dans une vidéo importée (la vidéo reste sur l'appareil).
   video: {
@@ -313,9 +318,7 @@ export const fr = {
   // lecteur coupé : l'écran « Spottez cette vidéo ». TEXTES À VALIDER PAR LE
   // FONDATEUR. Espaces insécables avant « : » et « ? », et dans « … ».
   player: {
-    linkQuestion: "Vous avez un lien TikTok ou Instagram ?",
     linkLabel: "Lien TikTok ou Instagram",
-    linkHint: `La vidéo s'ouvre ici, dans ${BRAND} : vous la mettrez en pause sur la pièce.`,
     linkHintWeb: "Les pièces déjà repérées dans cette vidéo s'affichent ici, avec la marche à suivre.",
     open: "Ouvrir la vidéo",
     opening: "Ouverture de la vidéo…",
@@ -333,16 +336,18 @@ export const fr = {
       body: (platform: string) => `Cette vidéo est lue par ${platform}, qui peut utiliser ses propres traceurs.`,
       play: "Lire la vidéo ici",
       refuse: "Non merci",
+      // Retours du build 2 : analyse allumée, « Non merci » mène à la recherche automatique.
+      refuseAuto: "Non merci, chercher automatiquement",
     },
     howItWorksSteps: (spot: string) => [
       `Partagez la vidéo TikTok ou Instagram vers ${BRAND}, ou collez son lien.`,
-      `Mettez-la en pause sur la pièce, touchez « ${spot} », puis entourez la pièce.`,
+      `Mettez-la en pause sur la pièce, touchez « ${spot} », puis entourez la pièce (si la vidéo ne peut pas être lue ici, ${BRAND} vous propose un autre moyen).`,
       `${BRAND} vous montre où l'acheter, en 10 à 20 secondes.`,
     ],
     linkNotice: {
-      title: `Cette vidéo peut s'ouvrir dans ${BRAND}`,
-      body: "Ouvrez-la ici même : vous la mettrez en pause sur la pièce.",
-      bodyWeb: "Ouvrez-la ici : vous verrez les pièces déjà repérées, et comment la spotter.",
+      title: `Ce lien peut s'ouvrir dans ${BRAND}`,
+      body: `Ouvrez-le ici : ${BRAND} vous aide à trouver la pièce de la vidéo.`,
+      bodyWeb: "Ouvrez-le ici : vous verrez les pièces déjà repérées dans la vidéo, et comment la spotter.",
     },
     settings: {
       title: `Vidéos lues dans ${BRAND}`,
@@ -465,6 +470,11 @@ export const fr = {
       waitingSteps: ["On récupère la vidéo…", "L'IA regarde les pièces…"],
       // Sous la capture proposée après un échec, quand rien n'a été écrit.
       keptLink: "Votre lien est gardé.",
+    },
+    // Retours du build 2 (« la vidéo d'abord ») : le lecteur n'a pas pu servir, l'IA prend le relais.
+    playerLead: {
+      notHere: "La vidéo n'a pas pu être lue ici : l'IA peut chercher la pièce pour vous.",
+      snapshot: `${BRAND} n'a pas pu prendre l'image de ce moment : l'IA peut chercher la pièce pour vous.`,
     },
   },
   // Recherche d'image d'iOS (iOS 26 et suivants) : carte montrée une fois.
