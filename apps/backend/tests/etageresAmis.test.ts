@@ -25,13 +25,14 @@ import { STORAGE_ORIGIN, fakeSupabase, type FakeDbOptions, type Row } from "./fa
 // impossible. Le même parcours sur la vraie base : etageresAmisBase.test.ts.
 
 // Images des marchands : jamais téléchargées pour de vrai.
-const downloads = vi.hoisted(() => ({ images: new Map<string, Buffer>(), calls: [] as string[] }));
+const downloads = vi.hoisted(() => ({ images: new Map<string, Buffer>(), calls: [] as string[], onDownload: null as null | (() => void) }));
 vi.mock("../src/lib/publicImage.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../src/lib/publicImage.js")>();
   return {
     ...original,
     downloadPublicImage: async (url: string) => {
       downloads.calls.push(url);
+      downloads.onDownload?.();
       const image = downloads.images.get(url);
       if (!image) throw new original.PublicImageError("Image refusée", 403);
       return image;
@@ -229,6 +230,7 @@ beforeEach(() => {
   resetWishAlertsProbe();
   downloads.images.clear();
   downloads.calls.length = 0;
+  downloads.onDownload = null;
 });
 
 afterEach(async () => {
@@ -425,6 +427,32 @@ describe("les Envies d'un ami : lecture seule, jamais ce qui est privé", () => 
     expect(fake.table("collection_image_copies").map((row) => row.wishlist_item_id)).toEqual([WISH]);
     expect(fake.removed.some((path) => path.startsWith(`post-media/${ALICE}/`))).toBe(true);
     expect((await as(target, BOB).get(`/api/users/${ALICE}/wishlist`)).json()).toEqual({ items: [], nextCursor: null });
+  });
+
+  it("réglage éteint pendant que les copies se font : aucune copie ne reste (vérifiée après coup)", async () => {
+    await withImages();
+    const fake = seeded();
+    const target = await shelvesApp(fake.db);
+    // Alice éteint le réglage pendant que Bob fait faire les copies (et la
+    // remise en ordre de ce moment-là ne voit encore aucune copie).
+    downloads.onDownload = () => {
+      fake.table("profiles").find((row) => row.id === ALICE)!.wishes_shown_to_friends = false;
+    };
+    await as(target, BOB).get(`/api/users/${ALICE}/wishlist`);
+    // Refusé : une copie qui survit au « non ».
+    await vi.waitFor(() => expect(fake.table("collection_image_copies")).toHaveLength(0));
+    expect(downloads.calls.length).toBeGreaterThan(0);
+    expect(fake.removed.filter((path) => path.startsWith(`post-media/${ALICE}/`)).length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("réglage resté allumé : la vérification d'après coup garde les copies", async () => {
+    await withImages();
+    const fake = seeded();
+    const target = await shelvesApp(fake.db);
+    await as(target, BOB).get(`/api/users/${ALICE}/wishlist`);
+    // Permis : les deux copies restent, aucun fichier effacé.
+    expect(fake.table("collection_image_copies")).toHaveLength(2);
+    expect(fake.removed.filter((path) => path.startsWith(`post-media/${ALICE}/`))).toEqual([]);
   });
 
   it("une envie retirée part de l'étagère et sa copie est effacée", async () => {

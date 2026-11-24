@@ -393,8 +393,15 @@ async function makeCopy(fastify: FastifyInstance, log: FastifyBaseLogger, userId
  * `userId` : une copie pour chaque envie visible par les amis (faite si elle
  * manque, réessayée si elle avait échoué), aucune pour les autres (fichier
  * effacé). À appeler après chaque changement : ajout ou retrait d'une envie,
- * changement de visibilité, collection supprimée. */
-export async function syncFriendCopies(fastify: FastifyInstance, log: FastifyBaseLogger, userId: string, wishIds: string[]): Promise<void> {
+ * changement de visibilité, collection supprimée. `noNewCopies` : efface
+ * seulement, ne copie rien (la vérification d'après les copies). */
+export async function syncFriendCopies(
+  fastify: FastifyInstance,
+  log: FastifyBaseLogger,
+  userId: string,
+  wishIds: string[],
+  options: { noNewCopies?: boolean } = {}
+): Promise<void> {
   const ids = [...new Set(wishIds)];
   if (ids.length === 0) return;
   const db = fastify.supabaseAdmin;
@@ -419,17 +426,24 @@ export async function syncFriendCopies(fastify: FastifyInstance, log: FastifyBas
     for (const copy of part) await deleteWishCopy(fastify, userId, [copy.image_url, copy.image_thumb_url]);
   }
 
+  if (options.noNewCopies) return;
   const missing = ids.filter((id) => visible.has(id) && !copies.has(id));
   if (missing.length === 0) return;
   const wishes: WishRow[] = [];
   for (const part of chunks(missing)) {
     wishes.push(...parseDbRows(z.array(wishRowSchema), await db.from("wishlist_items").select("*").eq("user_id", userId).in("id", part), "Envies à copier"));
   }
-  let failed = 0;
+  const copied: string[] = [];
   await eachLimited(wishes, COPY_CONCURRENCY, async (wish) => {
-    if (!(await makeCopy(fastify, log, userId, wish))) failed += 1;
+    if (await makeCopy(fastify, log, userId, wish)) copied.push(wish.id);
   });
-  if (wishes.length > 0) log.info({ copies: wishes.length - failed, failed }, "Collections : images copiées pour les amis");
+  if (wishes.length > 0) log.info({ copies: copied.length, failed: wishes.length - copied.length }, "Collections : images copiées pour les amis");
+  // Les copies prennent du temps (parfois en arrière-plan, routes/users.ts) :
+  // si, entre-temps, le membre a éteint « Montrer mes Envies à mes amis » ou
+  // retiré l'envie d'une collection montrée, la remise en ordre faite alors
+  // n'a pas vu ces nouvelles copies. On vérifie donc de nouveau, après coup,
+  // et on efface celles qui ne sont plus visibles.
+  if (copied.length > 0) await syncFriendCopies(fastify, log, userId, copied, { noNewCopies: true });
 }
 
 /** Comme syncFriendCopies, sans jamais faire échouer la demande : le
