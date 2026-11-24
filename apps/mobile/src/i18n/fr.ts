@@ -1250,7 +1250,7 @@ export const fr = {
     sortShort: { recent: "Récentes", price_asc: "Prix ↑", price_desc: "Prix ↓" },
     sortButtonLabel: (current: string) => `Trier, actuellement : ${current}`,
     // Lot « étagères des amis » : la phrase quand « Montrer mes Envies à mes amis » est allumé.
-    privateNoteFriends: "Vos amis voient toutes vos Envies (réglage « Montrer mes Envies à mes amis »). Vous pouvez les rendre privées dans Réglages.",
+    privateNoteFriends: "Vos amis voient toutes vos Envies (réglage « Montrer mes Envies à mes amis »), sauf celles d'une collection masquée par la modération. Vous pouvez les rendre privées dans Réglages.",
   },
   profile: {
     vault: "Vault",
@@ -2152,13 +2152,13 @@ export const fr = {
   // Vault à ses amis, si on le décide ; onglets en lecture seule sur le profil d'un ami.
   friendShelves: {
     settingWishesTitle: "Montrer mes Envies à mes amis",
-    settingWishesHelp: `Éteint au départ. Allumé, vos amis (les membres que vous suivez et qui vous suivent) voient toutes vos Envies, y compris celles rangées dans vos collections privées, sans le nom de ces collections : titre, image (une copie faite par ${BRAND}), prix et lien vers la boutique. Jamais vos notes, vos alertes, les pièces reçues ni vos publications enregistrées.`,
+    settingWishesHelp: `Éteint au départ. Allumé, vos amis (les membres que vous suivez et qui vous suivent) voient toutes vos Envies (sauf celles d'une collection masquée par la modération), y compris celles rangées dans vos collections privées, sans le nom de ces collections : titre, image (une copie faite par ${BRAND}), prix et lien vers la boutique. Jamais vos notes, vos alertes, les pièces reçues ni vos publications enregistrées.`,
     settingVaultTitle: "Montrer mon Vault à mes amis",
-    settingVaultHelp: "Éteint au départ. Allumé, vos amis voient les pièces de votre Vault : nom, catégorie et photo, y compris les photos que vous avez prises vous-même. Jamais la date d'ajout ni la mention « Achat vérifié ».",
+    settingVaultHelp: "Éteint au départ. Allumé, vos amis voient les pièces de votre Vault (sauf une pièce dont une publication est masquée par la modération) : nom, catégorie et photo, y compris les photos que vous avez prises vous-même. Jamais la date d'ajout ni la mention « Achat vérifié ».",
     confirmWishesTitle: "Montrer vos Envies à vos amis ?",
-    confirmWishesBody: "Vos amis verront toutes vos Envies, même celles de vos collections privées. Personne d'autre. Vous pourrez les rendre privées à tout moment.",
+    confirmWishesBody: "Vos amis verront toutes vos Envies, même celles de vos collections privées (sauf celles d'une collection masquée par la modération). Personne d'autre. Vous pourrez les rendre privées à tout moment.",
     confirmVaultTitle: "Montrer votre Vault à vos amis ?",
-    confirmVaultBody: "Vos amis verront toutes les pièces de votre Vault, avec leurs photos, y compris celles que vous avez prises vous-même : vérifiez ce qu'elles montrent. Personne d'autre. Vous pourrez le rendre privé à tout moment.",
+    confirmVaultBody: "Vos amis verront toutes les pièces de votre Vault (sauf une pièce dont une publication est masquée par la modération), avec leurs photos, y compris celles que vous avez prises vous-même : vérifiez ce qu'elles montrent. Personne d'autre. Vous pourrez le rendre privé à tout moment.",
     confirmCta: "Montrer à mes amis",
     cancel: "Annuler",
     wishesShown: "Vos amis voient maintenant vos Envies.",

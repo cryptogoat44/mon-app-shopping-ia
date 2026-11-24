@@ -285,6 +285,39 @@ describe("textes FR / EN", () => {
   });
 });
 
+describe("« toutes vos Envies » / « toutes les pièces » : l'exception de la modération, dite partout", () => {
+  const wishesFr = "sauf celles d'une collection masquée par la modération";
+  const wishesEn = "except those in a collection hidden by moderation";
+  const vaultFr = "sauf une pièce dont une publication est masquée par la modération";
+  const vaultEn = "except a piece whose post is hidden by moderation";
+
+  it("permis : chaque phrase qui promet tout aux amis dit l'exception, en FR et en EN", () => {
+    for (const text of [fr.friendShelves.settingWishesHelp, fr.friendShelves.confirmWishesBody, fr.wishlist.privateNoteFriends]) expect(text).toContain(wishesFr);
+    for (const text of [en.friendShelves.settingWishesHelp, en.friendShelves.confirmWishesBody, en.wishlist.privateNoteFriends]) expect(text).toContain(wishesEn);
+    for (const text of [fr.friendShelves.settingVaultHelp, fr.friendShelves.confirmVaultBody]) expect(text).toContain(vaultFr);
+    for (const text of [en.friendShelves.settingVaultHelp, en.friendShelves.confirmVaultBody]) expect(text).toContain(vaultEn);
+    const frText = all(privacyPolicy);
+    const enText = all(privacyPolicyEn);
+    expect(frText).toContain(`vos amis voient toutes vos Envies (${wishesFr}), y compris celles de vos collections privées`);
+    expect(frText).toContain(`vos amis voient chaque pièce de votre Vault (${vaultFr}), son nom`);
+    expect(enText).toContain(`your friends see all your wishes (${wishesEn}), including those in your private collections`);
+    expect(enText).toContain(`your friends see each piece in your Vault (${vaultEn}), its name`);
+  });
+
+  it("refusé : plus aucune promesse « toutes » sans l'exception", () => {
+    expect(fr.wishlist.privateNoteFriends).not.toContain("Vos amis voient toutes vos Envies (réglage « Montrer mes Envies à mes amis »). ");
+    expect(en.wishlist.privateNoteFriends).not.toContain("Your friends can see all your wishes (setting “Show my Wishlist to my friends”). ");
+    expect(fr.friendShelves.confirmWishesBody).not.toContain("même celles de vos collections privées. ");
+    expect(en.friendShelves.confirmWishesBody).not.toContain("even those in your private collections. ");
+    expect(fr.friendShelves.confirmVaultBody).not.toContain("toutes les pièces de votre Vault, avec");
+    expect(en.friendShelves.confirmVaultBody).not.toContain("every piece in your Vault, with");
+    expect(all(privacyPolicy)).not.toContain("vos amis voient toutes vos Envies, y compris");
+    expect(all(privacyPolicyEn)).not.toContain("your friends see all your wishes, including");
+    expect(all(privacyPolicy)).not.toContain("vos amis voient chaque pièce de votre Vault, son nom");
+    expect(all(privacyPolicyEn)).not.toContain("your friends see each piece in your Vault, its name");
+  });
+});
+
 describe("politique de confidentialité : plus de promesse absolue fausse", () => {
   it("le Vault n'est plus « visible par vous seul » sans réserve, en FR et en EN", () => {
     const frText = all(privacyPolicy);
