@@ -134,6 +134,14 @@ describe("textes vrais que le lecteur s'ouvre, que l'IA prenne le relais ou que 
     expect(en.player.linkNotice.title).toBe("This link can open in Spotto");
   });
 
+  it("bandeau du site : l'anglais dit la même chose que le français (« dans la vidéo »)", () => {
+    // Permis : la vidéo nommée dans les deux langues, « la » / “it” renvoient à elle.
+    expect(fr.player.linkNotice.bodyWeb).toContain("déjà repérées dans la vidéo");
+    expect(en.player.linkNotice.bodyWeb).toContain("already spotted in the video");
+    // Refusé : sous le titre « This link… », “how to spot it” sans la vidéo renverrait au lien.
+    expect(en.player.linkNotice.bodyWeb).not.toMatch(/already spotted, and how to spot it/);
+  });
+
   it("les nouveaux textes existent en français (« vous ») et en anglais", () => {
     expect(fr.player.gate.refuseAuto).toBe("Non merci, chercher automatiquement");
     expect(en.player.gate.refuseAuto).toBe("No thanks, search automatically");

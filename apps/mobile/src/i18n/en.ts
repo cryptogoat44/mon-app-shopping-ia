@@ -338,7 +338,7 @@ export const en: Catalog = {
     linkNotice: {
       title: `This link can open in ${BRAND}`,
       body: `Open it here: ${BRAND} helps you find the piece in the video.`,
-      bodyWeb: "Open it here: you'll see the pieces already spotted, and how to spot it.",
+      bodyWeb: "Open it here: you'll see the pieces already spotted in the video, and how to spot it.",
     },
     settings: {
       title: `Videos played in ${BRAND}`,
