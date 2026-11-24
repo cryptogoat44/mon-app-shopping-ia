@@ -19,12 +19,13 @@ import { exportContentSecurityPolicy, renderExportHtml } from "../lib/exportHtml
 import { collectLookups } from "../lib/exportLookups.js";
 import { requestLocale } from "../lib/locale.js";
 import { isAdmin } from "../lib/moderation.js";
-import { deleteUserStorageFiles, removeOwnedFiles, storageLeftovers } from "../lib/storage.js";
+import { deleteUserStorageFiles, removeOwnedFiles, storageLeftovers, type StorageCleanup } from "../lib/storage.js";
 import { parseDbRows, parseInput } from "../lib/validation.js";
 import { WISH_COPY_BUCKET } from "../lib/wishShare.js";
 import { messagesReady, otherMembersMessageCopies } from "../lib/messaging.js";
 import { allOwnCopies, collectionsReady } from "../lib/collections.js";
 import { deleteAllPushTokens, pushReady } from "../lib/push.js";
+import { LOOK_IMAGE_BUCKET, lookImagesOf, lookPagesReady, removeLookImages } from "../lib/lookPages.js";
 
 /** Corps de DELETE /api/me : le mot tapé par la personne (revérifié ici). */
 const deleteAccountSchema = z.object({ confirmation: z.string().max(40).refine((value) => isAccountDeletionWord(value)) });
@@ -297,6 +298,29 @@ export default async function accountRoutes(fastify: FastifyInstance) {
         return reply.code(500).send({ error: "internal_error", message: "La suppression a échoué." });
       }
     }
+    // Page look (migration 0057) : ses pages partent avec le compte (cascade
+    // en base), et tout de suite ici, pour qu'aucun visiteur ne les voie
+    // pendant la suppression ; les copies de leurs images, rangées hors de
+    // son dossier (post-media/looks/, sans son identifiant), sont effacées
+    // une à une. Sans 0057, il n'y a rien à effacer. Lecture impossible
+    // (arrêt d'urgence de 0057, panne) : le compte est supprimé quand même,
+    // les pages partent par la cascade et les copies restent dans le
+    // stockage (une image de boutique sous un nom aléatoire, reliée à rien),
+    // comptées au journal avec les autres fichiers restés.
+    let lookImages: string[] = [];
+    let lookCopiesLeft = false;
+    try {
+      lookImages = await lookImagesOf(fastify, userId);
+    } catch {
+      lookCopiesLeft = true;
+      request.log.warn("Suppression de compte : pages look illisibles, laissées à la cascade (copies d'images restées)");
+    }
+    if (await lookPagesReady(fastify)) {
+      const { error: looksError } = await fastify.supabaseAdmin.from("shared_looks").delete().eq("user_id", userId);
+      if (looksError) request.log.warn("Suppression de compte : pages look laissées à la cascade");
+    }
+    if (!(await removeLookImages(fastify, lookImages))) lookCopiesLeft = true;
+
     const receivedCopies = await removeOwnedFiles(fastify, WISH_COPY_BUCKET, [
       ...received.flatMap((piece) => [piece.image_url, piece.image_thumb_url].flatMap((url) => (url ? [{ ownerId: piece.sender_id, url }] : []))),
       ...messageCopies,
@@ -307,7 +331,8 @@ export default async function accountRoutes(fastify: FastifyInstance) {
     // (décision du fondateur, 2026-10-15) : un fichier qui refuse de
     // s'effacer est compté et signalé au journal — des nombres, jamais un
     // identifiant —, puis le compte est supprimé quand même.
-    const leftovers = storageLeftovers([receivedCopies, ...(await deleteUserStorageFiles(fastify, userId))]);
+    const lookCopiesUnread: StorageCleanup[] = lookCopiesLeft ? [{ bucket: LOOK_IMAGE_BUCKET, removed: 0, failed: 0, unreadable: true }] : [];
+    const leftovers = storageLeftovers([receivedCopies, ...lookCopiesUnread, ...(await deleteUserStorageFiles(fastify, userId))]);
     if (leftovers.length > 0) request.log.warn({ leftovers }, "Suppression de compte : fichiers restés dans le stockage, à nettoyer");
 
     // Lot notifications : ses appareils sont oubliés tout de suite (la base

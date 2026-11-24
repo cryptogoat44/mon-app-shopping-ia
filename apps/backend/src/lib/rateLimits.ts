@@ -407,6 +407,38 @@ export const RATE_LIMITS = {
     error: "for_you_limit",
     message: "Trop de pages « Pour vous » en peu de temps. Réessayez dans un moment.",
   },
+
+  // La page look (lot « page look », migration 0057) : créer un lien copie
+  // une image (480 px) dans le stockage. 20 par heure et par membre (une
+  // page encore active pour la même pièce renvoie le même lien, mais compte
+  // aussi), et 300 par jour pour tout le service.
+  lookCreate: {
+    max: 20,
+    windowMs: HOUR,
+    error: "look_create_limit",
+    message: "Vous avez créé beaucoup de liens en peu de temps. Réessayez dans une heure.",
+  },
+  lookCreateGlobal: {
+    max: 300,
+    windowMs: DAY,
+    scope: "global",
+    error: "look_create_limit",
+    message: "Les liens de partage sont très demandés aujourd'hui. Réessayez demain.",
+  },
+  // Lecture d'une page par un visiteur, sans compte (GET
+  // /api/looks/public/:token). Le serveur ne voit pas l'adresse du visiteur
+  // (pas de trustProxy : toutes les requêtes semblent venir du relais de
+  // Render), donc un seul compteur pour tout le service, prudent : 120 pages
+  // par minute (2 par seconde). Chaque demande compte, jeton mal formé
+  // compris : la route ne peut servir à essayer des jetons en masse (il y en
+  // a 2^128). Au-delà : 429, la page dit « La page n'a pas pu être chargée ».
+  lookPublicGlobal: {
+    max: 120,
+    windowMs: MINUTE,
+    scope: "global",
+    error: "look_read_limit",
+    message: "Trop de demandes en ce moment. Réessayez dans un instant.",
+  },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;

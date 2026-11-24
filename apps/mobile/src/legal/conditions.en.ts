@@ -55,6 +55,7 @@ export const termsOfUseEn: LegalDocument = {
       blocks: [
         `Links marked “Affiliate link” may, in the future, earn ${BRAND} a commission when you make a purchase, at no extra cost to you. As of this version, no affiliate program is active: ${BRAND} receives no commission.`,
         `For a piece that seems to come from a luxury house, ${BRAND} may offer “Pre-owned luxury”: links that open, in your browser, the search page of resale sites, already filled in with words taken from the title of an offer found. The list of these sites is ${BRAND}'s choice; they are listed in alphabetical order and, as of this version, none of them pays ${BRAND}. ${BRAND} doesn't see the pieces offered on these sites, their prices or their condition: the resale site presents them and answers for them, under its own terms.`,
+        "A look page shows prices and stock seen in the shops on the day of the search; they may have changed. Look pages can be reported and stopped by the moderation team.",
       ],
     },
     {

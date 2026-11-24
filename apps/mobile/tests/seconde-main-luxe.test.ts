@@ -250,7 +250,9 @@ describe("statistiques : ajouts seulement, sans la pièce", () => {
     expect(ANALYTICS_EVENTS.luxury_resale_opened).toEqual({ sites_count: { kind: "count" } });
     expect(ANALYTICS_EVENTS.luxury_resale_site_opened).toEqual({ position: { kind: "count" }, sites_count: { kind: "count" } });
     // Les derniers événements du catalogue restent ceux que leurs tests attendent.
-    expect(keys.slice(-2)).toEqual(["news_banner_shown", "news_line_opened"]);
+    // Assemblage : la page look ajoute ensuite ses trois événements à la fin.
+    expect(keys.slice(-5, -3)).toEqual(["news_banner_shown", "news_line_opened"]);
+    expect(keys.slice(-3)).toEqual(["look_shared", "look_stopped", "look_signup"]);
   });
 
   it("refusé : sanitizeProps ne garde que sites_count et position — jamais la maison, les mots, un site, une pièce, un prix ni platform", () => {

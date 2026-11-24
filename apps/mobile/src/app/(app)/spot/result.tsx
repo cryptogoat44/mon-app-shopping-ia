@@ -1,4 +1,4 @@
-import { formatPrice } from "@/lib/format";
+import { formatLongDate, formatPrice } from "@/lib/format";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { AccessibilityInfo, Keyboard, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -89,6 +89,10 @@ import { openWishlistFromSpotter } from "@/lib/wishlist-link";
 import { isAffiliateLink } from "@/lib/affiliate-link";
 import { AffiliateMention } from "@/components/affiliate-mention";
 import { PieceExtraActions } from "@/components/piece-extra-actions";
+import { LookConfirmSheet } from "@/components/look-confirm-sheet";
+import { createLook, rememberedLookReused, rememberedLookUrl, rememberLookUrl, shareLookLink, useLookPagesStatus } from "@/lib/look-pages";
+import { dayOf, lookShareAllowed } from "@/lib/look-page";
+import { ApiError } from "@/lib/api-error";
 import { themedStyles } from "@/theme/themed-styles";
 
 function displayPrice(piece: Piece): string {
@@ -137,6 +141,11 @@ export default function ResultScreen() {
   const [categoryTarget, setCategoryTarget] = useState<Piece | null>(null);
   const [reportTarget, setReportTarget] = useState<Piece | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // La page look (lot « page look ») : « Partager le look » quand le serveur
+  // le permet, une feuille de confirmation, puis la feuille de partage.
+  const lookStatus = useLookPagesStatus();
+  const [lookTarget, setLookTarget] = useState<Piece | null>(null);
+  const [lookBusy, setLookBusy] = useState(false);
   const [blockedMerchantUrl, setBlockedMerchantUrl] = useState<string | null>(null);
   const [showAllOthers, setShowAllOthers] = useState(false);
   // Section « Sans prix » dépliée : son bouton, ou « Ce n'est pas la bonne pièce ? » (relecture ORD-5).
@@ -207,6 +216,7 @@ export default function ResultScreen() {
   const startIndex = result ? startIndexOf(choice, result, startOptions) : 0;
   const selectedIndex = choice.chosen ?? startIndex;
   const piece = result ? (allPieces(result)[selectedIndex] ?? null) : null;
+  const lookAllowed = lookShareAllowed(lookStatus, piece, result);
   // Place de chaque proposition pour les statistiques du clic, dans la disposition de l'écran.
   const placements: ReadonlyMap<number, ClickPlacement> = result ? clickPlacements(result, startIndex) : new Map();
 
@@ -505,6 +515,13 @@ export default function ResultScreen() {
   async function handleShare() {
     if (!piece) return;
     holdPiece();
+    if (lookAllowed) {
+      // Même pièce déjà partagée pendant cette visite : le même lien, sans nouvelle feuille.
+      const known = rememberedLookUrl(piece.id);
+      if (known) await shareLook(piece, known, rememberedLookReused(piece.id));
+      else setLookTarget(piece);
+      return;
+    }
     const url = piece.affiliateUrl ?? piece.merchantUrl ?? "";
     const message = t.result.shareMessage(piece.name, url, isAffiliateLink(piece));
     try {
@@ -519,6 +536,33 @@ export default function ResultScreen() {
     } catch {
       // Partage annulé par l'utilisateur : rien à signaler.
     }
+  }
+
+  /** « Créer le lien » : la page (ou celle déjà active pour cette pièce), puis la feuille de partage. */
+  async function confirmLook() {
+    const target = lookTarget;
+    setLookTarget(null);
+    if (!target || lookBusy) return;
+    setLookBusy(true);
+    setActionError(null);
+    AccessibilityInfo.announceForAccessibility(t.look.creating);
+    try {
+      const look = await createLook(target.id);
+      rememberLookUrl(target.id, look.url, look.created);
+      await shareLook(target, look.url, !look.created);
+    } catch (error) {
+      const body = error instanceof ApiError ? (error.body as { error?: string; reason?: string }) : null;
+      setActionError(body?.error === "look_limit" ? t.look.limitReached : body?.reason === "shops_pending" ? t.look.shopsPending : t.look.createError);
+    } finally {
+      setLookBusy(false);
+    }
+  }
+
+  async function shareLook(target: Piece, url: string, reused: boolean) {
+    const outcome = await shareLookLink(target.name, url, reused, target.id);
+    if (outcome === "copied") showToast(t.look.linkCopied);
+    // Site : le navigateur a refusé après l'attente de la création ; le lien est gardé, un nouveau toucher le partage.
+    else if (outcome === "needs_tap") showToast(t.look.tapToShare);
   }
 
   /** « Plus disponible ? » de la grande carte : sa pièce, retenue comme pour
@@ -881,8 +925,8 @@ export default function ResultScreen() {
               <Pressable style={styles.action} onPress={openCategory} disabled={bought.has(piece.id)} accessibilityRole="button">
                 <Text style={styles.actionLabel}>{bought.has(piece.id) ? t.result.bought : t.result.markAsBought}</Text>
               </Pressable>
-              <Pressable style={styles.action} onPress={handleShare} accessibilityRole="button">
-                <Text style={styles.actionLabel}>{t.result.share}</Text>
+              <Pressable style={styles.action} onPress={handleShare} disabled={lookBusy} accessibilityRole="button" accessibilityState={{ busy: lookBusy }}>
+                <Text style={styles.actionLabel}>{lookBusy ? t.look.creating : lookAllowed ? t.look.share : t.result.share}</Text>
               </Pressable>
               {piece.real ? <ResultFeedbackButton onPress={openReport} /> : null}
             </View>
@@ -985,6 +1029,10 @@ export default function ResultScreen() {
         )}
         {textSearch(true)}
       </ScrollView>
+
+      {lookTarget ? (
+        <LookConfirmSheet date={formatLongDate(dayOf(result.createdAt) ?? "", getActiveLocale())} onConfirm={confirmLook} onClose={() => setLookTarget(null)} />
+      ) : null}
 
       {reportPiece.real ? (
         <ResultFeedbackSheet

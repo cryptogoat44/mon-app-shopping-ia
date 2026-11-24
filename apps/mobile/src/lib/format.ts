@@ -11,6 +11,12 @@ export function formatLongDate(isoOrDay: string, locale: Locale): string {
   return date.toLocaleDateString(INTL[locale], { day: "numeric", month: "long", year: "numeric" });
 }
 
+/** Date courte, mois abrégé : « 23 nov. 2026 » ; « Nov 23, 2026 ». Lue à midi,
+ * comme formatLongDate (page look : prix et stock datés). */
+export function formatShortDate(isoDay: string, locale: Locale): string {
+  return new Date(`${isoDay}T12:00:00`).toLocaleDateString(INTL[locale], { day: "numeric", month: "short", year: "numeric" });
+}
+
 /** Jour et mois, sans l'année, pour une date proche : « 3 novembre », « 1er décembre » ;
  * « November 3 ». Lu à midi, comme formatLongDate, pour ne jamais changer de jour. */
 export function formatDayMonth(isoDay: string, locale: Locale): string {

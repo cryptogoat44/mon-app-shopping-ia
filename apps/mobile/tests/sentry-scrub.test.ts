@@ -25,6 +25,24 @@ describe("Sentry (site et iPhone) : protection des données", () => {
     expect(scrubBreadcrumb({ category: "navigation", data: { from: "/a?x=1", to: "/profil?id=abc" } })!.data).toEqual({ from: "/a", to: "/profil" });
   });
 
+  it("page look : le jeton dans le chemin de l'appel est remplacé, les autres adresses gardent leur chemin", () => {
+    const token = "AbCdEfGhIjKlMnOpQrStUv";
+    // Refusé : le jeton ne part jamais (trace réseau, navigation, adresse du rapport).
+    expect(scrubBreadcrumb({ category: "fetch", data: { url: `https://spotto-api.onrender.com/api/looks/public/${token}`, method: "GET" } })!.data).toEqual({
+      url: "https://spotto-api.onrender.com/api/looks/public/:token",
+      method: "GET",
+    });
+    const event = scrubErrorEvent({
+      type: undefined,
+      request: { url: `https://spotto-api.onrender.com/api/looks/public/${token}?x=1` },
+      breadcrumbs: [{ category: "xhr", data: { url: `https://spotto-api.onrender.com/api/looks/public/${token}#a` } }],
+    } as ErrorEvent);
+    expect(JSON.stringify(event)).not.toContain(token);
+    // Permis : les autres appels gardent leur chemin, y compris la liste des pages du membre.
+    expect(scrubBreadcrumb({ category: "fetch", data: { url: "https://spotto-api.onrender.com/api/looks/status" } })!.data).toEqual({ url: "https://spotto-api.onrender.com/api/looks/status" });
+    expect(scrubBreadcrumb({ category: "fetch", data: { url: "https://spotto-api.onrender.com/api/looks/public" } })!.data).toEqual({ url: "https://spotto-api.onrender.com/api/looks/public" });
+  });
+
   it("lien de vidéo suivi par le lecteur intégré : seule l'origine du site reste (contre-expertise n° 11)", () => {
     expect(scrubBreadcrumb({ category: "xhr", data: { url: "https://vm.tiktok.com/ZMabc123/", method: "GET" } })!.data).toEqual({ url: "https://vm.tiktok.com", method: "GET" });
     expect(scrubBreadcrumb({ category: "fetch", data: { url: "https://www.instagram.com/share/reel/BAGxyz/?igsh=x" } })!.data).toEqual({ url: "https://www.instagram.com" });

@@ -461,7 +461,7 @@ describe("textes FR / EN (fiche)", () => {
     // et celles du lot « découverte » (« Pour vous », 0050 ; notifications d'activité, 0051).
     for (const catalog of [fr, en]) {
       const keys = Object.keys(catalog);
-      expect(keys.slice(keys.indexOf("messageActions") + 1)).toEqual(["monthlyQuota", "privateAccount", "memberLists", "commentThreads", "carousel", "savedPosts", "profilePins", "forYou", "activityPush"]);
+      expect(keys.slice(keys.indexOf("messageActions") + 1)).toEqual(["monthlyQuota", "privateAccount", "memberLists", "commentThreads", "carousel", "savedPosts", "profilePins", "forYou", "activityPush", "look"]);
     }
     expect(Object.keys(en.messageActions).sort()).toEqual(Object.keys(fr.messageActions).sort());
     for (const value of Object.values(fr.messageActions)) {
