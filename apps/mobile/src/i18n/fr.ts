@@ -1206,6 +1206,8 @@ export const fr = {
     notFound: "Ce profil n'est pas disponible.",
     loadError: "Impossible de charger ce profil.",
     more: "Signaler ou bloquer",
+    // Lot « étagères des amis » : l'état vide nomme la personne (vrai aussi quand ses publications sont privées).
+    noPostsNamed: (name: string) => `${name} n'a encore rien publié.`,
   },
   wishlist: {
     title: "Envies",
@@ -1245,6 +1247,8 @@ export const fr = {
     searchClose: "Fermer la recherche",
     sortShort: { recent: "Récentes", price_asc: "Prix ↑", price_desc: "Prix ↓" },
     sortButtonLabel: (current: string) => `Trier, actuellement : ${current}`,
+    // Lot « étagères des amis » : la phrase quand « Montrer mes Envies à mes amis » est allumé.
+    privateNoteFriends: "Vos amis voient toutes vos Envies (réglage « Montrer mes Envies à mes amis »). Vous pouvez les rendre privées dans Réglages.",
   },
   profile: {
     vault: "Vault",
@@ -2141,5 +2145,38 @@ export const fr = {
     moderationStopped: "Page arrêtée.",
     // Site : le navigateur a refusé le partage après l'attente de la création du lien.
     tapToShare: "Le lien est créé : touchez « Partager le look » pour l'envoyer.",
+  },
+  // Lot « étagères des amis » (migration 0058) : montrer ses Envies et son
+  // Vault à ses amis, si on le décide ; onglets en lecture seule sur le profil d'un ami.
+  friendShelves: {
+    settingWishesTitle: "Montrer mes Envies à mes amis",
+    settingWishesHelp: `Éteint au départ. Allumé, vos amis (les membres que vous suivez et qui vous suivent) voient toutes vos Envies, y compris celles rangées dans vos collections privées, sans le nom de ces collections : titre, image (une copie faite par ${BRAND}), prix et lien vers la boutique. Jamais vos notes, vos alertes, les pièces reçues ni vos publications enregistrées.`,
+    settingVaultTitle: "Montrer mon Vault à mes amis",
+    settingVaultHelp: "Éteint au départ. Allumé, vos amis voient les pièces de votre Vault : nom, catégorie et photo, y compris les photos que vous avez prises vous-même. Jamais la date d'ajout ni la mention « Achat vérifié ».",
+    confirmWishesTitle: "Montrer vos Envies à vos amis ?",
+    confirmWishesBody: "Vos amis verront toutes vos Envies, même celles de vos collections privées. Personne d'autre. Vous pourrez les rendre privées à tout moment.",
+    confirmVaultTitle: "Montrer votre Vault à vos amis ?",
+    confirmVaultBody: "Vos amis verront toutes les pièces de votre Vault, avec leurs photos, y compris celles que vous avez prises vous-même : vérifiez ce qu'elles montrent. Personne d'autre. Vous pourrez le rendre privé à tout moment.",
+    confirmCta: "Montrer à mes amis",
+    cancel: "Annuler",
+    wishesShown: "Vos amis voient maintenant vos Envies.",
+    vaultShown: "Vos amis voient maintenant votre Vault.",
+    wishesPrivateAgain: "Vos Envies sont de nouveau privées.",
+    // Avec les collections : celles montrées aux amis le restent.
+    wishesPrivateAgainCollections: "Vos amis ne voient plus que les Envies rangées dans une collection montrée à vos amis.",
+    vaultPrivateAgain: "Votre Vault est de nouveau privé.",
+    settingError: "Le réglage n'a pas pu être enregistré. Réessayez.",
+    // Profil d'un ami : les onglets, en lecture seule.
+    tabsLabel: "Ce que vous pouvez voir",
+    shownBecauseFriends: "Visible parce que vous êtes amis.",
+    emptyWishes: "Aucune envie pour le moment.",
+    emptyVault: "Aucune pièce pour le moment.",
+    loadError: "Impossible de charger ces pièces.",
+    loadMoreError: "Impossible de charger la suite.",
+    close: "Fermer",
+    // Notes « privé » quand le réglage est allumé (fiche d'une pièce du Vault, ajout d'une pièce, fiche d'une envie).
+    vaultItemNote: "Votre Vault est montré à vos amis (Réglages) ; personne d'autre ne le voit. Pour montrer cette pièce à d'autres, partagez-la dans votre fil.",
+    vaultFormNote: "Votre Vault est montré à vos amis : ils verront cette pièce (Réglages, « Montrer mon Vault à mes amis »).",
+    wishShareHint: "Vos amis voient vos Envies (Réglages). Rien d'autre n'est partagé sans votre accord.",
   },
 } as const;

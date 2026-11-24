@@ -14,6 +14,7 @@ import { PRIVACY_LEVELS } from "@/lib/vault-labels";
 import { VerifiedIcon } from "@/components/icons";
 import { useToast } from "@/lib/toast-context";
 import { useAuth } from "@/lib/auth-context";
+import { vaultItemNote } from "@/lib/friend-shelves";
 import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
@@ -334,10 +335,11 @@ export default function VaultItemDetailScreen() {
           </View>
         ) : null}
 
-        {/* Décision 5 du Lot Q : le Vault est toujours privé. La seule façon
-            de montrer une pièce est de la partager, avec la confidentialité
-            choisie pour cette publication. */}
-        <Text style={styles.privateNote}>{t.vaultItem.privateNote}</Text>
+        {/* Décision 5 du Lot Q : le Vault est privé. Pour montrer une pièce à
+            d'autres, on la partage, avec la confidentialité choisie pour cette
+            publication. Seule exception, choisie par le membre : « Montrer mon
+            Vault à mes amis » (migration 0058) ; la phrase le dit alors. */}
+        <Text style={styles.privateNote}>{vaultItemNote(profile)}</Text>
         {item.sharedPost ? (
           // Déjà partagée (Lot F) : l'état réel, jamais un choix reproposé
           // comme si rien ne s'était passé. Une pièce ne se partage qu'une
