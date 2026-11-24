@@ -326,6 +326,25 @@ describe("« toutes vos Envies » / « toutes les pièces » : l'exception de la
   });
 });
 
+describe("politique : la copie d'image d'une Envie dans une collection masquée par la modération", () => {
+  // La modération masque une collection sans remettre les copies en ordre
+  // (lib/collections.ts, syncFriendCopies) : la politique le dit.
+  const frException =
+    "La copie de l'image est effacée dès que l'Envie n'est plus montrée à vos amis, et tout part avec la suppression de votre compte. Exception : si la modération masque une collection, les copies des images de ses Envies peuvent être gardées tant qu'elle reste masquée, même quand ces Envies ne sont plus montrées à vos amis, et au plus tard jusqu'à la suppression de votre compte.";
+  const enException =
+    "The copy of the image is deleted as soon as the wish is no longer shown to your friends, and everything goes when you delete your account. Exception: if moderation hides a collection, the image copies of its wishes may be kept while it stays hidden, even when those wishes are no longer shown to your friends, and at the latest until you delete your account.";
+
+  it("permis : la phrase « effacée dès que » est suivie de l'exception, en FR et en EN", () => {
+    expect(all(privacyPolicy)).toContain(frException);
+    expect(all(privacyPolicyEn)).toContain(enException);
+  });
+
+  it("refusé : plus de « effacée dès que » sans l'exception juste après", () => {
+    expect(all(privacyPolicy)).not.toContain("et tout part avec la suppression de votre compte. Un ami peut signaler une collection");
+    expect(all(privacyPolicyEn)).not.toContain("and everything goes when you delete your account. A friend can report a collection");
+  });
+});
+
 describe("politique de confidentialité : plus de promesse absolue fausse", () => {
   it("le Vault n'est plus « visible par vous seul » sans réserve, en FR et en EN", () => {
     const frText = all(privacyPolicy);
