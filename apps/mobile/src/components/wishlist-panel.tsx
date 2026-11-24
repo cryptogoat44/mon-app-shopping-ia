@@ -545,7 +545,7 @@ const styles = themedStyles(() => ({
   sheetButtonLabel: { fontSize: font.secondary, fontWeight: "600", color: color.encre, textAlign: "center" },
   sheetPrimaryLabel: { color: color.blanc },
   emptyContent: { flexGrow: 1 },
-  empty: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl, marginTop: -60 },
+  empty: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl },
   emptyText: { fontSize: font.secondary, color: color.acier, textAlign: "center", lineHeight: 20, marginBottom: space.md },
   emptyCta: { fontSize: font.body, color: color.vert, fontWeight: "600" },
   gridContent: {

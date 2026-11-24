@@ -129,6 +129,18 @@ describe("ce qui est affiché : la puce, puis la recherche, puis le tri", () => 
     expect(panel).not.toContain("{loading ? (\n        <View");
   });
 
+  it("liste vide (collection neuve ou Envies vides) : le message ne remonte pas sur les puces, qui restent touchables", () => {
+    // Le message vide est rendu juste après l'en-tête de la liste (puces,
+    // « + Nouvelle collection », « … ») : une marge négative le ferait passer
+    // par-dessus et prendre leurs touchers.
+    const empty = panel.match(/^  empty: \{[^\n]*\},$/m)?.[0] ?? "";
+    // Permis : centré dans la place qui reste sous l'en-tête.
+    expect(empty).toContain('flex: 1, alignItems: "center", justifyContent: "center"');
+    // Refusé : aucune marge négative qui recouvrirait l'en-tête.
+    expect(empty).not.toMatch(/margin\w*: -/);
+    expect(panel).toContain("<View style={styles.empty}>\n                <Text style={styles.emptyText}>{t.collections.empty}</Text>");
+  });
+
   it("le signet des publications enregistrées et le cadenas : icônes nommées de 44 points", () => {
     const header = panel.slice(panel.indexOf("  const header = ("), panel.indexOf("  return (\n    <>"));
     expect(header).toMatch(/\{collectionsAvailable\.savedPosts \? \(\s*<Pressable[\s\S]*?accessibilityLabel=\{t\.savedPosts\.listTitle\}/);
