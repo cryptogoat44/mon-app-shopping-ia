@@ -342,20 +342,54 @@ async function eachLimited<T>(items: readonly T[], limit: number, run: (item: T)
   await Promise.all(workers);
 }
 
+/** Lot « étagères des amis » : les envies de `userId` rangées dans au moins
+ * une de ses collections masquées par la modération (collections.hidden_at,
+ * migration 0034 ; sans elle, aucune). Elles ne sont jamais montrées sur
+ * l'étagère de ses amis, quel que soit le réglage, et reviennent quand la
+ * modération rend la collection. Toutes les colonnes, comme readCollection
+ * (hidden_at n'existe qu'après 0034) ; une collection contient au plus
+ * COLLECTION_ITEMS_MAX envies, lue une par une (jamais tronquée). Lecture
+ * impossible : DatabaseReadError, jamais « aucune ». */
+export async function wishesInHiddenCollections(fastify: FastifyInstance, userId: string): Promise<Set<string>> {
+  const db = fastify.supabaseAdmin;
+  const hidden = parseDbRows(COLLECTION_ROWS, await db.from("collections").select(COLLECTION_COLUMNS).eq("user_id", userId), "Collections masquées")
+    .filter((row) => row.hidden_at !== null)
+    .map((row) => row.id);
+  const wishes = new Set<string>();
+  for (const collectionId of hidden) {
+    const rows = parseDbRows(
+      z.array(z.object({ wishlist_item_id: ID })),
+      await db.from("collection_items").select("wishlist_item_id").eq("user_id", userId).eq("collection_id", collectionId),
+      "Envies d'une collection masquée"
+    );
+    for (const row of rows) wishes.add(row.wishlist_item_id);
+  }
+  return wishes;
+}
+
 /** Envies de `userId` visibles par ses amis (dans au moins une de ses
  * collections « Mes amis »), parmi `wishIds`. Lot « étagères des amis »
- * (migration 0058) : toutes, s'il montre ses Envies à ses amis. */
+ * (migration 0058) : s'il montre ses Envies à ses amis, toutes celles qui ne
+ * sont dans aucune collection masquée par la modération (celles-là ne sont
+ * pas sur l'étagère : seule une collection « Mes amis » les garde, comme
+ * avant ce lot). Lecture impossible : DatabaseReadError (rien n'est effacé). */
 async function friendVisibleWishes(fastify: FastifyInstance, userId: string, wishIds: string[]): Promise<Set<string>> {
   const db = fastify.supabaseAdmin;
-  if (await showsWishesToFriends(fastify, userId)) return new Set(wishIds);
+  const visible = new Set<string>();
+  let candidates = wishIds;
+  if (await showsWishesToFriends(fastify, userId)) {
+    const hidden = await wishesInHiddenCollections(fastify, userId);
+    for (const id of wishIds) if (!hidden.has(id)) visible.add(id);
+    candidates = wishIds.filter((id) => hidden.has(id));
+    if (candidates.length === 0) return visible;
+  }
   const shared = parseDbRows(
     z.array(z.object({ id: ID })),
     await db.from("collections").select("id").eq("user_id", userId).eq("visibility", "friends"),
     "Collections montrées aux amis"
   ).map((row) => row.id);
-  const visible = new Set<string>();
   if (shared.length === 0) return visible;
-  for (const part of chunks(wishIds)) {
+  for (const part of chunks(candidates)) {
     const rows = parseDbRows(
       z.array(z.object({ wishlist_item_id: ID })),
       await db.from("collection_items").select("wishlist_item_id").eq("user_id", userId).in("wishlist_item_id", part).in("collection_id", shared),

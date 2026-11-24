@@ -20,8 +20,8 @@ import { withoutSuspendedFaces } from "../lib/profileModeration.js";
 import { notInFilter, reportedIdsFor } from "../lib/reportedByViewer.js";
 import { profileExtrasShown } from "../lib/profileExtras.js";
 import { POST_ROWS, hydratePosts, type PostRow } from "./posts.js";
-import { NO_SHELVES, friendShelvesFor, type FriendShelves } from "../lib/friendShelves.js";
-import { collectionsReady, ownCopyUrl, readCopies, syncFriendCopiesQuietly } from "../lib/collections.js";
+import { NO_SHELVES, friendShelvesFor, vaultPiecesInHiddenPosts, type FriendShelves } from "../lib/friendShelves.js";
+import { collectionsReady, ownCopyUrl, readCopies, syncFriendCopiesQuietly, wishesInHiddenCollections } from "../lib/collections.js";
 import { fetchAffiliateUrls, isAffiliateLink } from "../lib/affiliateLinks.js";
 import { fetchHdImageUrls } from "../lib/pieceImages.js";
 
@@ -363,13 +363,21 @@ export default async function usersRoutes(fastify: FastifyInstance) {
     const ownerId = params.userId;
     if (!(await openShelves(fastify, request.user!.id, ownerId)).wishes) return reply.send(emptyShelf());
 
+    // Une envie rangée dans au moins une collection masquée par la modération
+    // n'est pas montrée, quel que soit le réglage : retirée de la requête
+    // elle-même, pour que le rang (le curseur) ne laisse ni trou ni doublon,
+    // et que rien ne dise qu'elle existe. Elle revient quand la modération
+    // rend la collection. Lecture impossible : erreur, jamais tout montrer.
+    const hiddenWishes = notInFilter([...(await wishesInHiddenCollections(fastify, ownerId))]);
     const offset = pageQuery.cursor ?? 0;
+    let wishQuery = fastify.supabaseAdmin
+      .from("wishlist_items")
+      .select("id, title, price_min, currency, merchant_name, merchant_url, product_match_id")
+      .eq("user_id", ownerId);
+    if (hiddenWishes) wishQuery = wishQuery.not("id", "in", hiddenWishes);
     const rows = parseDbRows(
       FRIEND_WISH_ROWS,
-      await fastify.supabaseAdmin
-        .from("wishlist_items")
-        .select("id, title, price_min, currency, merchant_name, merchant_url, product_match_id")
-        .eq("user_id", ownerId)
+      await wishQuery
         .order("created_at", { ascending: false })
         .order("id", { ascending: false })
         .range(offset, offset + SHELF_PAGE_SIZE),
@@ -423,13 +431,17 @@ export default async function usersRoutes(fastify: FastifyInstance) {
     const ownerId = params.userId;
     if (!(await openShelves(fastify, request.user!.id, ownerId)).vault) return reply.send(emptyShelf());
 
+    // Une pièce qu'une publication « achat » de son propriétaire, masquée par
+    // la modération, montre : pas sur l'étagère tant qu'elle reste masquée
+    // (retirée de la requête : le rang reste juste). Lecture impossible :
+    // erreur, jamais tout montrer.
+    const hiddenPieces = notInFilter(await vaultPiecesInHiddenPosts(fastify, ownerId));
     const offset = pageQuery.cursor ?? 0;
+    let vaultQuery = fastify.supabaseAdmin.from("vault_items").select("id, title, category, image_url, product_match_id").eq("user_id", ownerId);
+    if (hiddenPieces) vaultQuery = vaultQuery.not("id", "in", hiddenPieces);
     const rows = parseDbRows(
       FRIEND_VAULT_ROWS,
-      await fastify.supabaseAdmin
-        .from("vault_items")
-        .select("id, title, category, image_url, product_match_id")
-        .eq("user_id", ownerId)
+      await vaultQuery
         .order("created_at", { ascending: false })
         .order("id", { ascending: false })
         .range(offset, offset + SHELF_PAGE_SIZE),

@@ -112,6 +112,30 @@ describe("étagères des amis, sur la base de développement (0058)", () => {
     expect(((await request(bruno, "GET", `/api/users/${alice.id}`)).json() as UserProfile).friendShelves).toMatchObject({ vault: true });
   });
 
+  it("modération : une envie d'une collection masquée et une pièce d'une publication masquée ne sont plus montrées ; rendues, elles reviennent", async (context) => {
+    if (!migrated || !collectionsMigrated) return context.skip();
+    const moderated = !(await service.from("collections").select("hidden_at").limit(0)).error;
+    if (!moderated) return context.skip();
+    // Envie : rangée dans une collection privée, que la modération masque.
+    const collection = (await request(alice, "POST", "/api/collections", { name: "Hiver" })).json() as { id: string };
+    expect((await request(alice, "PUT", `/api/wishlist/${wish.id}/collections`, { collectionIds: [collection.id] })).statusCode).toBe(200);
+    expect(((await request(bruno, "GET", `/api/users/${alice.id}/wishlist`)).json() as FriendWishPage).items.map((item) => item.id)).toEqual([wish.id]);
+    expect((await service.from("collections").update({ hidden_at: new Date().toISOString() }).eq("id", collection.id)).error).toBeNull();
+    expect((await request(bruno, "GET", `/api/users/${alice.id}/wishlist`)).json()).toEqual({ items: [], nextCursor: null });
+    expect((await service.from("collections").update({ hidden_at: null }).eq("id", collection.id)).error).toBeNull();
+    expect(((await request(bruno, "GET", `/api/users/${alice.id}/wishlist`)).json() as FriendWishPage).items.map((item) => item.id)).toEqual([wish.id]);
+    // Pièce du Vault : sa publication « achat » masquée par la modération.
+    const piece = await service.from("vault_items").insert({ user_id: alice.id, title: "Veste", image_url: MERCHANT_IMAGE, category: "clothing" }).select("id").single();
+    expect(piece.error).toBeNull();
+    const post = await service.from("posts").insert({ user_id: alice.id, type: "purchase", vault_item_id: piece.data!.id, media_kind: "photo", media_url: MERCHANT_IMAGE }).select("id").single();
+    expect(post.error).toBeNull();
+    expect(((await request(bruno, "GET", `/api/users/${alice.id}/vault`)).json() as FriendVaultPage).items.map((item) => item.id)).toEqual([piece.data!.id]);
+    expect((await service.from("posts").update({ hidden_at: new Date().toISOString() }).eq("id", post.data!.id)).error).toBeNull();
+    expect((await request(bruno, "GET", `/api/users/${alice.id}/vault`)).json()).toEqual({ items: [], nextCursor: null });
+    expect((await service.from("posts").update({ hidden_at: null }).eq("id", post.data!.id)).error).toBeNull();
+    expect(((await request(bruno, "GET", `/api/users/${alice.id}/vault`)).json() as FriendVaultPage).items.map((item) => item.id)).toEqual([piece.data!.id]);
+  });
+
   it("éteint : l'étagère se ferme et la copie de l'image est effacée du stockage", async (context) => {
     if (!migrated || !collectionsMigrated) return context.skip();
     expect((await request(alice, "PUT", "/api/me/friend-shelves", { wishes: false, vault: false })).statusCode).toBe(204);

@@ -11,8 +11,8 @@ import collectionsRoutes from "../src/routes/collections.js";
 import { RATE_LIMITS } from "../src/lib/rateLimits.js";
 import type { Audience } from "../src/lib/audience.js";
 import { resetPrivateAccountsProbe } from "../src/lib/audience.js";
-import { canSeeFriendCollections, resetCollectionsProbe } from "../src/lib/collections.js";
-import { friendShelfAllowed, friendShelvesFor, friendShelvesReady, resetFriendShelvesProbe } from "../src/lib/friendShelves.js";
+import { canSeeFriendCollections, resetCollectionsProbe, syncFriendCopies, wishesInHiddenCollections } from "../src/lib/collections.js";
+import { friendShelfAllowed, friendShelvesFor, friendShelvesReady, resetFriendShelvesProbe, vaultPiecesInHiddenPosts } from "../src/lib/friendShelves.js";
 import { DatabaseReadError } from "../src/lib/validation.js";
 import { isBlockedEitherWay, isFollowing } from "../src/lib/visibility.js";
 import { resetWishAlertsProbe } from "../src/lib/wishAlertsSchema.js";
@@ -570,5 +570,218 @@ describe("contre-lecture : les vérifications de blocage ne sont plus « ouverte
     for (const table of ["blocks", "follows", "suspensions"]) {
       await expect(canSeeFriendCollections(fastifyWith(withBrokenTables(fake.db, [table])), BOB, ALICE), table).rejects.toBeInstanceOf(DatabaseReadError);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Modération : ce qu'elle masque ne se voit pas non plus sur les étagères.
+
+const HIDDEN_AT = "2026-11-10T00:00:00+00:00";
+const PRIVATE_COLLECTION = "c1000000-0000-4000-8000-000000000001";
+const FRIENDS_COLLECTION = "c1000000-0000-4000-8000-000000000002";
+
+/** Une collection d'Alice (masquée par la modération si `hidden`) qui contient `wishIds`. */
+function aliceCollection(fake: ReturnType<typeof fakeSupabase>, id: string, visibility: "private" | "friends", hidden: boolean, wishIds: string[]) {
+  fake.table("collections").push({
+    id,
+    user_id: ALICE,
+    name: "Collection",
+    visibility,
+    visibility_changed_at: null,
+    created_at: "2026-11-01T00:00:00+00:00",
+    updated_at: "2026-11-01T00:00:00+00:00",
+    hidden_at: hidden ? HIDDEN_AT : null,
+  });
+  wishIds.forEach((wishId, index) =>
+    fake.table("collection_items").push({
+      id: `c2000000-0000-4000-8000-${id.slice(-4)}${String(index).padStart(8, "0")}`,
+      collection_id: id,
+      wishlist_item_id: wishId,
+      user_id: ALICE,
+      created_at: "2026-11-01T00:00:00+00:00",
+    })
+  );
+}
+
+/** Une publication « achat » d'Alice qui montre la pièce `vaultItemId`. */
+function purchasePost(fake: ReturnType<typeof fakeSupabase>, id: string, vaultItemId: string, hidden: boolean) {
+  fake.table("posts").push({
+    id,
+    user_id: ALICE,
+    type: "purchase",
+    caption: null,
+    media_url: OWN_PHOTO,
+    privacy: "followers",
+    vault_item_id: vaultItemId,
+    wishlist_item_id: null,
+    media_thumb_url: null,
+    media_removed_at: null,
+    hidden_at: hidden ? HIDDEN_AT : null,
+    created_at: "2026-11-05T00:00:00+00:00",
+  });
+}
+
+/** Seule la lecture de `table` avec `columns` échoue (les sondes, déjà passées, ne sont pas refaites). */
+function breakSelect(fake: ReturnType<typeof fakeSupabase>, table: string, columns: (asked: string) => boolean): () => void {
+  const original = fake.db.from;
+  const broken = withBrokenTables(fake.db, [table]).from(table);
+  (fake.db as { from: (name: string) => unknown }).from = (name: string) => {
+    const query = original(name);
+    if (name !== table) return query;
+    return { ...query, select: (asked: string, ...rest: unknown[]) => (columns(asked) ? broken : (query.select as (...args: unknown[]) => unknown)(asked, ...rest)) };
+  };
+  return () => {
+    (fake.db as { from: typeof original }).from = original;
+  };
+}
+
+describe("Envies d'une collection masquée par la modération : jamais sur l'étagère des amis", () => {
+  it("refusé : une envie d'une collection masquée (privée ou « Mes amis ») n'est pas montrée ; permis : les autres, et elle revient quand la modération rend la collection", async () => {
+    for (const visibility of ["private", "friends"] as const) {
+      const fake = seeded();
+      aliceCollection(fake, PRIVATE_COLLECTION, visibility, true, [WISH]);
+      const target = await shelvesApp(fake.db);
+      const page = (await as(target, BOB).get(`/api/users/${ALICE}/wishlist`)).json() as FriendWishPage;
+      expect(page, visibility).toEqual({ items: [expect.objectContaining({ id: WISH_2 })], nextCursor: null });
+      expect(JSON.stringify(page)).not.toContain("Sac cabas");
+      // Rendue par la modération : l'envie revient.
+      fake.table("collections").find((row) => row.id === PRIVATE_COLLECTION)!.hidden_at = null;
+      const back = (await as(target, BOB).get(`/api/users/${ALICE}/wishlist`)).json() as FriendWishPage;
+      expect(back.items.map((item) => item.id)).toEqual([WISH_2, WISH]);
+      await target.close();
+      app = null;
+    }
+  });
+
+  it("refusé même si l'envie est aussi dans une collection « Mes amis » non masquée ; permis : une collection non masquée ne retire rien", async () => {
+    const fake = seeded();
+    aliceCollection(fake, PRIVATE_COLLECTION, "private", true, [WISH]);
+    aliceCollection(fake, FRIENDS_COLLECTION, "friends", false, [WISH, WISH_2]);
+    const target = await shelvesApp(fake.db);
+    expect(((await as(target, BOB).get(`/api/users/${ALICE}/wishlist`)).json() as FriendWishPage).items.map((item) => item.id)).toEqual([WISH_2]);
+    fake.table("collections").find((row) => row.id === PRIVATE_COLLECTION)!.hidden_at = null;
+    expect(((await as(target, BOB).get(`/api/users/${ALICE}/wishlist`)).json() as FriendWishPage).items.map((item) => item.id)).toEqual([WISH_2, WISH]);
+  });
+
+  it("pages : le rang ne laisse ni trou ni doublon, et rien ne dit que des envies sont masquées", async () => {
+    const fake = seeded();
+    const ids: string[] = [];
+    for (let i = 0; i < 30; i += 1) {
+      const id = `e2000000-0000-4000-8000-0000000000${String(i).padStart(2, "0")}`;
+      ids.push(id);
+      fake.table("wishlist_items").push({ id, user_id: ALICE, title: `Envie ${i}`, image_url: THUMB, reference: null, price_min: null, currency: null, merchant_name: null, merchant_url: null, product_match_id: null, created_at: `2026-10-${String(i + 1).padStart(2, "0")}T00:00:00+00:00` });
+    }
+    // 32 envies, dont 5 masquées réparties sur les deux pages : 27 montrées.
+    const hidden = [WISH, ids[29]!, ids[20]!, ids[3]!, ids[0]!];
+    aliceCollection(fake, PRIVATE_COLLECTION, "private", true, hidden);
+    const target = await shelvesApp(fake.db);
+    const first = (await as(target, BOB).get(`/api/users/${ALICE}/wishlist`)).json() as FriendWishPage;
+    expect(first.items).toHaveLength(24);
+    expect(first.nextCursor).toBe("24");
+    const second = (await as(target, BOB).get(`/api/users/${ALICE}/wishlist?cursor=24`)).json() as FriendWishPage;
+    expect(second.items).toHaveLength(3);
+    expect(second.nextCursor).toBeNull();
+    const seen = [...first.items, ...second.items].map((item) => item.id);
+    expect(new Set(seen).size).toBe(27);
+    for (const id of hidden) expect(seen).not.toContain(id);
+    // Au-delà de la fin : la même page vide qu'un ami qui n'a rien.
+    expect((await as(target, BOB).get(`/api/users/${ALICE}/wishlist?cursor=27`)).json()).toEqual({ items: [], nextCursor: null });
+  });
+
+  it("lecture des collections masquées impossible : erreur, jamais une envie (et wishesInHiddenCollections ne répond jamais « aucune »)", async () => {
+    const fake = seeded();
+    aliceCollection(fake, PRIVATE_COLLECTION, "private", true, [WISH]);
+    const target = await shelvesApp(fake.db);
+    // Permis : les sondes passent, l'étagère répond.
+    expect((await as(target, BOB).get(`/api/users/${ALICE}/wishlist`)).statusCode).toBe(200);
+    const restore = breakSelect(fake, "collections", (columns) => columns === "*");
+    const res = await as(target, BOB).get(`/api/users/${ALICE}/wishlist`);
+    await expect(wishesInHiddenCollections({ supabaseAdmin: fake.db, log: { warn: () => {} } } as unknown as FastifyInstance, ALICE)).rejects.toBeInstanceOf(DatabaseReadError);
+    restore();
+    expect(res.statusCode).toBe(500);
+    expect(JSON.stringify(res.json())).not.toMatch(/Sac cabas|Montre/);
+    const restoreItems = breakSelect(fake, "collection_items", (columns) => columns === "wishlist_item_id");
+    const resItems = await as(target, BOB).get(`/api/users/${ALICE}/wishlist`);
+    restoreItems();
+    expect(resItems.statusCode).toBe(500);
+  });
+
+  it("copies : celle d'une envie d'une collection privée masquée est effacée par la remise en ordre ; celle d'une collection « Mes amis » masquée reste (comme avant ce lot)", async () => {
+    await withImages();
+    const fake = seeded();
+    const target = await shelvesApp(fake.db);
+    await as(target, BOB).get(`/api/users/${ALICE}/wishlist`);
+    expect(new Set(fake.table("collection_image_copies").map((row) => row.wishlist_item_id))).toEqual(new Set([WISH, WISH_2]));
+    const fastify = { supabaseAdmin: fake.db, log: { warn: () => {}, info: () => {}, error: () => {} } } as unknown as FastifyInstance;
+    // Refusé : le sac est dans une collection privée masquée, plus rien ne le montre aux amis.
+    aliceCollection(fake, PRIVATE_COLLECTION, "private", true, [WISH]);
+    await syncFriendCopies(fastify, fastify.log, ALICE, [WISH, WISH_2]);
+    expect(fake.table("collection_image_copies").map((row) => row.wishlist_item_id)).toEqual([WISH_2]);
+    expect(fake.removed.filter((path) => path.startsWith(`post-media/${ALICE}/`))).toHaveLength(2);
+    // Permis : la montre, dans une collection « Mes amis » masquée, garde sa
+    // copie (la règle des collections, inchangée : elle resservira si la
+    // modération rend la collection).
+    aliceCollection(fake, FRIENDS_COLLECTION, "friends", true, [WISH_2]);
+    await syncFriendCopies(fastify, fastify.log, ALICE, [WISH, WISH_2]);
+    expect(fake.table("collection_image_copies").map((row) => row.wishlist_item_id)).toEqual([WISH_2]);
+    expect(((await as(target, BOB).get(`/api/users/${ALICE}/wishlist`)).json() as FriendWishPage).items).toEqual([]);
+  });
+});
+
+describe("Vault : une pièce dont la publication « achat » est masquée par la modération", () => {
+  const HIDDEN_POST = "a1000000-0000-4000-8000-000000000001";
+  const SHOWN_POST = "a1000000-0000-4000-8000-000000000002";
+
+  it("refusé : la pièce n'est pas sur l'étagère tant que la publication reste masquée ; permis : elle revient quand la modération la rend", async () => {
+    const fake = seeded();
+    purchasePost(fake, HIDDEN_POST, VAULT_PHOTO, true);
+    const target = await shelvesApp(fake.db);
+    const page = (await as(target, BOB).get(`/api/users/${ALICE}/vault`)).json() as FriendVaultPage;
+    expect(page).toEqual({ items: [expect.objectContaining({ id: VAULT_MATCH })], nextCursor: null });
+    expect(JSON.stringify(page)).not.toContain(OWN_PHOTO);
+    fake.table("posts").find((row) => row.id === HIDDEN_POST)!.hidden_at = null;
+    expect(((await as(target, BOB).get(`/api/users/${ALICE}/vault`)).json() as FriendVaultPage).items.map((item) => item.id)).toEqual([VAULT_MATCH, VAULT_PHOTO]);
+  });
+
+  it("permis : une publication non masquée ne retire rien ; refusé : une seule publication masquée suffit, même si une autre est visible", async () => {
+    const fake = seeded();
+    purchasePost(fake, SHOWN_POST, VAULT_PHOTO, false);
+    const target = await shelvesApp(fake.db);
+    expect(((await as(target, BOB).get(`/api/users/${ALICE}/vault`)).json() as FriendVaultPage).items).toHaveLength(2);
+    purchasePost(fake, HIDDEN_POST, VAULT_PHOTO, true);
+    expect(((await as(target, BOB).get(`/api/users/${ALICE}/vault`)).json() as FriendVaultPage).items.map((item) => item.id)).toEqual([VAULT_MATCH]);
+  });
+
+  it("pages : le rang ne laisse ni trou ni doublon", async () => {
+    const fake = seeded();
+    for (let i = 0; i < 30; i += 1) {
+      fake.table("vault_items").push({ id: `f2000000-0000-4000-8000-0000000000${String(i).padStart(2, "0")}`, user_id: ALICE, title: `Pièce ${i}`, image_url: OWN_PHOTO, category: "clothing", verified: false, product_match_id: null, affiliate_conversion_id: null, created_at: `2026-10-${String(i + 1).padStart(2, "0")}T00:00:00+00:00` });
+    }
+    purchasePost(fake, HIDDEN_POST, VAULT_PHOTO, true);
+    purchasePost(fake, SHOWN_POST, "f2000000-0000-4000-8000-000000000029", true);
+    const target = await shelvesApp(fake.db);
+    const first = (await as(target, BOB).get(`/api/users/${ALICE}/vault`)).json() as FriendVaultPage;
+    expect(first.items).toHaveLength(24);
+    expect(first.nextCursor).toBe("24");
+    const second = (await as(target, BOB).get(`/api/users/${ALICE}/vault?cursor=24`)).json() as FriendVaultPage;
+    expect(second.nextCursor).toBeNull();
+    const seen = [...first.items, ...second.items].map((item) => item.id);
+    expect(seen).toHaveLength(30);
+    expect(new Set(seen).size).toBe(30);
+    expect(seen).not.toContain(VAULT_PHOTO);
+    expect(seen).not.toContain("f2000000-0000-4000-8000-000000000029");
+  });
+
+  it("lecture des publications impossible : erreur, jamais une pièce (et vaultPiecesInHiddenPosts ne répond jamais « aucune »)", async () => {
+    const fake = seeded();
+    purchasePost(fake, HIDDEN_POST, VAULT_PHOTO, true);
+    const db = withBrokenTables(fake.db, ["posts"]);
+    await expect(vaultPiecesInHiddenPosts({ supabaseAdmin: db } as unknown as FastifyInstance, ALICE)).rejects.toBeInstanceOf(DatabaseReadError);
+    const target = await shelvesApp(db);
+    const res = await as(target, BOB).get(`/api/users/${ALICE}/vault`);
+    expect(res.statusCode).toBe(500);
+    expect(JSON.stringify(res.json())).not.toMatch(/Veste|Sac cabas/);
+    // Permis : la même base, publications lisibles.
+    expect(await vaultPiecesInHiddenPosts({ supabaseAdmin: fake.db } as unknown as FastifyInstance, ALICE)).toEqual([VAULT_PHOTO]);
   });
 });

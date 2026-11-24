@@ -20,7 +20,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { readAudienceOf, type Audience } from "./audience.js";
-import { DatabaseReadError } from "./validation.js";
+import { readAll } from "./pagedReads.js";
+import { DatabaseReadError, parseDbRows } from "./validation.js";
 import { isFollowing } from "./visibility.js";
 
 export const FRIEND_SHELVES_UNAVAILABLE = {
@@ -161,4 +162,31 @@ export async function friendShelvesFor(fastify: FastifyInstance, viewerId: strin
 export async function showsWishesToFriends(fastify: FastifyInstance, userId: string): Promise<boolean> {
   if (!(await friendShelvesReady(fastify))) return false;
   return (await readShelfSettings(fastify, userId)).wishes;
+}
+
+/** Les pièces du Vault de `ownerId` qu'une de SES publications masquée par la
+ * modération montre (posts.vault_item_id : la publication « achat » de cette
+ * pièce, dont la photo est celle de la pièce). Elles ne sont pas montrées sur
+ * l'étagère de ses amis tant que la publication reste masquée ; elles
+ * reviennent quand la modération la rend. Lecture complète (jamais tronquée) ;
+ * lecture impossible : DatabaseReadError, jamais « aucune ». */
+export async function vaultPiecesInHiddenPosts(fastify: FastifyInstance, ownerId: string): Promise<string[]> {
+  let rows: unknown[];
+  try {
+    rows = await readAll<unknown>(
+      "Publications masquées d'un Vault",
+      () =>
+        fastify.supabaseAdmin
+          .from("posts")
+          .select("id, vault_item_id", { count: "exact" })
+          .eq("user_id", ownerId)
+          .not("vault_item_id", "is", null)
+          .not("hidden_at", "is", null),
+      ["id"]
+    );
+  } catch {
+    throw new DatabaseReadError("Publications masquées d'un Vault illisibles");
+  }
+  const parsed = parseDbRows(z.array(z.object({ id: z.guid(), vault_item_id: z.guid() })), { data: rows, error: null }, "Publications masquées d'un Vault");
+  return [...new Set(parsed.map((row) => row.vault_item_id))];
 }
