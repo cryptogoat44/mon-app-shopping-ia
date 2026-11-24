@@ -678,6 +678,22 @@ export const en: Catalog = {
       limits: `${BRAND} checks neither whether a piece is an original nor its condition, and this sentence does not change the order of the suggestions. Prices are those shown by the shops at the time of the search. Always check before you buy.`,
       closeButton: "Got it",
     },
+    // Pre-owned luxury (components/luxury-resale.tsx). If a link in this list ever becomes an affiliate link,
+    // `leave` becomes false: change it, add the "Affiliate link" mention and the terms sentence.
+    luxuryResale: {
+      entry: "Pre-owned luxury",
+      entryLabel: (house: string) => `Pre-owned luxury: search for this ${house} piece on resale sites`,
+      entryHint: "Opens the list of resale sites.",
+      sheetTitle: "Pre-owned luxury",
+      intro: (house: string) =>
+        `Based on the shops found, this piece seems to come from ${house}. You can look for it pre-owned on these resale sites, chosen by ${BRAND} and listed in alphabetical order.`,
+      words: (words: string) => `Search already filled in: “${words}”`,
+      site: (name: string) => `Search on ${name}`,
+      siteLabel: (name: string, host: string) => `Search on ${name}, ${host}, opens outside ${BRAND}`,
+      limits: `${BRAND} doesn't see the pieces on these sites, their prices or their condition: the resale site presents them and answers for them, under its own terms. Check before you buy.`,
+      leave: `You're about to leave ${BRAND}: the site opens in your browser. None of these links is an affiliate link: ${BRAND} earns nothing on these purchases.`,
+      close: "Close",
+    },
   },
   wishlistItem: {
     back: "Wishlist",

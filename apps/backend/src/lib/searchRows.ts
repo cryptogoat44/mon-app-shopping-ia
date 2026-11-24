@@ -19,6 +19,7 @@ import { deferredPending, deferredStateOf } from "./deferredComplement.js";
 import { parisDayStart } from "./matchFeedback.js";
 import { FAILURE_KINDS } from "./searchMeasure.js";
 import { reviewOffers, sectionOrder, type TrustOffer } from "./shopTrust.js";
+import { luxuryResaleOf } from "./luxuryResale.js";
 import { searchVerdict } from "./verdict.js";
 
 export const SEARCH_ROW = z.object({
@@ -248,18 +249,24 @@ export function complementOf(row: SearchRow, textSearchOn: boolean, now: Date = 
  * seulement quand la base a 0055 (sonde lib/verdictColumn.ts) et que
  * `matches` porte TOUTES les propositions de la recherche (lancement,
  * boutiques ensuite, relecture) ; jamais pour l'historique, qui n'en lit
- * qu'une. Faux par défaut : aucun verdict. */
+ * qu'une. Faux par défaut : aucun verdict.
+ * `options.luxuryResale` : l'entrée « Seconde main de luxe »
+ * (lib/luxuryResale.ts) est calculée — aux trois mêmes endroits que le
+ * verdict (lancement, boutiques ensuite, relecture : `matches` porte TOUTES
+ * les propositions), jamais pour l'historique ; elle ne dépend d'aucune
+ * migration. Faux par défaut : aucune entrée. */
 export function toProductSearch(
   row: SearchRow,
   matches: MatchRow[],
   affiliateUrlByMatchId: Map<string, string>,
   feedbackByMatchId: Map<string, MatchFeedbackReason>,
   textSearchOn = false,
-  options: { verdict?: boolean } = {}
+  options: { verdict?: boolean; luxuryResale?: boolean } = {}
 ): ProductSearch {
   const complement = complementOf(row, textSearchOn);
   const shown = trustedMatches(matches);
   const verdict = options.verdict === true ? searchVerdict(row, shown) : undefined;
+  const luxuryResale = options.luxuryResale === true ? luxuryResaleOf(row, shown) : undefined;
   return {
     id: row.id,
     sourceUrl: row.source_url,
@@ -275,6 +282,8 @@ export function toProductSearch(
     // Boutiques douteuses (lib/shopTrust.ts) : retirées, mentions, ordre (rangé par les mentions dans « shopping » seulement).
     // Le verdict (0055) : seulement quand il est connu (absent : rien n'est affirmé).
     ...(verdict ? { verdict } : {}),
+    // Seconde main de luxe : seulement quand une seule maison est retenue (absent : aucune entrée).
+    ...(luxuryResale ? { luxuryResale } : {}),
     matches: shown.map(({ match: m, mark, demoted }) => ({
         id: m.id,
         rank: m.rank,

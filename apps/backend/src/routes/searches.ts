@@ -600,7 +600,8 @@ async function writeOutcome(fastify: FastifyInstance, request: FastifyRequest, i
   const affiliateUrlByMatchId = await fetchAffiliateUrls(fastify, matches.map((m) => m.id));
   // Recherche toute neuve : aucune proposition n'a encore pu être signalée.
   // Toutes ses propositions sont là : le verdict est calculé (lib/verdict.ts), sur une base qui a 0055.
-  return toProductSearch(search, matches, affiliateUrlByMatchId, new Map(), false, { verdict: await verdictColumnReady(fastify) });
+  // Seconde main de luxe (lib/luxuryResale.ts) : calculée aussi, sans migration.
+  return toProductSearch(search, matches, affiliateUrlByMatchId, new Map(), false, { verdict: await verdictColumnReady(fastify), luxuryResale: true });
 }
 
 /** Enregistre l'issue de l'appel et sa mesure, et renvoie la recherche
@@ -960,7 +961,7 @@ async function readSearchForReply(fastify: FastifyInstance, request: FastifyRequ
   const matchIds = matches.map((m) => m.id);
   const affiliateUrlByMatchId = await fetchAffiliateUrls(fastify, matchIds);
   const feedbackByMatchId = await fetchFeedbackReasons(fastify, userId, matchIds);
-  return toProductSearch(row, matches, affiliateUrlByMatchId, feedbackByMatchId, true, { verdict: await verdictColumnReady(fastify) });
+  return toProductSearch(row, matches, affiliateUrlByMatchId, feedbackByMatchId, true, { verdict: await verdictColumnReady(fastify), luxuryResale: true });
 }
 
 // ---- Boutiques ensuite (POST /api/searches/:id/complement, 0031) ----
@@ -1665,9 +1666,9 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       keptMatchIds(fastify, "wishlist_items", userId, matchIds),
       keptMatchIds(fastify, "vault_items", userId, matchIds),
     ]);
-    // Le verdict (lib/verdict.ts), seulement sur une base qui a 0055.
+    // Le verdict (lib/verdict.ts), seulement sur une base qui a 0055 ; la seconde main de luxe (lib/luxuryResale.ts), toujours.
     const verdict = await verdictColumnReady(fastify);
-    const reread: ProductSearch = { ...toProductSearch(row, matches, affiliateUrlByMatchId, feedbackByMatchId, textSearchOn, { verdict }), wishlistMatchIds, vaultMatchIds };
+    const reread: ProductSearch = { ...toProductSearch(row, matches, affiliateUrlByMatchId, feedbackByMatchId, textSearchOn, { verdict, luxuryResale: true }), wishlistMatchIds, vaultMatchIds };
 
     return reply.send(reread);
   });

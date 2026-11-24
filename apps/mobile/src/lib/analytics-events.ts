@@ -228,6 +228,18 @@ export const ANALYTICS_EVENTS = {
   // nouveau si le niveau change quand les boutiques arrivent. Jamais la
   // pièce, la marque, une boutique, un prix ni le nombre de boutiques.
   verdict_shown: { level: oneOf(VERDICT_LEVELS) },
+  // Seconde main de luxe (lot « seconde main de luxe », lib/luxury-resale.ts ;
+  // rangés juste après verdict_shown, avant les événements que leurs tests
+  // veulent en fin de catalogue) : l'entrée montrée (une fois par résultat
+  // affiché, et quand elle apparaît avec les boutiques arrivées ensuite), la
+  // feuille ouverte, puis un site touché ; sites_count : combien de sites
+  // dans la feuille ; position : la place du site touché (1 à 5, dans l'ordre
+  // alphabétique affiché ; à traduire avec la liste en vigueur ce jour-là).
+  // Rien n'est envoyé si l'adresse est refusée. Jamais la maison, les mots,
+  // la pièce, une boutique, un prix ni le nom d'un site.
+  luxury_resale_shown: { sites_count: count },
+  luxury_resale_opened: { sites_count: count },
+  luxury_resale_site_opened: { position: count, sites_count: count },
   // Parcours 3 (« Vous l'avez achetée ? », lib/purchase-question.ts) : un
   // retour de la boutique repéré, depuis l'écran Résultat (result, similar)
   // ou la fiche d'une Envie (wishlist, price_alert), question posée ou non,

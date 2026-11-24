@@ -1226,3 +1226,73 @@ describe("verdict (0055) : le palier noté avec les boutiques, la phrase renvoy�
     expect("verdict" in res.json()).toBe(false);
   });
 });
+
+// Seconde main de luxe (lot « seconde main de luxe », sans migration) :
+// l'entrée se recalcule à chaque relecture, aux trois mêmes chemins que le
+// verdict (lancement, boutiques ensuite, relecture), jamais pour
+// l'historique. Aucune requête ne part vers un site de revente. Les règles,
+// cas par cas : luxuryResale.test.ts.
+describe("seconde main de luxe : le champ aux trois chemins, jamais dans l'historique, aucun appel", () => {
+  // La recherche visuelle : le site officiel de Dior seul (une source) ; une boutique connue qui nomme Dior en plus suffit.
+  const DIOR_LENS: VisualMatch[] = [lensMatch(1, "Sac Saddle en toile Oblique", "https://www.dior.com/fr_fr/saddle"), lensMatch(2, "Sac beige", "https://www.lens-exemple.fr/b")];
+  const FARFETCH_LENS = lensMatch(3, "Dior Saddle sac", "https://www.farfetch.com/fr/saddle");
+  const DIOR_SHOPPING: TextSearchResponse = {
+    items: [shoppingItem(1, "Dior sac Saddle Oblique", "https://www.24s.com/1"), shoppingItem(2, "Sac bleu", "https://boutique-b.fr/2")],
+    received: 2,
+    statusCode: 200,
+  };
+  const EXPECTED = {
+    house: "Dior",
+    words: "Dior Sac Saddle toile Oblique",
+    sites: [{ name: "Vestiaire Collective", url: "https://fr.vestiairecollective.com/search/?q=Dior%20Sac%20Saddle%20toile%20Oblique" }],
+  };
+  const reread = async (target: FastifyInstance, id: string) => (await target.inject({ method: "GET", url: `/api/searches/${id}` })).json();
+  const history = async (target: FastifyInstance) => (await target.inject({ method: "GET", url: "/api/searches" })).json() as Record<string, unknown>[];
+  afterEach(() => vi.restoreAllMocks());
+
+  it("permis : apps déjà installées — le lancement renvoie le champ, la relecture le même ; refusé : l'historique ne l'a jamais ; aucune requête ne part", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    lensMock.mockResolvedValue({ matches: [...structuredClone(DIOR_LENS), structuredClone(FARFETCH_LENS)], measure: LENS_MEASURE, addedRanks: [], statusCode: 200 });
+    const target = await buildApp();
+    const id = preparedSearch();
+    const res = await launch(target, id, { query: WORDS });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().luxuryResale).toEqual(EXPECTED);
+    expect((await reread(target, id)).luxuryResale).toEqual(EXPECTED);
+    const list = await history(target);
+    expect(list.map((search) => search.id)).toContain(id);
+    expect(list.some((search) => "luxuryResale" in search)).toBe(false);
+    // Ni les mots tapés sous la photo, ni la requête de l'IA, ni un identifiant dans le champ.
+    expect(JSON.stringify(res.json().luxuryResale)).not.toMatch(/rouge|zéphyrine|Nuage|Exemplor/i);
+    expect(JSON.stringify(res.json().luxuryResale)).not.toContain(id);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    // Rien d'enregistré : ni la maison, ni les mots.
+    expect(JSON.stringify(db.rows("product_searches"))).not.toMatch(/vestiaire|"Dior"|Saddle toile/i);
+    expect(matchRows(id).every((row) => row.brand === null)).toBe(true);
+  });
+
+  it("permis : boutiques ensuite — aucun champ au lancement (une seule source), puis le champ avec les boutiques, et à la relecture", async () => {
+    lensMock.mockResolvedValue({ matches: structuredClone(DIOR_LENS), measure: LENS_MEASURE, addedRanks: [], statusCode: 200 });
+    shoppingMock.mockResolvedValue(DIOR_SHOPPING);
+    const target = await buildApp();
+    const id = preparedSearch();
+    const first = await launch(target, id, { complement: "deferred" });
+    expect(first.statusCode).toBe(200);
+    expect(first.json().complement.pending).toBe(true);
+    expect("luxuryResale" in first.json()).toBe(false);
+    expect("luxuryResale" in (await reread(target, id))).toBe(false);
+    const later = await complement(target, id);
+    expect(later.json().complement.status).toBe("shown");
+    expect(later.json().luxuryResale).toEqual(EXPECTED);
+    expect((await reread(target, id)).luxuryResale).toEqual(EXPECTED);
+  });
+
+  it("refusé : aucune maison (boutiques et titres par défaut) — aucun champ, nulle part ; les propositions et leurs mentions sont celles d'avant", async () => {
+    const target = await buildApp();
+    const id = preparedSearch();
+    const res = await launch(target, id);
+    expect(res.statusCode).toBe(200);
+    expect("luxuryResale" in res.json()).toBe(false);
+    expect("luxuryResale" in (await reread(target, id))).toBe(false);
+  });
+});
