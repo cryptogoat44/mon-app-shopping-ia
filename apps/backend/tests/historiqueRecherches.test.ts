@@ -2,7 +2,7 @@ import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 import { afterEach, describe, expect, it } from "vitest";
 import searchesRoutes from "../src/routes/searches.js";
 import { requestLogFields, scrubLogLine, withoutErrorDetails } from "../src/lib/logPrivacy.js";
-import { HISTORY_SCAN_BATCH, historyLikePattern, matchesHistoryQuery, recentSearchesQuerySchema } from "../src/lib/searchHistory.js";
+import { HISTORY_SCAN_BATCH, matchesHistoryQuery, recentSearchesQuerySchema } from "../src/lib/searchHistory.js";
 import { keptMatchRows } from "../src/lib/searchRows.js";
 import { fakeSupabase, type FakeDbOptions, type Row } from "./fakeSupabase.js";
 
@@ -127,10 +127,7 @@ describe("paramètres : `before` et `q` facultatifs, vérifiés", () => {
     }
   });
 
-  it("premier tri dans la base : un joker tapé ne vaut jamais « tout » ; recherche exacte sans tenir compte de la casse", () => {
-    expect(historyLikePattern("sac noir")).toBe("%sac noir%");
-    expect(historyLikePattern("100%")).toBe("%100_%");
-    expect(historyLikePattern("a*b_c\\d")).toBe("%a_b_c_d%");
+  it("recherche exacte, sur notre serveur, sans tenir compte de la casse ; un joker tapé est cherché tel quel", () => {
     const piece = { product_name: "Sac NOIR Exemplor", brand: null, merchant_name: "Boutique (Paris), Lyon" };
     expect(matchesHistoryQuery(piece, "sac noir")).toBe(true);
     expect(matchesHistoryQuery(piece, "(paris), ly")).toBe(true);
@@ -268,6 +265,33 @@ describe("vie privée : les mots tapés ne sont ni gardés ni écrits dans le jo
     expect(lines.join("\n")).not.toMatch(/zéphyrine|z%C3%A9phyrine|Robe/i);
     expect(lines.join("\n")).toContain("/api/searches");
     expect(JSON.stringify([...fake.tables])).toBe(before);
+  });
+
+  it("refusé : aucun mot tapé ne part vers la base (ni `ilike`, ni dans une valeur de filtre) ; permis : la recherche trouve quand même", async () => {
+    const fake = seeded(5);
+    Object.assign(fake.table("product_matches").find((row) => row.id === matchId(ALICE, 3, 2))!, { product_name: "Robe zéphyrine longue" });
+    // Chaque appel fait au client de la base est noté, avec ses arguments.
+    const sent: string[] = [];
+    const spy = (target: unknown): unknown =>
+      typeof target === "function" || (typeof target === "object" && target !== null)
+        ? new Proxy(target as object, {
+            get(obj, key, receiver) {
+              const value = Reflect.get(obj, key, receiver);
+              if (typeof value !== "function") return key === "then" ? value : spy(value);
+              return (...args: unknown[]) => {
+                sent.push(`${String(key)}(${JSON.stringify(args)})`);
+                const result = (value as (...a: unknown[]) => unknown).apply(obj, args);
+                return result instanceof Promise ? result : spy(result);
+              };
+            },
+          })
+        : target;
+    const target = await buildApp(spy(fake.db));
+    const res = await list(target, qs({ q: WORDS, limit: "20" }));
+    expect(res.status).toBe(200);
+    expect(res.body.map((search) => search.matches[0]!.id)).toEqual([matchId(ALICE, 3, 2)]);
+    expect(sent.some((call) => call.startsWith("from("))).toBe(true);
+    expect(sent.join("\n")).not.toMatch(/ilike|zéphyrine|z%C3%A9phyrine|Robe/i);
   });
 
   it("refusé : lecture impossible — 500, et toujours aucun mot dans le journal", async () => {

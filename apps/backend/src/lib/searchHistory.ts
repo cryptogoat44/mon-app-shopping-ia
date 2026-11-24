@@ -19,11 +19,11 @@
 //
 // Lectures complètes (lib/pagedReads.ts) : listes d'identifiants par paquets,
 // chaque lecture de propositions lue en entier (« Max rows » de Supabase).
-// Trois filtres `ilike` séparés plutôt qu'un `.or()` construit avec le texte
-// tapé (même règle que la recherche de personnes, routes/users.ts) ; ce
-// premier tri est large (les jokers tapés valent « un caractère »), le tri
-// exact se fait ensuite ici (matchesHistoryQuery), sur les propositions
-// gardées seulement.
+// Les mots tapés ne quittent JAMAIS notre serveur : aucune lecture de la base
+// ne les porte (pas de filtre `ilike`, qui les mettrait dans l'adresse de la
+// demande et donc dans les journaux de Supabase). Les propositions sont lues
+// par identifiant de recherche, et le tri se fait ici (matchesHistoryQuery),
+// sur les propositions gardées seulement.
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { chunks, readAll } from "./pagedReads.js";
@@ -59,13 +59,6 @@ const PAGE_SCAN_ROUNDS = 5;
 /** Recherches dont on relit toutes les propositions d'un coup. */
 const MATCH_READ_CHUNK = 20;
 
-/** Premier tri dans la base : « % » « _ » « * » (joker de PostgREST) et
- * « \ » valent un caractère quelconque ; jamais un joker « tout » venu du
- * texte tapé. Plus large que la recherche exacte, jamais plus étroit. */
-export function historyLikePattern(q: string): string {
-  return `%${q.replace(/[%_*\\]/g, "_")}%`;
-}
-
 /** La recherche exacte : les mots se trouvent, sans tenir compte de la
  * casse, dans le nom de la pièce, sa marque ou sa boutique. */
 export function matchesHistoryQuery(match: Pick<MatchRow, "product_name" | "brand" | "merchant_name">, q: string): boolean {
@@ -80,7 +73,6 @@ export interface HistoryEntry {
 }
 
 const SEARCH_REFS = z.array(z.object({ id: z.string(), created_at: z.string() }));
-const SEARCH_IDS = z.array(z.object({ search_id: z.string() }));
 
 /** Toutes les propositions de ces recherches, par rang (lecture complète). */
 async function allMatches(fastify: FastifyInstance, searchIds: readonly string[]): Promise<Map<string, MatchRow[]>> {
@@ -134,7 +126,6 @@ async function historyPage(fastify: FastifyInstance, userId: string, limit: numb
 
 /** Une recherche dans l'historique (`q`, et `before` pour la suite). */
 async function historySearch(fastify: FastifyInstance, userId: string, limit: number, before: string | undefined, q: string): Promise<HistoryEntry[]> {
-  const pattern = historyLikePattern(q);
   const entries: HistoryEntry[] = [];
   let cursor = before;
   for (let scanned = 0; scanned < HISTORY_SCAN_MAX && entries.length < limit; ) {
@@ -147,23 +138,17 @@ async function historySearch(fastify: FastifyInstance, userId: string, limit: nu
     // Une lecture plus courte que demandé n'est pas la fin (« Max rows ») : seule une lecture vide l'est.
     if (batch.length === 0) break;
 
-    // Premier tri dans la base : les recherches dont une proposition peut correspondre.
+    // Les propositions lues par identifiant (sans les mots) ; dans l'ordre de
+    // l'historique, la première proposition GARDÉE qui correspond, ici.
     const ids = batch.map((ref) => ref.id);
-    const found = new Set<string>();
-    const columns = ["product_name", "brand", "merchant_name"] as const;
-    const lists = await Promise.all(
-      columns.map((column) =>
-        readAll("Historique : recherche", () => fastify.supabaseAdmin.from("product_matches").select("search_id", { count: "exact" }).in("search_id", ids).ilike(column, pattern), ["id"])
-      )
-    );
-    for (const list of lists) {
-      const rows = SEARCH_IDS.safeParse(list);
-      if (!rows.success) throw new DatabaseReadError("Historique : recherche illisible");
-      for (const row of rows.data) found.add(row.search_id);
+    const matches = await allMatches(fastify, ids);
+    const hits = new Map<string, MatchRow>();
+    for (const id of ids) {
+      const hit = keptMatchRows(matches.get(id) ?? []).find((match) => matchesHistoryQuery(match, q));
+      if (hit) hits.set(id, hit);
     }
-    const candidates = ids.filter((id) => found.has(id));
+    const candidates = ids.filter((id) => hits.has(id));
 
-    // Puis, dans l'ordre de l'historique : la première proposition GARDÉE qui correspond.
     for (const part of chunks(candidates, MATCH_READ_CHUNK)) {
       if (entries.length >= limit) break;
       const { data: searchData, error: searchError } = await fastify.supabaseAdmin.from("product_searches").select("*").in("id", part).eq("user_id", userId);
@@ -171,10 +156,9 @@ async function historySearch(fastify: FastifyInstance, userId: string, limit: nu
       const rows = parseSearchRows(searchData);
       if (!rows) throw new DatabaseReadError("Historique : recherches illisibles");
       const rowById = new Map(rows.map((row) => [row.id, row]));
-      const matches = await allMatches(fastify, part);
       for (const id of part) {
         const row = rowById.get(id);
-        const hit = keptMatchRows(matches.get(id) ?? []).find((match) => matchesHistoryQuery(match, q));
+        const hit = hits.get(id);
         if (row && hit && entries.length < limit) entries.push({ row, match: hit });
       }
     }

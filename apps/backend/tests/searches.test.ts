@@ -149,7 +149,7 @@ describe("recherches récentes : meilleur rang existant", () => {
 });
 
 // Retours du build 2, lot « historique » : `before` et `q` sur la vraie base
-// (PostgREST : filtres ilike et dates avec fuseau). Les mêmes règles, cas par
+// (PostgREST : lectures par identifiant et dates avec fuseau). Les mêmes règles, cas par
 // cas, sans base : historiqueRecherches.test.ts.
 describe("historique : `before` et `q` sur la vraie base", () => {
   let app: FastifyInstance;
