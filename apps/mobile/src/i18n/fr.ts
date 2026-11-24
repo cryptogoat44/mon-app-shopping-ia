@@ -21,6 +21,16 @@ export const fr = {
     offline: "Vous semblez hors ligne. Vérifiez votre connexion internet, puis réessayez.",
     /** Lot 5, partie B : image copiée retirée par la modération. */
     imageUnavailable: "Image indisponible",
+    // Image d'une pièce en plein écran (retours du build 2) : envie, Vault, grande carte d'un résultat.
+    imageViewer: {
+      // Indice lu par VoiceOver sur l'image d'une fiche (iPhone et site).
+      openHint: "Ouvre l'image en grand",
+      viewerLabel: "Image de la pièce en grand. Balayez vers le haut ou le bas pour zoomer.",
+      viewerLabelWeb: "Image de la pièce en grand. Utilisez les boutons pour zoomer.",
+      zoomValue: (percent: number) => `Zoom ${percent} %`,
+      zoomIn: "Zoomer",
+      zoomOut: "Dézoomer",
+    },
   },
   tabs: {
     feed: "Fil",

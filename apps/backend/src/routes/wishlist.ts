@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
 import { fetchHdImageUrls } from "../lib/pieceImages.js";
+import { upgradeMerchantImageLater } from "../lib/merchantImage.js";
 import { z } from "zod";
 import { WISHLIST_ITEMS_MAX, type WishlistItem, type WishlistItemDetail } from "@monapp/shared-types";
 import { findOwnMatch } from "../lib/ownMatches.js";
@@ -228,6 +229,9 @@ export default async function wishlistRoutes(fastify: FastifyInstance) {
     } catch (error) {
       request.log.error({ error }, "Échec de lecture de l'image HD d'une envie créée");
     }
+    // Pas d'image HD : la grande image de la boutique, cherchée après la
+    // réponse (lib/merchantImage.ts, éteint par défaut ; jamais un échec).
+    upgradeMerchantImageLater(fastify, request.log, row, imageHdUrl);
     return reply.send(toWishlistItem(row, undefined, imageHdUrl));
   });
 
@@ -263,6 +267,8 @@ export default async function wishlistRoutes(fastify: FastifyInstance) {
         wishPost && !wishPost.hidden_at ? { id: wishPost.id, privacy: wishPost.privacy, createdAt: wishPost.created_at } : null,
       inVault: inVault.length > 0,
     };
+    // Envie plus ancienne sans image HD : même recherche, après la réponse.
+    upgradeMerchantImageLater(fastify, request.log, row, hdUrls[0] ?? null);
     return reply.send(detail);
   });
 
