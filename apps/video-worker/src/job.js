@@ -165,7 +165,7 @@ export function buildBody(metadataDuration, extracted, stats) {
 
   const maxFrames = duration > LIMITS.longVideoSeconds ? LIMITS.maxFrames : LIMITS.maxFramesShort;
   const selected = selectFrames(usable, { minFrames: LIMITS.minFrames, maxFrames });
-  // Taille totale bornée (le client lit 12 Mo au plus) : les plus lourdes partent d'abord.
+  // Taille totale bornée (le client lit 16 Mio au plus) : les plus lourdes partent d'abord.
   let total = selected.reduce((sum, candidate) => sum + candidate.jpeg.length, 0);
   while (total > LIMITS.maxTotalFrameBytes && selected.length > 1) {
     let heaviest = 0;

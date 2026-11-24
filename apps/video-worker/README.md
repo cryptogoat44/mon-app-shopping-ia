@@ -31,7 +31,7 @@ pas joignable depuis Internet, ni par l'app, ni par le site.
 8. Le service garde 6 à 16 images nettes, différentes les unes des autres et
    réparties dans le temps. Les mesures sont les mêmes que sur le téléphone :
    netteté, empreinte, couleurs.
-9. Il renvoie ces images en JPEG (1 280 px au plus, qualité ≈ 82), puis efface
+9. Il renvoie ces images en JPEG (1 280 px au plus, peu compressées : -q:v 2), puis efface
    tout ce qu'il avait en mémoire.
 
 **Rien n'est écrit sur le disque** : ni la vidéo, ni les images, ni un cache.
@@ -276,7 +276,7 @@ secret, jamais la sortie brute de yt-dlp ou de ffmpeg.
 - **Mémoire** :
   - corps de la demande limité à 4 Ko, JSON de yt-dlp à 8 Mo, fichier vidéo
     à 64 Mo (effacé dès l'extraction finie), images de ffmpeg à 48 Mo ;
-  - une image rendue pèse 1 Mo au plus, l'ensemble 8 Mo au plus ;
+  - une image rendue pèse 1 Mo au plus, l'ensemble 11 Mo au plus (le serveur, déployé avant ce service, en lit 16 Mio) ;
   - les tampons sont effacés après la réponse.
 - **Conteneur** :
   - utilisateur sans droits (`node`) ;

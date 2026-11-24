@@ -37,6 +37,11 @@ describe("contrat : codes d'erreur et statuts HTTP", () => {
     assert.equal(LIMITS.minFrames, 6);
     assert.equal(LIMITS.maxFrames, 16);
     assert.equal(LIMITS.maxFrameEdge, 1280);
+    // Retours du build 2 : images moins compressées, total relevé ; en base64 (+ un peu de JSON), sous les 16 Mio que lit le serveur.
+    assert.equal(LIMITS.jpegQscale, 2);
+    assert.equal(LIMITS.maxTotalFrameBytes, 11_000_000);
+    assert.ok(Math.ceil(LIMITS.maxTotalFrameBytes / 3) * 4 + 64 * 1024 < 16 * 1024 * 1024);
+    assert.ok(LIMITS.maxFrameBytes <= 1024 * 1024);
   });
 });
 
@@ -322,7 +327,8 @@ describe("ffmpeg : arguments et lecture de sa sortie d'erreur", () => {
     assert.equal(at("-f"), "mp4");
     assert.equal(at("-i"), input.url);
     assert.equal(at("-t"), "91");
-    assert.equal(at("-q:v"), "4");
+    // Retours du build 2 : moins de compression (avant : 4).
+    assert.equal(at("-q:v"), "2");
     assert.ok(args.includes("-nostdin"));
     assert.ok(args.includes("-rw_timeout"));
     assert.ok(!args.includes("-skip_frame"));
