@@ -13,8 +13,6 @@ import { SpotImage } from "@/components/spot-image";
 import { ForeignShopNote } from "@/components/foreign-shop-note";
 import { OfferMarkNote } from "@/components/offer-mark";
 import { StockNote } from "@/components/stock-note";
-import { SendToFriendLink } from "@/components/send-to-friend-link";
-import { StockReportLink } from "@/components/stock-report-sheet";
 import { isAffiliateLink } from "@/lib/affiliate-link";
 import { AffiliateMention } from "@/components/affiliate-mention";
 import { themedStyles } from "@/theme/themed-styles";
@@ -32,27 +30,22 @@ import { themedStyles } from "@/theme/themed-styles";
  * moins chère de la devise dominante (lib/result-sort.ts). `variant` :
  * « row », une ligne pleine largeur de la liste triée par prix (prix en
  * évidence, une ligne par proposition : la page ne saute pas quand une
- * boutique arrive au-dessus). `onSend` : « Envoyer à un ami » pour CETTE
- * pièce (lib/send-to-friend.ts), sous le lien ; absent, rien ne s'affiche
- * (messagerie indisponible, pièce de démonstration). `onReportGone` (lot 2) :
- * « Plus disponible ? » pour CETTE pièce, en dernier, discret ; absent sans
- * les alertes sur le serveur (lib/wish-alerts.ts, canReportResult). */
+ * boutique arrive au-dessus). Retours du build 2 (24 novembre 2026) :
+ * « Envoyer à un ami » et « Plus disponible ? » ne sont plus sur les lignes ni
+ * sur les cartes (elles prenaient trop de place) ; ils restent seulement sur
+ * la grande carte de la pièce choisie (spot/result.tsx). */
 export function ProposalCard({
   piece,
   onSelect,
   placement,
   cheapest = false,
   variant = "grid",
-  onSend,
-  onReportGone,
 }: {
   piece: Piece;
   onSelect: () => void;
   placement?: ClickPlacement;
   cheapest?: boolean;
   variant?: "grid" | "row";
-  onSend?: () => void;
-  onReportGone?: () => void;
 }) {
   const price = piece.priceFrom !== null ? formatPrice(piece.priceFrom, piece.currency, getActiveLocale()) : null;
   // Ligne de la liste triée : « Prix à vérifier chez le marchand » s'affiche aussi sans prix, et se lit.
@@ -80,15 +73,13 @@ export function ProposalCard({
             <ForeignShopNote piece={piece} compact />
           </View>
         </Pressable>
-        {piece.merchantUrl || onSend || onReportGone || piece.offerMark || typeof piece.inStock === "boolean" ? (
+        {piece.merchantUrl || piece.offerMark || typeof piece.inStock === "boolean" ? (
           <View style={styles.rowLink}>
             {/* Boutiques douteuses : « Boutique connue » ou « Prix inhabituellement bas », touchable à part. */}
             <OfferMarkNote piece={piece} />
             {/* Stock affiché : « En stock » ou « Épuisée » d'après Google, touchable à part (components/stock-note.tsx). */}
             <StockNote piece={piece} />
             {piece.merchantUrl ? <ShopLink piece={piece} placement={placement} /> : null}
-            {onSend ? <SendToFriendLink pieceName={piece.name} onPress={onSend} /> : null}
-            {onReportGone ? <StockReportLink pieceName={piece.name} onPress={onReportGone} /> : null}
           </View>
         ) : null}
       </View>
@@ -116,8 +107,6 @@ export function ProposalCard({
       {/* Stock affiché : « En stock » ou « Épuisée » d'après Google, touchable à part (components/stock-note.tsx). */}
       <StockNote piece={piece} />
       {piece.merchantUrl ? <ShopLink piece={piece} placement={placement} /> : null}
-      {onSend ? <SendToFriendLink pieceName={piece.name} onPress={onSend} /> : null}
-      {onReportGone ? <StockReportLink pieceName={piece.name} onPress={onReportGone} /> : null}
     </View>
   );
 }

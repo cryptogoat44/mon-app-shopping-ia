@@ -149,8 +149,9 @@ export const ANALYTICS_EVENTS = {
   wish_republished: { visibility: VISIBILITY },
   piece_sent: {},
   // « Envoyer à un ami » (écran Résultat, lib/send-to-friend.ts) : une proposition
-  // envoyée dans une conversation, et d'où (grande carte, carte d'une section,
-  // ligne de la liste triée par prix) — jamais la pièce, le texte ni la personne.
+  // envoyée dans une conversation, et d'où — jamais la pièce, le texte ni la personne.
+  // Depuis les retours du build 2, l'app n'envoie plus que "big_card" (grande carte) ;
+  // "section" et "price_list" restent acceptés : des builds installés les envoient encore.
   piece_sent_to_friend: { from: oneOf(["big_card", "section", "price_list"]) },
   wish_shared_external: { method: oneOf(["native", "copy"]), affiliate: bool },
   received_piece_removed: {},

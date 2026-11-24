@@ -169,7 +169,7 @@ describe("tout est caché sans les alertes sur le serveur (migration 0036 absent
     expect(panel).toContain("{alerts.available ? (\n        <WishAlertSheet");
     expect(panel).toContain("(status.available ? fetchWishAlertStates() : new Map<string, WishAlertState>())");
     expect(result).toContain("{canReportResult(alerts, piece) ? <StockReportLink");
-    expect(result).toContain("canReportResult(alerts, target) ? () => setStockReport(");
+    expect(result).toContain("if (!piece || !canReportResult(alerts, piece)) return;");
     expect(result).toContain("{alerts.available ? <StockReportSheet");
     expect(setting).toContain("if (!status.available) return null;");
   });
@@ -396,7 +396,7 @@ describe("« Plus disponible », avec une confirmation", () => {
     expect(stockSheet).toContain("{t.wishAlerts.reportCancel}");
     expect(stockSheet).toContain("accessibilityLabel={t.wishAlerts.reportLinkLabel(pieceName)}");
     // Les écrans retiennent seulement la pièce visée.
-    expect(body(result, "function handleStockReport()", "const stockFrom")).toContain('setStockReport({ kind: "match", id: piece.id, title: pieceTitle(piece.name) });');
+    expect(body(result, "function handleStockReport()", "/** Voie B (lot c)")).toContain('setStockReport({ kind: "match", id: piece.id, title: pieceTitle(piece.name) });');
     expect(envie).toContain('setStockReport({ kind: "wish", id: item.id, title: item.title })');
   });
 
@@ -413,26 +413,31 @@ describe("« Plus disponible », avec une confirmation", () => {
     expect(read("lib/spot-result.ts")).toContain("...(match.alertTrackable === true ? { alertTrackable: true } : {}),");
   });
 
-  it("sur la grande carte, les sections et la liste triée — seulement de vraies propositions avec un lien", () => {
+  it("seulement de vraies propositions avec un lien ; retours du build 2 : sur la grande carte seulement, plus sur les sections ni la liste triée", () => {
     expect(canReportResult(ON, { real: false, merchantUrl: "https://boutique.example/veste", alertTrackable: true })).toBe(false);
     expect(canReportResult(ON, { merchantUrl: "https://boutique.example/veste", alertTrackable: true })).toBe(false);
     expect(canReportResult(ON, { real: true, merchantUrl: null, alertTrackable: true })).toBe(false);
     expect(canReportResult(ON, { real: true, merchantUrl: "", alertTrackable: true })).toBe(false);
-    expect(result).toContain("onReportGone={stockFrom(p)} />");
-    expect(result.match(/stockAction=\{stockFrom\}/g)?.length).toBe(4);
+    // Permis : la grande carte, une seule fois dans l'écran.
+    expect(result.match(/<StockReportLink/g)?.length).toBe(1);
+    expect(result).toContain("onPress={handleStockReport}");
+    // Refusé : plus rien passé aux cartes ni aux lignes.
+    expect(result).not.toContain("stockFrom");
+    expect(result).not.toContain("stockAction=");
+    expect(result).not.toContain("onReportGone=");
     for (const path of ["components/result-complement.tsx", "components/no-price-section.tsx", "components/price-sorted-list.tsx"]) {
-      expect(read(path), path).toContain("onReportGone={stockAction?.(piece)} />");
+      expect(read(path), path).not.toContain("stockAction");
+      expect(read(path), path).not.toContain("onReportGone");
     }
-    // Depuis une section : rien ne change à l'écran (ni grande carte ni défilement).
-    const fromSection = body(result, "const stockFrom", "/** Voie B (lot c)");
-    for (const forbidden of ["updateChoice", "holdPiece", "selectPiece", "scrollTo", "reveal"]) expect(fromSection, forbidden).not.toContain(forbidden);
   });
 
-  it("le lien est une zone à part sur la carte, jamais dans celle qui la met en grand", () => {
+  it("retours du build 2 : la carte et la ligne n'ont plus « Plus disponible ? », mais gardent « Voir chez … » hors de la zone qui met en grand", () => {
+    expect(card).not.toContain("StockReportLink");
+    expect(card).not.toContain("onReportGone");
     const row = card.slice(card.indexOf('if (variant === "row")'), card.indexOf("return (\n    <View style={styles.card}>"));
     const grid = card.slice(card.indexOf("return (\n    <View style={styles.card}>"), card.indexOf("export function CheapestBadge"));
     for (const variant of [row, grid]) {
-      expect(variant.indexOf("<StockReportLink")).toBeGreaterThan(variant.indexOf("</Pressable>"));
+      expect(variant.indexOf("<ShopLink")).toBeGreaterThan(variant.indexOf("</Pressable>"));
     }
   });
 
