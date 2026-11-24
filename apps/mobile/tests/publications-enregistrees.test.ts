@@ -237,8 +237,13 @@ describe("la liste « Publications enregistrées »", () => {
     const panel = read("components/wishlist-panel.tsx");
     expect(panel).toContain("{collectionsAvailable.savedPosts ? (");
     expect(panel).toContain("router.push(savedListRoute())");
-    expect(panel).toContain("router.push(savedListRoute(selected.id))");
-    expect(panel.match(/collectionsAvailable\.savedPosts \?/g)).toHaveLength(2);
+    // Retours du build 2 : le lien d'une collection passe dans la feuille « … » de la collection choisie.
+    expect(panel).toContain("onPosts={(collection) => router.push(savedListRoute(collection.id))}");
+    expect(panel).toContain("savedPosts={collectionsAvailable.savedPosts === true}");
+    expect(panel.match(/collectionsAvailable\.savedPosts \?/g)).toHaveLength(1);
+    const options = read("components/collection-options-sheet.tsx");
+    expect(options.match(/\{savedPosts \? \(/g)).toHaveLength(1);
+    expect(options).toContain("onPress={() => then(() => onPosts(collection))}");
   });
 
   it("l'état des collections : `savedPosts` n'est gardé que vrai, et seulement avec les collections", () => {

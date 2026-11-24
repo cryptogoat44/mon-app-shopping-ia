@@ -39,7 +39,7 @@ import { MASKED_DATA, scrubLogLine } from "../src/lib/logPrivacy.js";
 import { scrubEvent } from "../src/lib/sentry.js";
 import rateLimitPlugin, { registerHit } from "../src/plugins/rateLimit.js";
 import accountRoutes from "../src/routes/account.js";
-import videoLinkAnalysisRoutes, { MAX_PARALLEL_ANALYSES, VIDEO_LINK_MOMENT_EDGE, WORKER_FAILURE_REPLIES, type VideoLinkAnalysisOptions } from "../src/routes/videoLinkAnalysis.js";
+import videoLinkAnalysisRoutes, { MAX_PARALLEL_ANALYSES, MOMENT_QUALITY, VIDEO_LINK_MOMENT_EDGE, WORKER_FAILURE_REPLIES, type VideoLinkAnalysisOptions } from "../src/routes/videoLinkAnalysis.js";
 import { VideoAiError, type askVideoMoments, type askVideoPieces, type FrameForAi } from "../src/services/videoMoments.js";
 import { fakeSupabase, type Row } from "./fakeSupabase.js";
 
@@ -1001,5 +1001,26 @@ describe("propositions de l'IA (mode « pièces »)", () => {
     const done = logs.map((line) => JSON.parse(line) as Record<string, unknown>).find((line) => line.msg === "Analyse d'un lien vidéo");
     expect(done).not.toHaveProperty("mode");
     expect(done).not.toHaveProperty("refusedLabels");
+  });
+});
+
+// Retours du build 2 (« les captures proposées sont de piètre qualité ») :
+// l'image d'un moment renvoyée à l'app est moins compressée (92 au lieu de 85) ;
+// les images envoyées à l'IA, elles, ne changent pas (512 px, qualité 80 :
+// « images réduites » de la politique de confidentialité).
+describe("images d'un moment moins compressées, images de l'IA inchangées", () => {
+  it("permis : le moment à 1 280 px en qualité 92 ; refusé : jamais l'IA au-delà de 512 px ni en qualité 92", async () => {
+    expect(MOMENT_QUALITY).toBe(92);
+    const target = await buildApp();
+    const before = vi.mocked(optimizePhotoWithSize).mock.calls.length;
+    const res = await analyze(target, { url: SHARED_TEXT, query: QUERY });
+    expect(res.statusCode).toBe(200);
+    const calls = vi.mocked(optimizePhotoWithSize).mock.calls.slice(before);
+    const moments = calls.filter((call) => call[1] === VIDEO_LINK_MOMENT_EDGE);
+    const forAi = calls.filter((call) => call[1] !== VIDEO_LINK_MOMENT_EDGE);
+    expect(moments.length).toBeGreaterThan(0);
+    expect(moments.every((call) => call[2] === 92)).toBe(true);
+    expect(forAi.length).toBeGreaterThan(0);
+    expect(forAi.every((call) => call[1] === 512 && call[2] === 80)).toBe(true);
   });
 });

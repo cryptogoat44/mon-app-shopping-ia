@@ -260,7 +260,7 @@ export default function ProfileScreen() {
                 >
                   <View style={styles.thumb}>
                     {item.imageUrl ? (
-                      <SpotImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} style={styles.thumbImage} fit="cover" size="small" accessibilityLabel={item.title} />
+                      <SpotImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} style={styles.thumbImage} fit="cover" size="card" accessibilityLabel={item.title} />
                     ) : (
                       <ClockIcon size={30} tint={color.encre} />
                     )}
@@ -341,8 +341,9 @@ export default function ProfileScreen() {
                     <ImageUnavailable variant="tile" />
                   ) : (
                     <SpotImage
-                      hdUri={post.mediaThumbUrl}
-                      fallbackUri={post.mediaUrl}
+                      size="small"
+                      hdUri={post.mediaUrl}
+                      fallbackUri={post.mediaThumbUrl ?? post.mediaUrl}
                       style={styles.thumbImage}
                       fit="cover"
                       recyclingKey={post.id}

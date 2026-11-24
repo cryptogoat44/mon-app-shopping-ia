@@ -1116,6 +1116,9 @@ export const fr = {
     hiddenChipLabel: (name: string) => `${name}, masquée par la modération`,
     hiddenState: "Masquée par la modération : vos amis ne la voient plus.",
     hiddenCannotShare: "Cette collection a été masquée par la modération : vous ne pouvez pas la montrer à vos amis.",
+    // Retours du build 2 (Envies compactes) : le bouton « … » au bout des puces, pour la collection choisie.
+    ownOptionsLabel: (name: string) => `Options de la collection ${name}`,
+    ownOptionsPosts: "Publications rangées ici",
   },
   // Lot 5 : pièces reçues (onglet « Reçues » des Envies).
   received: {
@@ -1225,6 +1228,13 @@ export const fr = {
     totalLoading: "Calcul du total…",
     // Au-delà de 500 envies, ou si une page n'a pas pu être lue.
     partialNote: (n: number) => `Calculé sur les ${n} envies chargées : faites défiler pour voir les suivantes.`,
+    // Retours du build 2 (Envies compactes) : la phrase de confidentialité derrière un cadenas, la recherche
+    // derrière une loupe, le tri dans un bouton. Titre neutre : il restera vrai le jour où vos amis pourront voir vos Envies.
+    privacyTitle: "Qui voit vos Envies",
+    privacyOk: "Compris",
+    searchClose: "Fermer la recherche",
+    sortShort: { recent: "Récentes", price_asc: "Prix ↑", price_desc: "Prix ↓" },
+    sortButtonLabel: (current: string) => `Trier, actuellement : ${current}`,
   },
   profile: {
     vault: "Vault",

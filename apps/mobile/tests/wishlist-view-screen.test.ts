@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { fr } from "../src/i18n/fr";
 import { en } from "../src/i18n/en";
+import { searchFieldOpen } from "../src/lib/wishlist-view";
 
 // Écran Envies (2026-11-09) : recherche, tri et total. Pas de rendu de
 // composants ici (vitest.config.ts) : les fichiers sont lus, comme pour le tri
@@ -21,10 +22,20 @@ describe("la recherche, en haut de la liste", () => {
     expect(tools).toContain('returnKeyType="search"');
   });
 
-  it("« Effacer la recherche » : un bouton nommé, seulement quand quelque chose est tapé", () => {
-    expect(tools).toMatch(/\{query\.length > 0 \? \(\s*<Pressable/);
-    expect(tools).toContain('onPress={() => onQueryChange("")}');
-    expect(tools).toContain("accessibilityLabel={t.wishlist.clearSearch}");
+  it("retours du build 2 : le champ derrière une loupe nommée ; « Fermer la recherche » efface le texte et ferme le champ", () => {
+    expect(tools).toContain("const searching = searchFieldOpen(searchOpened, query);");
+    expect(tools).toContain('onPress={() => setSearchOpened(true)}');
+    expect(tools).toMatch(/testID="ouvrir-recherche-envies"/);
+    expect(tools).toMatch(/onPress=\{\(\) => \{\s*onQueryChange\(""\);\s*setSearchOpened\(false\);\s*\}\}/);
+    expect(tools).toContain("accessibilityLabel={t.wishlist.searchClose}");
+    // Ouvert d'un geste : le clavier vient tout de suite.
+    expect(tools).toContain("autoFocus={searchOpened}");
+  });
+
+  it("le champ reste ouvert tant qu'un texte est tapé (refusé : le refermer en gardant un filtre invisible)", () => {
+    expect(searchFieldOpen(false, "veste")).toBe(true);
+    expect(searchFieldOpen(false, "")).toBe(false);
+    expect(searchFieldOpen(true, "")).toBe(true);
   });
 
   it("aucun résultat : le dire, et proposer d'effacer la recherche (dans la collection choisie aussi)", () => {
@@ -36,7 +47,7 @@ describe("la recherche, en haut de la liste", () => {
 });
 
 describe("le tri, comme sur l'écran Résultat", () => {
-  it("trois choix exclusifs, annoncés comme un groupe de boutons radio (état coché aussi sur le site)", () => {
+  it("trois choix exclusifs, dans une petite feuille, annoncés comme un groupe de boutons radio (état coché aussi sur le site)", () => {
     expect(tools).toContain('accessibilityRole="radiogroup" accessibilityLabel={t.wishlist.sortLabel}');
     expect(tools).toContain('accessibilityRole="radio"');
     expect(tools).toContain("accessibilityState={{ checked: selected }}");
@@ -48,11 +59,23 @@ describe("le tri, comme sur l'écran Résultat", () => {
     ]) {
       expect(tools).toContain(`{ value: "${value}", label: ${label} }`);
     }
-    expect(tools).toContain("onPress={() => (selected ? undefined : onSortChange(option.value))}");
+    expect(tools).toMatch(/onPress=\{\(\) => \{\s*if \(!selected\) onSortChange\(option\.value\);\s*setSortOpen\(false\);/);
+    // Retours du build 2 : la feuille, ouverte par un bouton qui montre le tri choisi en court et le dit en entier à VoiceOver.
+    const sheet = tools.slice(tools.indexOf("<Modal visible={sortOpen}"), tools.indexOf("</Modal>"));
+    expect(sheet).toContain('accessibilityRole="radiogroup"');
+    expect(sheet).toContain("onRequestClose={() => setSortOpen(false)}");
+    expect(tools).toContain("onPress={() => setSortOpen(true)}");
+    expect(tools).toContain("accessibilityLabel={t.wishlist.sortButtonLabel(currentSort.label)}");
+    expect(tools).toContain("{t.wishlist.sortShort[sort]}");
   });
 
-  it("zones tactiles de 44 points au moins (champ, effacer, segments, bouton du résultat vide)", () => {
-    expect(tools.match(/minHeight: size\.touchTarget/g)?.length).toBeGreaterThanOrEqual(4);
+  it("zones tactiles de 44 points au moins (ligne, champ, loupe et fermer, tri, choix du tri, bouton du résultat vide)", () => {
+    expect(tools.match(/minHeight: size\.touchTarget/g)?.length).toBeGreaterThanOrEqual(6);
+    expect(tools).toContain("iconButton: { minWidth: size.touchTarget, minHeight: size.touchTarget");
+    expect(tools).toMatch(/sortButton: \{\s*minWidth: size\.touchTarget,\s*minHeight: size\.touchTarget/);
+    // En grand texte ou à 320 points : la ligne passe à la ligne, jamais une hauteur fixe.
+    expect(tools).toContain('row: { flexDirection: "row", flexWrap: "wrap"');
+    expect(tools).not.toMatch(/\b(row|sortButton|searchBar|iconButton): \{[^}]*\bheight:/);
   });
 
   it("le choix vient de l'appareil ; le changer le garde, avec la puce choisie pour les statistiques", () => {
@@ -67,7 +90,7 @@ describe("ce qui est affiché : la puce, puis la recherche, puis le tri", () => 
     expect(panel).toContain("max: WISHLIST_LOAD_MAX,");
     expect(panel).toContain("onFirstPage: (page) => setList((current) => current ?? page),");
     expect(panel).toContain("const view = wishlistView(list?.items ?? [], { query, sort, country: searchCountryFrom(acceptLanguage()) });");
-    expect(panel).toContain("data={chunk(view.visible, 3)}");
+    expect(panel).toContain("data={loading ? [] : chunk(view.visible, 3)}");
     // Une autre puce choisie abandonne la lecture en cours.
     const choose = panel.slice(panel.indexOf("function choose("), panel.indexOf("function changeSort("));
     expect(choose).toContain("loadRun.current += 1;");
@@ -81,8 +104,57 @@ describe("ce qui est affiché : la puce, puis la recherche, puis le tri", () => 
 
   it("recherche, tri et total en tête de liste, seulement quand il y a des envies", () => {
     expect(panel).toContain("{hasItems ? <WishlistTools query={query} onQueryChange={setQuery} sort={sort} onSortChange={changeSort} total={totalLine} note={partialNote} /> : null}");
-    const header = panel.slice(panel.indexOf("ListHeaderComponent={"), panel.indexOf("ListEmptyComponent={"));
+    expect(panel).toContain("ListHeaderComponent={header}");
+    const header = panel.slice(panel.indexOf("  const header = ("), panel.indexOf("  return (\n    <>"));
     expect(header).toContain("<WishlistTools");
+  });
+
+  it("retours du build 2 : tout le haut des Envies défile avec la grille (permis : dans l'en-tête de la liste)", () => {
+    const header = panel.slice(panel.indexOf("  const header = ("), panel.indexOf("  return (\n    <>"));
+    for (const part of ["{switcher}", 'testID="entree-enregistrees"', 'testID="qui-voit-vos-envies"', 'accessibilityRole="tablist"', 'testID="options-collection"', "<WishAlertNewsBanner", "<WishlistTools"]) {
+      expect(header).toContain(part);
+    }
+  });
+
+  it("refusé : rien de fixe entre les onglets du profil et la grille (ni sous-onglets, ni phrase, ni signet, ni puces)", () => {
+    const outside = panel.slice(panel.indexOf("  return (\n    <>"), panel.indexOf("<FlatList"));
+    for (const part of ["{switcher}", 'testID="entree-enregistrees"', 'accessibilityRole="tablist"', "<WishlistTools", "<Text style={styles.privateNote}"]) {
+      expect(outside).not.toContain(part);
+    }
+    // « Mes envies » : la liste seule ; « Reçues » : les sous-onglets en haut de sa propre liste.
+    expect(panel).toContain("<MyWishlist news={news} switcher={switcher} />");
+    expect(panel).toMatch(/<ScrollView>\s*<View style=\{styles\.switcher\}>\{switcher\}<\/View>\s*<ReceivedPieces \/>/);
+    // Chargement compris : une seule liste, l'en-tête n'est jamais recréé quand une puce est choisie.
+    expect(panel.match(/<FlatList/g)).toHaveLength(1);
+    expect(panel).not.toContain("{loading ? (\n        <View");
+  });
+
+  it("liste vide (collection neuve ou Envies vides) : le message ne remonte pas sur les puces, qui restent touchables", () => {
+    // Le message vide est rendu juste après l'en-tête de la liste (puces,
+    // « + Nouvelle collection », « … ») : une marge négative le ferait passer
+    // par-dessus et prendre leurs touchers.
+    const empty = panel.match(/^  empty: \{[^\n]*\},$/m)?.[0] ?? "";
+    // Permis : centré dans la place qui reste sous l'en-tête.
+    expect(empty).toContain('flex: 1, alignItems: "center", justifyContent: "center"');
+    // Refusé : aucune marge négative qui recouvrirait l'en-tête.
+    expect(empty).not.toMatch(/margin\w*: -/);
+    expect(panel).toContain("<View style={styles.empty}>\n                <Text style={styles.emptyText}>{t.collections.empty}</Text>");
+  });
+
+  it("le signet des publications enregistrées et le cadenas : icônes nommées de 44 points", () => {
+    const header = panel.slice(panel.indexOf("  const header = ("), panel.indexOf("  return (\n    <>"));
+    expect(header).toMatch(/\{collectionsAvailable\.savedPosts \? \(\s*<Pressable[\s\S]*?accessibilityLabel=\{t\.savedPosts\.listTitle\}/);
+    expect(header).toContain("accessibilityLabel={t.wishlist.privacyTitle}");
+    expect(header).toContain("accessibilityLabel={t.collections.ownOptionsLabel(selected.name)}");
+    expect(panel).toContain("iconButton: { minWidth: size.touchTarget, minHeight: size.touchTarget");
+  });
+
+  it("« Qui voit vos Envies » : la phrase de confidentialité, mot pour mot, dans une feuille qui se ferme", () => {
+    const sheet = panel.slice(panel.indexOf("<Modal visible={privacyOpen}"), panel.indexOf("</Modal>"));
+    expect(sheet).toContain("{t.wishlist.privacyTitle}");
+    expect(sheet).toContain("{collectionsAvailable.enabled ? t.wishlist.privateNoteCollections : t.wishlist.privateNote}");
+    expect(sheet).toContain("onRequestClose={() => setPrivacyOpen(false)}");
+    expect(sheet).toContain("{t.wishlist.privacyOk}");
   });
 
   it("la ligne du total est lue avec des virgules et annoncée quand elle change", () => {
@@ -139,8 +211,26 @@ describe("textes en français et en anglais", () => {
     expect(en.wishlist.totalWithoutPrice(1)).toBe("+ 1 without a price");
   });
 
+  it("retours du build 2 : les nouveaux textes, en français et en anglais", () => {
+    expect(fr.wishlist.privacyTitle).toBe("Qui voit vos Envies");
+    expect(en.wishlist.privacyTitle).toBe("Who can see your Wishlist");
+    expect([fr.wishlist.privacyOk, en.wishlist.privacyOk]).toEqual(["Compris", "Got it"]);
+    expect([fr.wishlist.searchClose, en.wishlist.searchClose]).toEqual(["Fermer la recherche", "Close search"]);
+    expect(fr.wishlist.sortShort).toEqual({ recent: "Récentes", price_asc: "Prix ↑", price_desc: "Prix ↓" });
+    expect(en.wishlist.sortShort).toEqual({ recent: "Recent", price_asc: "Price ↑", price_desc: "Price ↓" });
+    // VoiceOver lit le nom entier du tri, jamais la flèche.
+    expect(fr.wishlist.sortButtonLabel(fr.wishlist.sortPriceAsc)).toBe("Trier, actuellement : Prix croissant");
+    expect(en.wishlist.sortButtonLabel(en.wishlist.sortPriceDesc)).toBe("Sort, currently: Price: high to low");
+    expect(fr.collections.ownOptionsLabel("Montres")).toBe("Options de la collection Montres");
+    expect(en.collections.ownOptionsLabel("Watches")).toBe("Options for the collection Watches");
+    expect([fr.collections.ownOptionsPosts, en.collections.ownOptionsPosts]).toEqual(["Publications rangées ici", "Posts filed here"]);
+    // Titre neutre : il ne promet pas « privées » (un réglage « montrer mes Envies à mes amis » pourra venir).
+    expect(fr.wishlist.privacyTitle).not.toMatch(/priv/i);
+    expect(en.wishlist.privacyTitle).not.toMatch(/priv/i);
+  });
+
   it("vouvoiement, jamais de tutoiement", () => {
-    const french = [fr.wishlist.searchLabel, fr.wishlist.sortLabel, fr.wishlist.partialNote(480), fr.wishlist.totalLoading].join(" ");
+    const french = [fr.wishlist.searchLabel, fr.wishlist.sortLabel, fr.wishlist.partialNote(480), fr.wishlist.totalLoading, fr.wishlist.privacyTitle, fr.wishlist.searchClose, fr.collections.ownOptionsPosts].join(" ");
     expect(french).not.toMatch(/\b(tu|ton|ta|tes|toi)\b/i);
     expect(fr.wishlist.partialNote(480)).toBe("Calculé sur les 480 envies chargées : faites défiler pour voir les suivantes.");
   });

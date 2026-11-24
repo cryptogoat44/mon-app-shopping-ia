@@ -227,3 +227,10 @@ export function appendPage<T extends { id: string }>(current: readonly T[], page
   const seen = new Set(current.map((item) => item.id));
   return [...current, ...page.filter((item) => !seen.has(item.id))];
 }
+
+/** Retours du build 2 (Envies compactes) : le champ de recherche, caché
+ * derrière une loupe, reste ouvert tant qu'un texte est tapé ; seul « Fermer
+ * la recherche » (qui efface aussi le texte) le referme. */
+export function searchFieldOpen(opened: boolean, query: string): boolean {
+  return opened || query.length > 0;
+}

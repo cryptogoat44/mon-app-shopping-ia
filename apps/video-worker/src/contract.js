@@ -8,7 +8,7 @@
 //   reconstruite par le serveur principal) ;
 // - 200 : {"durationSeconds", "frames": [{"timeSeconds", "width", "height",
 //   "jpegBase64"}]}, de 6 à 16 images distinctes et nettes, dans l'ordre du
-//   temps, 1 280 px au plus sur le grand côté, JPEG de qualité ≈ 82 ;
+//   temps, 1 280 px au plus sur le grand côté, JPEG peu compressé (-q:v 2) ;
 // - erreur : {"error": code}, avec le statut HTTP de ERROR_STATUS ;
 // - GET /health, sans secret : {"status": "ok", "ytDlp", "ffmpeg"}.
 
@@ -68,12 +68,19 @@ export const LIMITS = Object.freeze({
   maxFrames: 16,
   longVideoSeconds: 40,
   maxFrameEdge: 1280,
-  /** Qualité JPEG de ffmpeg (-q:v 4 ≈ qualité 82 de libjpeg, mesuré sur ses tables). */
-  jpegQscale: 4,
+  /** Qualité JPEG de ffmpeg. Retours du build 2 (« les captures proposées
+   * sont de piètre qualité ») : -q:v 2 au lieu de 4 (≈ qualité 82 de libjpeg,
+   * mesuré sur ses tables), soit moins de compression (≈ qualité 92 par la
+   * même règle, à confirmer par une mesure). Les images envoyées à l'IA, elles,
+   * sont réduites par le serveur (512 px) : inchangées. */
+  jpegQscale: 2,
   /** Une image : 1 Mo au plus (le client refuse au-delà). */
   maxFrameBytes: 1_000_000,
-  /** Toutes les images : 8 Mo au plus (≈ 10,7 Mo en base64 ; le client lit 12 Mo). */
-  maxTotalFrameBytes: 8_000_000,
+  /** Toutes les images : 11 Mo au plus (≈ 14,7 Mo en base64 ; le serveur lit
+   * 16 Mio depuis les retours du build 2, 12 Mio avant : le serveur doit être
+   * déployé AVANT ce service). Avant : 8 Mo, trop peu pour 16 images moins
+   * compressées (les plus lourdes seraient retirées). */
+  maxTotalFrameBytes: 11_000_000,
   /** Images candidates examinées au plus (une toutes les 0,5 s au moins). */
   maxCandidates: 40,
   minCandidateSpacingSeconds: 0.5,
