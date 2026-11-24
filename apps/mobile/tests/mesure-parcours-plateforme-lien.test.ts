@@ -9,7 +9,7 @@ import { ANALYTICS_EVENTS, sanitizeProps } from "../src/lib/analytics-events";
 // remplacée par l'appareil à l'envoi (analytics.ts) ; la plateforme du lien
 // part donc AUSSI en « link_platform ». « platform » reste dans le catalogue
 // et aux appels, inchangée (séries existantes). Envoi simulé : rien ne part.
-const LINK_EVENTS = ["player_opened", "player_unavailable", "player_fallback", "player_consent", "player_spot", "video_link_ai_started", "video_link_ai_moment_chosen"] as const;
+const LINK_EVENTS = ["player_opened", "player_unavailable", "player_fallback", "player_consent", "player_spot", "player_to_ai", "video_link_ai_started", "video_link_ai_moment_chosen"] as const;
 const PLAYER_PLATFORM = { kind: "enum", values: ["tiktok", "instagram"] };
 
 const read = (path: string) => readFileSync(join(__dirname, "..", path), "utf8");
@@ -63,7 +63,8 @@ describe("les appels de l'écran « vidéo partagée » et le mode d'emploi", ()
   it("chaque événement du lecteur envoyé par l'écran porte link_platform, sa « platform » inchangée", () => {
     const screen = read("src/app/(app)/spot/lecteur.tsx");
     const calls = screen.match(/track\("player_[a-z_]+", \{[^}]*\}\)/g) ?? [];
-    expect(calls).toHaveLength(6);
+    // Retours du build 2 : + player_to_ai (« Trouver la pièce automatiquement » sous le lecteur).
+    expect(calls).toHaveLength(7);
     for (const call of calls) expect(call).toMatch(/^track\("player_[a-z_]+", \{ platform, .*link_platform: platform \}\)$/);
   });
 

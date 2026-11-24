@@ -14,7 +14,7 @@ import { HowItWorksCard } from "@/components/how-it-works";
 import { LinkEntry } from "@/components/link-entry";
 import { SeeAllRecentLink } from "@/components/recent-searches";
 import { ScreenshotHelp } from "@/components/screenshot-help";
-import { EntryTiles, LatestVideoCard, LatestVideoNote, LatestVideoQuestion } from "@/components/spot-entry";
+import { EntryTiles, LatestVideoCard, LatestVideoDismissedNote, LatestVideoNote, LatestVideoQuestion } from "@/components/spot-entry";
 import { SpotImage } from "@/components/spot-image";
 import { SearchLimitsNotice } from "@/components/search-limits-notice";
 import { VisualSearchTip } from "@/components/visual-search-tip";
@@ -44,6 +44,10 @@ function useLatestVideo() {
   const userId = session?.user.id ?? null;
   const [state, setState] = useState<LatestVideoState>({ kind: "off" });
   const [answer, setAnswer] = useState<"idle" | "saving" | "failed" | "answered">("idle");
+  // Retours du build 2 : la croix de la carte (« Ne plus proposer ma dernière vidéo »).
+  const [dismissal, setDismissal] = useState<"idle" | "saving" | "failed" | "done">("idle");
+  // Carte repliée sur une ligne par défaut, et de nouveau à chaque retour sur Spotter.
+  const [expanded, setExpanded] = useState(false);
   const load = useCallback(async () => {
     try {
       setState(await loadLatestVideo(userId));
@@ -55,6 +59,9 @@ function useLatestVideo() {
   // Retour sur Spotter : la note d'après la réponse a été lue.
   const refresh = useCallback(() => {
     setAnswer((current) => (current === "saving" ? current : "idle"));
+    // La note d'après la croix ne vaut que pour cette visite.
+    setDismissal((current) => (current === "saving" ? current : "idle"));
+    setExpanded(false);
     return load();
   }, [load]);
 
@@ -70,9 +77,36 @@ function useLatestVideo() {
     setAnswer("answered");
   }
 
+  /** La croix : exactement l'état « désactivé » de Réglages (« no », sur ce téléphone, pour ce compte).
+   * Échec de l'enregistrement : la carte reste, avec le message. */
+  async function dismiss() {
+    if (!userId) return;
+    setDismissal("saving");
+    try {
+      await saveLatestVideoChoice(userId, "no");
+    } catch {
+      return setDismissal("failed");
+    }
+    await load();
+    setDismissal("done");
+  }
+
   // Juste après un « oui » qui ne peut rien montrer : on dit pourquoi.
   const note = answer !== "answered" ? null : state.kind === "no_access" ? t.spotter.latestVideoNoAccess : state.kind === "none" ? t.spotter.latestVideoEmpty : null;
-  return { state, refresh, choose: (choice: LatestVideoChoice) => void choose(choice), saving: answer === "saving", failed: answer === "failed", note };
+  return {
+    state,
+    refresh,
+    choose: (choice: LatestVideoChoice) => void choose(choice),
+    saving: answer === "saving",
+    failed: answer === "failed",
+    note,
+    expanded,
+    toggle: () => setExpanded((value) => !value),
+    dismiss: () => void dismiss(),
+    dismissing: dismissal === "saving",
+    dismissFailed: dismissal === "failed",
+    dismissed: dismissal === "done",
+  };
 }
 
 function RecentRow({ recent }: { recent: { searchId: string; piece: Piece }[] }) {
@@ -112,22 +146,6 @@ function RecentRow({ recent }: { recent: { searchId: string; piece: Piece }[] })
         ))}
       </ScrollView>
     </View>
-  );
-}
-
-/** Lien TikTok ou Instagram (mission « liens vidéo ») : la question déplie le
- * champ de lien, qui ouvre l'écran « vidéo partagée » (lecteur officiel sur
- * l'app iPhone ; pièces déjà repérées et consigne sur le site). Un lien sans
- * vidéo lisible (Pinterest) montre l'aide « capture d'écran d'abord ». */
-function LinkHelp({ onHelp }: { onHelp: () => void }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <Pressable onPress={() => setOpen((value) => !value)} style={styles.linkQuestion} accessibilityRole="button" accessibilityState={{ expanded: open }}>
-        <Text style={styles.linkQuestionLabel}>{t.player.linkQuestion}</Text>
-      </Pressable>
-      {open ? <LinkEntry onHelp={onHelp} /> : null}
-    </>
   );
 }
 
@@ -266,6 +284,7 @@ function useSpotterEntries(reveal: () => void) {
 // photo à égalité ; sur l'app iPhone, en option, la dernière vidéo de la
 // galerie — il ne reste qu'à taper quelques mots et « Lancer ».
 export default function SpotterScreen() {
+  const router = useRouter();
   const [recent, setRecent] = useState<{ searchId: string; piece: Piece }[]>([]);
   // Historique relu au moins une fois : « Comment ça marche » ne s'affiche pas avant.
   const [recentLoaded, setRecentLoaded] = useState(false);
@@ -326,6 +345,17 @@ export default function SpotterScreen() {
             <ScreenshotHelp onAddScreenshot={entries.addPhoto} onAddVideo={entries.addVideo} busy={entries.importing} />
           </View>
         ) : null}
+        {/* Retours du build 2 : le champ du lien, toujours visible, avant les tuiles (plus de question à déplier). */}
+        <LinkEntry onHelp={entries.showLinkHelp} />
+        <EntryTiles
+          videoLabel={latest ? t.spotter.otherVideo : t.spotter.addVideo}
+          onVideo={entries.addVideo}
+          onPhoto={entries.addPhoto}
+          onCamera={entries.takePhoto}
+          busy={entries.busy}
+        />
+        {entries.message ? <ErrorMessage style={styles.feedback}>{entries.message}</ErrorMessage> : null}
+        {Platform.OS === "web" ? <Text style={styles.dropHint}>{t.videoLink.dropHint}</Text> : null}
         {latest ? (
           <LatestVideoCard
             video={latest}
@@ -334,20 +364,16 @@ export default function SpotterScreen() {
             onLaunch={() => entries.launchLatest(latest)}
             onAddVideo={entries.addVideo}
             busy={entries.busy === "latest"}
+            expanded={latestVideo.expanded}
+            onToggle={latestVideo.toggle}
+            onDismiss={latestVideo.dismiss}
+            dismissing={latestVideo.dismissing}
+            dismissFailed={latestVideo.dismissFailed}
           />
         ) : null}
-        {entries.message ? <ErrorMessage style={styles.feedback}>{entries.message}</ErrorMessage> : null}
-        <EntryTiles
-          videoLabel={latest ? t.spotter.otherVideo : t.spotter.addVideo}
-          onVideo={entries.addVideo}
-          onPhoto={entries.addPhoto}
-          onCamera={entries.takePhoto}
-          busy={entries.busy}
-        />
         {latestVideo.state.kind === "ask" ? <LatestVideoQuestion onAnswer={latestVideo.choose} saving={latestVideo.saving} failed={latestVideo.failed} /> : null}
         {latestVideo.note ? <LatestVideoNote message={latestVideo.note} /> : null}
-        {Platform.OS === "web" ? <Text style={styles.dropHint}>{t.videoLink.dropHint}</Text> : null}
-        <LinkHelp onHelp={entries.showLinkHelp} />
+        {latestVideo.dismissed ? <LatestVideoDismissedNote onSettings={() => router.push("/settings")} /> : null}
         <RecentRow recent={recent} />
         {recentLoaded && recent.length === 0 && guide.state !== "shown" ? <HowItWorksCard /> : null}
       </ScrollView>
@@ -363,8 +389,6 @@ const styles = themedStyles(() => ({
   feedback: { fontSize: font.caption, marginTop: space.sm, lineHeight: 18 },
   sharedHelp: { marginTop: space.lg },
   dropHint: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginTop: space.md, textAlign: "center" },
-  linkQuestion: { minHeight: 44, alignItems: "center", justifyContent: "center", marginTop: space.sm },
-  linkQuestionLabel: { fontSize: font.secondary, color: color.acier, textDecorationLine: "underline", textAlign: "center" },
   recentSection: { marginTop: space.xxl - space.xs },
   recentHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.md, marginBottom: space.md },
   recentTitle: { fontSize: font.body, fontWeight: "600", color: color.encre },

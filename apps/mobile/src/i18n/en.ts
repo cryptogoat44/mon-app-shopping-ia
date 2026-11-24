@@ -109,7 +109,6 @@ export const en: Catalog = {
       `Without full access to your photos, ${BRAND} can't find your latest video: choose it with “Add a video”. Access can be changed in the iPhone Settings.`,
     latestVideoEmpty: "No video in your gallery yet: the most recent one will appear here.",
     latestVideoChoiceFailed: "Your answer couldn't be saved. Please try again.",
-    linkQuestion: "Have a TikTok, Instagram or Pinterest link?",
     recentlySpotted: "Recently spotted",
     detected: {
       tiktok: "TikTok video recognized",
@@ -130,6 +129,12 @@ export const en: Catalog = {
     prepareError: "Preparation didn't go through. Check your connection, then try again.",
     networkError: "Unable to connect. Check your internet connection, then try again.",
     serverError: `${BRAND} isn't responding right now. Please try again in a minute.`,
+    // Build 2 feedback: the "Your latest video" card folded to one row, and its cross
+    // (it turns the suggestion off, exactly like the switch in Settings).
+    latestVideoExpand: "Search this video",
+    latestVideoDismiss: "Stop suggesting my latest video",
+    latestVideoDismissed: "Got it: your latest video won't be suggested anymore. You can turn this suggestion back on in Settings.",
+    latestVideoSettingsLink: "Open Settings",
   },
   video: {
     title: "Choose the frame",
@@ -294,9 +299,7 @@ export const en: Catalog = {
   // snapshot of what the view shows. On the website, or player off: the
   // "Spot this video" screen. Texts to be approved by the founder.
   player: {
-    linkQuestion: "Have a TikTok or Instagram link?",
     linkLabel: "TikTok or Instagram link",
-    linkHint: `The video opens here, in ${BRAND}: you'll pause it on the piece.`,
     linkHintWeb: "Pieces already spotted in this video appear here, with what to do next.",
     open: "Open the video",
     opening: "Opening the video…",
@@ -314,15 +317,17 @@ export const en: Catalog = {
       body: (platform: string) => `This video is played by ${platform}, which may use its own trackers.`,
       play: "Play the video here",
       refuse: "No thanks",
+      // Build 2 feedback: analysis on, "No thanks" leads to the automatic search.
+      refuseAuto: "No thanks, search automatically",
     },
     howItWorksSteps: (spot: string) => [
       `Share the TikTok or Instagram video to ${BRAND}, or paste its link.`,
-      `Pause it on the piece, tap “${spot}”, then circle the piece.`,
+      `Pause it on the piece, tap “${spot}”, then circle the piece (if the video can't be played here, ${BRAND} offers another way).`,
       `${BRAND} shows you where to buy it, in 10 to 20 seconds.`,
     ],
     linkNotice: {
-      title: `This video can open in ${BRAND}`,
-      body: "Open it right here: you'll pause it on the piece.",
+      title: `This link can open in ${BRAND}`,
+      body: `Open it here: ${BRAND} helps you find the piece in the video.`,
       bodyWeb: "Open it here: you'll see the pieces already spotted, and how to spot it.",
     },
     settings: {
@@ -436,6 +441,11 @@ export const en: Catalog = {
       waitingSteps: ["Fetching the video…", "The AI is looking at the pieces…"],
       // Under the screenshot offered after a failure, when nothing was written.
       keptLink: "Your link is kept.",
+    },
+    // Build 2 feedback ("video first"): the player couldn't be used, the AI takes over.
+    playerLead: {
+      notHere: "The video couldn't be played here: the AI can look for the piece for you.",
+      snapshot: `${BRAND} couldn't take the frame of this moment: the AI can look for the piece for you.`,
     },
   },
   visualSearchTip: {

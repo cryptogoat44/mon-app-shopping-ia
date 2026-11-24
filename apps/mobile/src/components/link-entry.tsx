@@ -6,13 +6,21 @@ import { t } from "@/i18n";
 import { ClipboardIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
 import { detectLink, type LinkDetection } from "@/lib/link-detection";
-import { linkRefusal } from "@/lib/link-step";
+import { linkRefusal, linkStep } from "@/lib/link-step";
 import { useLinkEntry } from "@/lib/use-link-entry";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Champ de lien du Spotter (mission « liens vidéo »), sur l'app iPhone comme
 // sur le site : un lien TikTok ou Instagram ouvre l'écran « vidéo partagée ».
 // Le bouton passe par la même fonction qu'un lien partagé (lib/use-link-entry.ts).
+// Retours du build 2 : le champ est toujours affiché sur l'accueil (plus de
+// question à déplier). Vide, il tient sur une ligne (libellé, champ, « Coller ») :
+// la pastille et « Ouvrir la vidéo » n'apparaissent qu'une fois le champ rempli.
+// « Coller » sur un lien de vidéo TikTok ou Instagram l'ouvre tout de suite
+// (un geste) ; un lien tapé garde le bouton et la touche « Aller ». Sur l'app,
+// plus de ligne d'aide qui promettrait le lecteur : selon le serveur, l'écran
+// suivant montre le lecteur, la recherche automatique ou la capture d'écran.
+// Le presse-papiers n'est lu qu'au toucher de « Coller », jamais de lui-même.
 
 function DetectionCard({ detection }: { detection: LinkDetection }) {
   if (detection.kind === "supported") {
@@ -40,18 +48,24 @@ export function LinkEntry({ onHelp }: { onHelp: () => void }) {
   const canContinue = detection.kind === "supported" && !busy;
 
   async function handlePaste() {
+    if (busy) return;
     setMessage(null);
+    let text: string;
     try {
-      const text = await Clipboard.getStringAsync();
-      if (!text || detectLink(text).kind === "not_a_link") {
-        setMessage(t.spotter.pasteEmpty);
-        return;
-      }
-      setLink(text.trim());
+      text = await Clipboard.getStringAsync();
     } catch {
       // Web : le navigateur a refusé la lecture du presse-papiers.
       setMessage(t.spotter.pasteDenied);
+      return;
     }
+    if (!text || detectLink(text).kind === "not_a_link") {
+      setMessage(t.spotter.pasteEmpty);
+      return;
+    }
+    const pasted = text.trim();
+    setLink(pasted);
+    // Lien de vidéo TikTok ou Instagram reconnu : la vidéo s'ouvre tout de suite (décision du fondateur).
+    if (linkStep(pasted).kind === "video") await openPasted(pasted);
   }
 
   /** La croix du champ : vide le lien collé ou tapé (et le message qui l'accompagnait). */
@@ -60,12 +74,12 @@ export function LinkEntry({ onHelp }: { onHelp: () => void }) {
     setMessage(null);
   }
 
-  async function handleContinue() {
-    if (detection.kind !== "supported") return;
+  /** Le lien, par le même chemin qu'un lien partagé : la vidéo, l'aide, ou le refus sous le champ. */
+  async function openPasted(text: string) {
     setMessage(null);
     setBusy(true);
     try {
-      const outcome = await openLink(link, "paste");
+      const outcome = await openLink(text, "paste");
       if (outcome.kind === "refused") setMessage(outcome.message);
       if (outcome.kind === "help") onHelp();
     } finally {
@@ -73,10 +87,15 @@ export function LinkEntry({ onHelp }: { onHelp: () => void }) {
     }
   }
 
+  async function handleContinue() {
+    if (detection.kind !== "supported" || busy) return;
+    await openPasted(link);
+  }
+
   return (
     <>
       <Text style={styles.label}>{label}</Text>
-      <Text style={styles.hint}>{Platform.OS === "web" ? t.player.linkHintWeb : t.player.linkHint}</Text>
+      {Platform.OS === "web" ? <Text style={styles.hint}>{t.player.linkHintWeb}</Text> : null}
       <View style={styles.field}>
         <TextInput
           style={styles.input}
@@ -104,26 +123,34 @@ export function LinkEntry({ onHelp }: { onHelp: () => void }) {
           <Text style={styles.pasteLabel}>{t.spotter.paste}</Text>
         </Pressable>
       </View>
-      <DetectionCard detection={detection} />
+      {link.length > 0 ? <DetectionCard detection={detection} /> : null}
       {message ? <ErrorMessage style={styles.feedback}>{message}</ErrorMessage> : null}
-      <Pressable style={[styles.primary, !canContinue ? styles.primaryDisabled : null]} onPress={handleContinue} disabled={!canContinue} accessibilityRole="button">
-        {busy ? <ActivityIndicator color={color.blanc} /> : null}
-        <Text style={[styles.primaryLabel, !canContinue ? styles.primaryLabelDisabled : null]}>
-          {busy ? t.spotter.preparing : t.player.open}
-        </Text>
-      </Pressable>
+      {link.length > 0 ? (
+        <Pressable
+          style={[styles.primary, !canContinue ? styles.primaryDisabled : null]}
+          onPress={handleContinue}
+          disabled={!canContinue}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !canContinue, busy }}
+        >
+          {busy ? <ActivityIndicator color={color.blanc} /> : null}
+          <Text style={[styles.primaryLabel, !canContinue ? styles.primaryLabelDisabled : null]}>
+            {busy ? t.spotter.preparing : t.player.open}
+          </Text>
+        </Pressable>
+      ) : null}
     </>
   );
 }
 
 const styles = themedStyles(() => ({
-  label: { fontSize: font.caption, color: color.acier, marginTop: space.xl },
+  label: { fontSize: font.caption, color: color.acier, marginTop: space.lg },
   hint: { fontSize: font.caption, color: color.acier, marginTop: space.xs, lineHeight: 18 },
   field: { flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: color.filet, gap: space.sm },
   input: { flex: 1, fontSize: font.body, color: color.encre, paddingVertical: 12 },
   clearButton: { minWidth: 32, minHeight: 44, alignItems: "center", justifyContent: "center" },
   clearLabel: { fontSize: 22, lineHeight: 24, color: color.acier },
-  pasteButton: { flexDirection: "row", alignItems: "center", gap: 5, minHeight: 44 },
+  pasteButton: { flexDirection: "row", alignItems: "center", gap: 5, minHeight: 44, minWidth: 44 },
   pasteLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   detected: { flexDirection: "row", alignItems: "center", gap: space.sm, marginTop: space.md },
   platformChip: { backgroundColor: color.encre, borderRadius: radius.full, paddingHorizontal: 11, height: 26, justifyContent: "center" },
