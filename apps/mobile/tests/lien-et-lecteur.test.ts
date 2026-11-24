@@ -86,6 +86,17 @@ describe("champ du lien toujours visible sur l'accueil (point 6)", () => {
     expect(entry).toContain("onSubmitEditing={handleContinue}");
   });
 
+  it("refusé : un second toucher pendant la lecture du presse-papiers (une seule vidéo ouverte) ; permis : un nouveau toucher une fois le premier fini", () => {
+    const paste = entry.slice(entry.indexOf("async function handlePaste()"), entry.indexOf("function handleClear()"));
+    const guard = paste.indexOf("if (opening.current || busy) return;\n    opening.current = true;");
+    expect(guard).toBeGreaterThan(-1);
+    expect(guard).toBeLessThan(paste.indexOf("Clipboard.getStringAsync()"));
+    expect(paste).toMatch(/\} finally \{\s*opening\.current = false;\s*\}\s*\}/);
+    const go = entry.slice(entry.indexOf("async function handleContinue()"), entry.indexOf("return (", entry.indexOf("async function handleContinue()")));
+    expect(go).toContain('if (detection.kind !== "supported" || opening.current || busy) return;');
+    expect(go).toMatch(/\} finally \{\s*opening\.current = false;\s*\}/);
+  });
+
   it("aucune promesse du lecteur sur l'app avant de savoir s'il s'ouvre : plus de ligne d'aide, sauf la consigne du site", () => {
     expect(entry).toContain('{Platform.OS === "web" ? <Text style={styles.hint}>{t.player.linkHintWeb}</Text> : null}');
     expect(fr.player).not.toHaveProperty("linkHint");

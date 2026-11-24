@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, Text, TextInput, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { color, font, radius, space } from "@/theme/tokens";
@@ -44,28 +44,35 @@ export function LinkEntry({ onHelp }: { onHelp: () => void }) {
   const [link, setLink] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Posé dès le toucher (avant la lecture du presse-papiers) : un double toucher n'ouvre la vidéo qu'une fois.
+  const opening = useRef(false);
   const detection = detectLink(link);
   const canContinue = detection.kind === "supported" && !busy;
 
   async function handlePaste() {
-    if (busy) return;
-    setMessage(null);
-    let text: string;
+    if (opening.current || busy) return;
+    opening.current = true;
     try {
-      text = await Clipboard.getStringAsync();
-    } catch {
-      // Web : le navigateur a refusé la lecture du presse-papiers.
-      setMessage(t.spotter.pasteDenied);
-      return;
+      setMessage(null);
+      let text: string;
+      try {
+        text = await Clipboard.getStringAsync();
+      } catch {
+        // Web : le navigateur a refusé la lecture du presse-papiers.
+        setMessage(t.spotter.pasteDenied);
+        return;
+      }
+      if (!text || detectLink(text).kind === "not_a_link") {
+        setMessage(t.spotter.pasteEmpty);
+        return;
+      }
+      const pasted = text.trim();
+      setLink(pasted);
+      // Lien de vidéo TikTok ou Instagram reconnu : la vidéo s'ouvre tout de suite (décision du fondateur).
+      if (linkStep(pasted).kind === "video") await openPasted(pasted);
+    } finally {
+      opening.current = false;
     }
-    if (!text || detectLink(text).kind === "not_a_link") {
-      setMessage(t.spotter.pasteEmpty);
-      return;
-    }
-    const pasted = text.trim();
-    setLink(pasted);
-    // Lien de vidéo TikTok ou Instagram reconnu : la vidéo s'ouvre tout de suite (décision du fondateur).
-    if (linkStep(pasted).kind === "video") await openPasted(pasted);
   }
 
   /** La croix du champ : vide le lien collé ou tapé (et le message qui l'accompagnait). */
@@ -88,8 +95,13 @@ export function LinkEntry({ onHelp }: { onHelp: () => void }) {
   }
 
   async function handleContinue() {
-    if (detection.kind !== "supported" || busy) return;
-    await openPasted(link);
+    if (detection.kind !== "supported" || opening.current || busy) return;
+    opening.current = true;
+    try {
+      await openPasted(link);
+    } finally {
+      opening.current = false;
+    }
   }
 
   return (
