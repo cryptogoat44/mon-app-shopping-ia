@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Stack, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -519,41 +519,46 @@ export default function NewPostScreen() {
       </Modal>
 
       <Modal visible={peopleOpen} animationType="slide" transparent onRequestClose={() => setPeopleOpen(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setPeopleOpen(false)} accessibilityRole="button" accessibilityLabel={t.common.close} />
-        <View style={styles.modalSheet}>
-          <View style={styles.modalNav}>
-            <Text style={styles.navTitle} accessibilityRole="header">{t.carousel.tagPeople}</Text>
-            <Pressable accessibilityRole="button" onPress={() => setPeopleOpen(false)} hitSlop={12}>
-              <Text style={styles.cancel}>{t.publish.closePicker}</Text>
-            </Pressable>
+        {/* Retours du build 2 : la feuille remonte au-dessus du clavier de l'iPhone (comme wish-alert-sheet.tsx) ;
+            sans cela, le champ et ce qu'on y tape restaient cachés dessous. Sur le site, une simple vue. */}
+        <KeyboardAvoidingView style={styles.modalAvoider} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setPeopleOpen(false)} accessibilityRole="button" accessibilityLabel={t.common.close} />
+          <View style={styles.modalSheet}>
+            <View style={styles.modalNav}>
+              <Text style={styles.navTitle} accessibilityRole="header">{t.carousel.tagPeople}</Text>
+              <Pressable accessibilityRole="button" onPress={() => setPeopleOpen(false)} hitSlop={12}>
+                <Text style={styles.cancel}>{t.publish.closePicker}</Text>
+              </Pressable>
+            </View>
+            <TextInput
+              style={styles.peopleSearch}
+              placeholder={t.carousel.searchPeople}
+              placeholderTextColor={color.acier}
+              value={peopleQuery}
+              onChangeText={setPeopleQuery}
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoFocus
+              accessibilityLabel={t.carousel.searchPeople}
+              returnKeyType="search"
+            />
+            <ScrollView style={styles.peopleList} keyboardShouldPersistTaps="handled">
+              {peopleCandidates?.length === 0 ? (
+                <Text style={styles.emptyPicker}>{t.carousel.noPeopleFound}</Text>
+              ) : (
+                peopleCandidates?.map((person) => (
+                    <Pressable accessibilityRole="button" key={person.id} style={styles.pickerRow} onPress={() => addPerson(person)} accessibilityLabel={t.carousel.addPerson(person.displayName)}>
+                      <Avatar uri={person.avatarUrl} userId={person.id} displayName={person.displayName} username={person.username} size={32} />
+                      <View>
+                        <Text style={styles.pickerRowName}>{person.displayName}</Text>
+                        <Text style={styles.pickerRowMaterial}>@{person.username}</Text>
+                      </View>
+                    </Pressable>
+                  ))
+              )}
+            </ScrollView>
           </View>
-          <TextInput
-            style={styles.peopleSearch}
-            placeholder={t.carousel.searchPeople}
-            placeholderTextColor={color.acier}
-            value={peopleQuery}
-            onChangeText={setPeopleQuery}
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoFocus
-            accessibilityLabel={t.carousel.searchPeople}
-          />
-          <ScrollView keyboardShouldPersistTaps="handled">
-            {peopleCandidates?.length === 0 ? (
-              <Text style={styles.emptyPicker}>{t.carousel.noPeopleFound}</Text>
-            ) : (
-              peopleCandidates?.map((person) => (
-                  <Pressable accessibilityRole="button" key={person.id} style={styles.pickerRow} onPress={() => addPerson(person)} accessibilityLabel={t.carousel.addPerson(person.displayName)}>
-                    <Avatar uri={person.avatarUrl} userId={person.id} displayName={person.displayName} username={person.username} size={32} />
-                    <View>
-                      <Text style={styles.pickerRowName}>{person.displayName}</Text>
-                      <Text style={styles.pickerRowMaterial}>@{person.username}</Text>
-                    </View>
-                  </Pressable>
-                ))
-            )}
-          </ScrollView>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -601,7 +606,10 @@ const styles = themedStyles(() => ({
   privacyLabel: { fontSize: font.caption, color: color.acier },
   privacyLabelActive: { color: color.blanc, fontWeight: "600" },
   modalBackdrop: { flex: 1, backgroundColor: color.voile },
-  modalSheet: { backgroundColor: color.porcelaine, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, paddingBottom: space.xl, maxHeight: "70%" },
+  modalSheet: { backgroundColor: color.porcelaine, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, paddingBottom: space.xl, maxHeight: "70%", flexShrink: 1 },
+  // Feuille « Identifier des personnes » : posée au-dessus du clavier ; sur un petit iPhone, la liste rétrécit et défile.
+  modalAvoider: { flex: 1, justifyContent: "flex-end" },
+  peopleList: { flexShrink: 1 },
   modalNav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: space.md, borderBottomWidth: 1, borderBottomColor: color.filet },
   emptyPicker: { fontSize: font.secondary, color: color.acier, textAlign: "center", padding: space.xl, lineHeight: 20 },
   pickerRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: space.md, paddingVertical: space.md, borderBottomWidth: 1, borderBottomColor: color.filet },
