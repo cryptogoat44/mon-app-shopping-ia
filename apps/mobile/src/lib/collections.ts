@@ -80,14 +80,17 @@ export function selectedCollection(collections: readonly CollectionSummary[] | n
   return collections.find((collection) => collection.id === selected) ?? null;
 }
 
-/** Phrase sous les puces : qui voit la collection choisie. */
-export function visibilityState(visibility: CollectionVisibility): string {
-  return visibility === "friends" ? t.collections.friendsState : t.collections.privateState;
+/** Phrase sous les puces : qui voit la collection choisie. Privée alors que
+ * « Montrer mes Envies à mes amis » est allumé : les amis voient ses envies,
+ * pas son nom (lot « étagères des amis »). */
+export function visibilityState(visibility: CollectionVisibility, showsWishesToFriends = false): string {
+  if (visibility === "friends") return t.collections.friendsState;
+  return showsWishesToFriends ? t.collections.privateStateFriendsSeeWishes : t.collections.privateState;
 }
 
 /** Comme visibilityState, et « masquée par la modération » quand elle l'est. */
-export function collectionState(collection: Pick<CollectionSummary, "visibility" | "hidden">): string {
-  return collection.hidden === true ? t.collections.hiddenState : visibilityState(collection.visibility);
+export function collectionState(collection: Pick<CollectionSummary, "visibility" | "hidden">, showsWishesToFriends = false): string {
+  return collection.hidden === true ? t.collections.hiddenState : visibilityState(collection.visibility, showsWishesToFriends);
 }
 
 /** « Mes amis » refusé tant que la modération masque la collection (le

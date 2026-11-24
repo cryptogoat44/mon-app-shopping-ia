@@ -1129,6 +1129,8 @@ export const fr = {
     // Retours du build 2 (Envies compactes) : le bouton « … » au bout des puces, pour la collection choisie.
     ownOptionsLabel: (name: string) => `Options de la collection ${name}`,
     ownOptionsPosts: "Publications rangées ici",
+    // Étagères des amis : collection privée quand « Montrer mes Envies à mes amis » est allumé.
+    privateStateFriendsSeeWishes: "Nom privé : vos amis voient ses envies (réglage « Montrer mes Envies à mes amis »), pas son nom.",
   },
   // Lot 5 : pièces reçues (onglet « Reçues » des Envies).
   received: {

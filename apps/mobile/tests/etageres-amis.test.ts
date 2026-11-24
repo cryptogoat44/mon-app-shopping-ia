@@ -18,6 +18,7 @@ import {
   vaultItemNote,
   wishShareHint,
 } from "../src/lib/friend-shelves";
+import { collectionState, visibilityState } from "../src/lib/collections";
 
 // Étagères des amis (lot « étagères des amis », migration 0058) : la logique
 // des écrans sans rendu (réglages cachés sans le serveur, onglets seulement
@@ -57,13 +58,32 @@ describe("les réglages : seulement quand le serveur les a, éteints sauf vrai o
     const setting = source("components/friend-shelves-setting.tsx");
     expect(setting).toContain("if (!friendShelvesSettingShown(profile)) return null;");
     expect(setting).toContain("await updateFriendShelves({ [shelf]: next });");
-    expect(setting).toContain("if (needsShelfConfirmation(next)) setConfirming(shelf);");
+    expect(setting).toMatch(/if \(needsShelfConfirmation\(next\)\) \{\s*setConfirming\(shelf\);/);
     expect(setting).toContain("accessibilityLabel={title}");
     expect(setting).toContain('accessibilityRole="alert"');
     expect(setting).toMatch(/minHeight: 44/);
     // Échec : l'interrupteur revient et un message le dit.
     expect(setting).toContain("setValue(previous);");
     expect(source("app/(app)/settings.tsx")).toContain("<FriendShelvesSetting />");
+  });
+
+  it("pendant la confirmation : l'interrupteur reste éteint, VoiceOver entend la confirmation", () => {
+    const setting = source("components/friend-shelves-setting.tsx");
+    // Refusé : montrer « allumé » avant le oui.
+    expect(setting).not.toContain("value={value[shelf] || confirming === shelf}");
+    // Permis : la valeur enregistrée, et l'annonce sur iOS.
+    expect(setting).toContain("value={value[shelf]}");
+    expect(setting).toContain('if (Platform.OS === "ios") AccessibilityInfo.announceForAccessibility(`${confirmTitle} ${confirmBody}`);');
+  });
+
+  it("éteindre pendant la confirmation : comme « Annuler », ni requête ni message « de nouveau privées »", () => {
+    const setting = source("components/friend-shelves-setting.tsx");
+    const toggle = setting.slice(setting.indexOf("function toggle("), setting.indexOf("if (!friendShelvesSettingShown"));
+    // Refusé : rien n'était montré, donc pas de save(false).
+    expect(toggle).toMatch(/if \(!next && confirming === shelf && !value\[shelf\]\) \{\s*setConfirming\(null\);\s*return;\s*\}/);
+    expect(toggle.indexOf("confirming === shelf && !value[shelf]")).toBeLessThan(toggle.indexOf("void save(shelf, false)"));
+    // Permis : éteindre une étagère vraiment montrée enregistre toujours.
+    expect(toggle).toContain("} else void save(shelf, false);");
   });
 });
 
@@ -125,6 +145,16 @@ describe("le profil d'un ami : des onglets seulement si le serveur les annonce",
     expect(profile).toContain("t.userProfile.noPostsNamed(profile.displayName)");
   });
 
+  it("la suite en erreur : « Réessayer » relance ; la fin de liste seule ne relance pas", () => {
+    // Permis : le bouton, 44 points, rôle bouton.
+    expect(profile).toContain("<Pressable onPress={shelf.retryMore} style={styles.retry} accessibilityRole=\"button\">");
+    expect(profile).toContain("retry: { marginTop: space.md, minHeight: 44");
+    // Refusé : onEndReached (loadMore) ne relance pas après une erreur.
+    expect(grid).toContain("if (moreError !== null && !retry) return;");
+    expect(grid).toContain("const loadMore = useCallback(() => fetchMore(false), [fetchMore]);");
+    expect(grid).toContain("const retryMore = useCallback(() => fetchMore(true), [fetchMore]);");
+  });
+
   it("chaque case est nommée pour VoiceOver (nom, puis prix ou catégorie)", () => {
     expect(grid).toContain("accessibilityLabel={shelfCellLabel(entry)}");
     const wish = { id: "w", title: "Sac", imageUrl: null, imageThumbUrl: null, merchantName: null, merchantUrl: null, isAffiliate: false, priceMin: null, currency: null };
@@ -154,6 +184,23 @@ describe("les phrases « privé » : exactes dans les deux cas", () => {
     setActiveLocale("en");
     expect(vaultItemNote(on)).toBe(en.friendShelves.vaultItemNote);
     expect(wishShareHint({})).toBe(en.wishlistItem.shareHint);
+  });
+
+  it("collection privée : « vous seul la voyez » seulement si les Envies ne sont pas montrées", () => {
+    // Éteint : la phrase d'avant.
+    expect(visibilityState("private")).toBe(fr.collections.privateState);
+    expect(visibilityState("private", false)).toBe("Privée : vous seul la voyez.");
+    // Allumé : refusé « vous seul » ; les amis voient ses envies, pas son nom.
+    expect(visibilityState("private", true)).not.toContain("vous seul");
+    expect(visibilityState("private", true)).toBe("Nom privé : vos amis voient ses envies (réglage « Montrer mes Envies à mes amis »), pas son nom.");
+    expect(collectionState({ visibility: "private" }, true)).toBe(fr.collections.privateStateFriendsSeeWishes);
+    expect(visibilityState("friends", true)).toBe(fr.collections.friendsState);
+    expect(collectionState({ visibility: "private", hidden: true }, true)).toBe(fr.collections.hiddenState);
+    setActiveLocale("en");
+    expect(visibilityState("private", true)).toBe("Private name: your friends see its wishes (setting “Show my Wishlist to my friends”), not its name.");
+    expect(visibilityState("private", false)).toBe(en.collections.privateState);
+    expect(source("components/collection-options-sheet.tsx")).toContain("{collectionState(collection, showsWishes(profile))}");
+    expect(source("components/collection-settings-sheet.tsx")).toContain("{collectionState(current, showsWishes(profile))}");
   });
 
   it("chaque écran passe par ces phrases", () => {

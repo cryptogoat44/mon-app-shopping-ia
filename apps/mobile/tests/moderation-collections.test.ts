@@ -149,7 +149,7 @@ describe("collection masquée, vue par son auteur", () => {
     const panel = source("components/wishlist-panel.tsx");
     expect(panel).toContain("{chip.hidden ? ` · ${t.collections.hiddenBadge}` : chip.shared ? ` · ${t.collections.sharedBadge}` : \"\"}");
     // Retours du build 2 : l'état de la collection choisie se lit dans sa feuille « … ».
-    expect(source("components/collection-options-sheet.tsx")).toContain("{collectionState(collection)}");
+    expect(source("components/collection-options-sheet.tsx")).toContain("{collectionState(collection, showsWishes(profile))}");
     expect(panel).toContain("<CollectionOptionsSheet");
   });
 
@@ -159,7 +159,7 @@ describe("collection masquée, vue par son auteur", () => {
     expect(shareBlockedByModeration(own({}), "friends")).toBe(false);
     const settings = source("components/collection-settings-sheet.tsx");
     expect(settings).toMatch(/if \(shareBlockedByModeration\(current, visibility\)\) \{\s*setError\(t\.collections\.hiddenCannotShare\);\s*return;/);
-    expect(settings).toContain("{collectionState(current)}");
+    expect(settings).toContain("{collectionState(current, showsWishes(profile))}");
   });
 });
 

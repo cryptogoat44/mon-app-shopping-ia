@@ -7,6 +7,8 @@ import { t } from "@/i18n";
 import { ApiError, deleteCollection, updateCollection } from "@/lib/api";
 import { canSaveName, cleanCollectionName, collectionState, needsShareConfirmation, shareBlockedByModeration, visibilityOptions } from "@/lib/collections";
 import { useToast } from "@/lib/toast-context";
+import { useAuth } from "@/lib/auth-context";
+import { showsWishes } from "@/lib/friend-shelves";
 import { CollectionNameField } from "@/components/collection-name-sheet";
 import { ErrorMessage } from "@/components/error-message";
 import { SegmentedChoice } from "@/components/segmented-choice";
@@ -30,6 +32,7 @@ export function CollectionSettingsSheet({
   onDeleted: (id: string) => void;
 }) {
   const { showToast } = useToast();
+  const { profile } = useAuth();
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -127,7 +130,7 @@ export function CollectionSettingsSheet({
               onChange={handleVisibility}
               disabled={busy}
             />
-            <Text style={[styles.hint, current.hidden ? styles.hidden : null]}>{collectionState(current)}</Text>
+            <Text style={[styles.hint, current.hidden ? styles.hidden : null]}>{collectionState(current, showsWishes(profile))}</Text>
             {confirmShare ? (
               <View style={styles.confirm} testID="confirmer-amis">
                 <Text style={styles.confirmTitle} accessibilityRole="alert">

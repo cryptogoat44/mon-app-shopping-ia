@@ -121,7 +121,7 @@ describe("écran Envies : « Toutes » puis une puce par collection", () => {
     expect(panel.slice(panel.indexOf("function choose("), panel.indexOf("function changeSort("))).toContain("setOptionsOpen(false);");
     const options = source("components/collection-options-sheet.tsx");
     expect(options).toContain("t.collections.manageLabel(collection.name)");
-    expect(options).toContain("{collectionState(collection)}");
+    expect(options).toContain("{collectionState(collection, showsWishes(profile))}");
     // Jamais deux fenêtres à la fois : « Gérer » attend que la feuille soit fermée.
     expect(options).toContain("onDismiss={() => afterClose.flush()}");
     expect(options).toContain("onPress={() => then(() => onManage(collection))}");

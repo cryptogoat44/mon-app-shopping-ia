@@ -1017,6 +1017,8 @@ export const en: Catalog = {
     // Build 2 feedback (compact Wishlist): the "…" button at the end of the chips, for the chosen collection.
     ownOptionsLabel: (name: string) => `Options for the collection ${name}`,
     ownOptionsPosts: "Posts filed here",
+    // Friends' shelves: private collection while "Show my Wishlist to my friends" is on.
+    privateStateFriendsSeeWishes: "Private name: your friends see its wishes (setting “Show my Wishlist to my friends”), not its name.",
   },
   received: {
     title: "Received pieces",
