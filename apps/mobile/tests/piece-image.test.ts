@@ -135,3 +135,36 @@ describe("grilles des Envies et du Vault en deux temps ; la grille des résultat
     expect(frame).not.toMatch(/size="(small|card)"/);
   });
 });
+
+// Contre-lecture du lot : « large » en deux temps par défaut faisait charger
+// la photo entière (1600 px) dans chaque case des grilles de publications
+// (Lifestyle du profil, profil d'un ami, publications enregistrées), en plus
+// de la miniature de 480 px. Ces grilles restent sur une seule image : la
+// miniature, la photo entière seulement en repli.
+describe("grilles de publications : la miniature d'abord, jamais la photo entière en plus", () => {
+  const src = (path: string) => readFileSync(join(__dirname, "../src", path), "utf8");
+  const MINI = "https://cdn.example/mini-480.jpg";
+  const FULL = "https://cdn.example/photo-1600.jpg";
+
+  it("refusé : en « large », la photo entière passée en repli serait chargée en premier (deux temps)", () => {
+    expect(twoStepSources("large", MINI, FULL)).toEqual({ thumb: FULL, hd: MINI });
+  });
+
+  it("permis : en « small », une seule image, la miniature d'abord, la photo entière seulement après un échec", () => {
+    expect(twoStepSources("small", FULL, MINI)).toBeNull();
+    expect(imageSources("small", FULL, MINI)).toEqual([MINI, FULL]);
+  });
+
+  it("les trois grilles passent « small » avec la photo entière en hdUri, jamais en premier", () => {
+    const grids: Array<[string, string]> = [
+      ["app/(app)/(tabs)/profile/index.tsx", "fallbackUri={post.mediaThumbUrl ?? post.mediaUrl}"],
+      ["app/(app)/profil.tsx", "fallbackUri={post.mediaThumbUrl ?? post.mediaHdUrl ?? post.mediaUrl}"],
+      ["app/(app)/enregistrees.tsx", "fallbackUri={post.mediaThumbUrl ?? post.mediaHdUrl ?? post.mediaUrl}"],
+    ];
+    for (const [path, fallback] of grids) {
+      const code = src(path).replace(/\s+/g, " ");
+      expect(code, path).toContain(`<SpotImage size="small" hdUri={post.mediaUrl} ${fallback}`);
+      expect(code, path).not.toContain("fallbackUri={post.mediaUrl}");
+    }
+  });
+});

@@ -341,8 +341,9 @@ export default function ProfileScreen() {
                     <ImageUnavailable variant="tile" />
                   ) : (
                     <SpotImage
-                      hdUri={post.mediaThumbUrl}
-                      fallbackUri={post.mediaUrl}
+                      size="small"
+                      hdUri={post.mediaUrl}
+                      fallbackUri={post.mediaThumbUrl ?? post.mediaUrl}
                       style={styles.thumbImage}
                       fit="cover"
                       recyclingKey={post.id}
