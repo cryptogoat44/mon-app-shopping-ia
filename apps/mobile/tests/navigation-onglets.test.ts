@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { isSlide, slideTarget, TAP_SLOP, tabIndexAt } from "../src/lib/tab-bar-gesture";
+import { isSlide, LIFT_MARGIN, liftedAbove, slideTarget, TAP_SLOP, tabIndexAt } from "../src/lib/tab-bar-gesture";
 
 // Retours du build 2, lot « navigation » : la barre d'onglets maison où l'on
 // glisse le doigt d'un onglet à l'autre, le léger glissement entre les
@@ -19,11 +19,28 @@ const PUBLISH = new Set([2]);
 describe("le glissé sur la barre (logique pure)", () => {
   it("refusé : moins de 10 points de côté, c'est un toucher ; permis : 10 points ou plus, c'est un glissé", () => {
     expect(TAP_SLOP).toBe(10);
-    expect(isSlide(0)).toBe(false);
-    expect(isSlide(9.5)).toBe(false);
-    expect(isSlide(-9)).toBe(false);
-    expect(isSlide(10)).toBe(true);
-    expect(isSlide(-24)).toBe(true);
+    expect(isSlide(0, 0)).toBe(false);
+    expect(isSlide(9.5, 0)).toBe(false);
+    expect(isSlide(-9, 0)).toBe(false);
+    expect(isSlide(10, 0)).toBe(true);
+    expect(isSlide(-24, 0)).toBe(true);
+  });
+
+  it("refusé : un pouce qui part vers le haut (ou le bas) en dérivant un peu de côté n'est pas un glissé ; permis : un glissé surtout de côté", () => {
+    expect(isSlide(12, 40)).toBe(false);
+    expect(isSlide(15, -150)).toBe(false);
+    expect(isSlide(-12, 12)).toBe(false);
+    expect(isSlide(12, 3)).toBe(true);
+    expect(isSlide(-30, -20)).toBe(true);
+  });
+
+  it("refusé : doigt levé bien au-dessus de la barre, rien ne s'ouvre ; permis : levé sur la barre ou juste au-dessus", () => {
+    expect(LIFT_MARGIN).toBe(24);
+    // Haut de la rangée à 760 points.
+    expect(liftedAbove(600, 760)).toBe(true);
+    expect(liftedAbove(735, 760)).toBe(true);
+    expect(liftedAbove(736, 760)).toBe(false);
+    expect(liftedAbove(780, 760)).toBe(false);
   });
 
   it("l'onglet sous le doigt : cinq places égales, les bords comptent pour la place la plus proche", () => {
@@ -58,11 +75,23 @@ describe("la barre maison (components/tab-bar.tsx)", () => {
 
   it("un toucher reste aux boutons : seul un déplacement de côté prend la main", () => {
     expect(bar).toContain("onStartShouldSetPanResponder: () => false");
-    expect(bar).toContain("onMoveShouldSetPanResponderCapture: (_event, gesture) => isSlide(gesture.dx)");
+    expect(bar).toContain("onMoveShouldSetPanResponderCapture: (_event, gesture) => isSlide(gesture.dx, gesture.dy)");
+    expect(bar).toContain("onMoveShouldSetPanResponder: (_event, gesture) => isSlide(gesture.dx, gesture.dy)");
+    expect(bar).toContain("onPanResponderRelease: (_event, gesture) => finish(true, gesture.moveY),");
+    expect(bar).toContain("if (releaseY !== undefined && liftedAbove(releaseY, measure.current.y)) return;");
   });
 
-  it("VoiceOver : rôle onglet, état choisi et libellés d'avant (dont « Activité, N non lus ») sur chaque bouton", () => {
-    expect(bar).toContain('accessibilityRole="tab"');
+  it("site : refusé, le clic qui suit un glissé à la souris n'ouvre rien (ni le « + ») ; permis : un toucher ou Entrée hors glissé ouvre l'onglet", () => {
+    expect(bar).toContain("slidUntil.current = Number.MAX_SAFE_INTEGER;");
+    expect(bar).toContain("slidUntil.current = Date.now() + 300;");
+    expect(bar).toMatch(/onPress=\{\(\) => \{\s*if \(Date\.now\(\) < slidUntil\.current\) return;\s*openTab\(index\);\s*\}\}/);
+    // Au départ, aucun glissé : le premier appui passe.
+    expect(bar).toContain("const slidUntil = useRef(0);");
+  });
+
+  it("VoiceOver : rôle d'avant (« bouton » sur iPhone, où « onglet » ne s'annonce pas ; « onglet » ailleurs), état choisi et libellés d'avant (dont « Activité, N non lus ») sur chaque bouton", () => {
+    expect(bar).toContain('accessibilityRole={Platform.OS === "ios" ? "button" : "tab"}');
+    expect(bar).not.toContain('accessibilityRole="tab"\n');
     expect(bar).toContain("accessibilityState={{ selected: focused }}");
     expect(bar).toContain("accessibilityLabel={options.tabBarAccessibilityLabel}");
     expect(bar).toContain('accessibilityRole="tablist"');

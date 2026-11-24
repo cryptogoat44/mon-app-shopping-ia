@@ -4,7 +4,7 @@ import * as Haptics from "expo-haptics";
 import type { BottomTabBarProps } from "expo-router/tabs";
 import { color, radius } from "@/theme/tokens";
 import { themedStyles } from "@/theme/themed-styles";
-import { isSlide, slideTarget, tabIndexAt } from "@/lib/tab-bar-gesture";
+import { isSlide, liftedAbove, slideTarget, tabIndexAt } from "@/lib/tab-bar-gesture";
 import { useReduceMotion } from "@/lib/use-reduce-motion";
 
 // Barre d'onglets maison (retours du build 2, point 8 : « comme sur
@@ -20,8 +20,9 @@ import { useReduceMotion } from "@/lib/use-reduce-motion";
 // Seulement PanResponder et Animated de React Native (ni gesture-handler,
 // ni reanimated, ni pager : aucun n'est initialisé dans l'app). Avec
 // « Réduire les animations », la pastille saute d'un onglet à l'autre sans
-// glisser. VoiceOver : chaque bouton garde le rôle « onglet », son état
-// et son libellé ; le double-toucher l'ouvre, le glissé n'est qu'un plus.
+// glisser. VoiceOver : chaque bouton garde le rôle d'avant (« bouton » sur
+// iPhone, comme la barre d'expo-router, « onglet » ailleurs), son état et
+// son libellé ; le double-toucher l'ouvre, le glissé n'est qu'un plus.
 
 // Sur le téléphone, mêmes mesures que la barre d'expo-router (49 points de
 // haut plus la zone du bas, icône 25 dans un cadre de 31 × 28).
@@ -29,7 +30,7 @@ const BAR_HEIGHT = 49;
 const ICON_SIZE = 25;
 const useNativeDriver = Platform.OS !== "web";
 
-type Measure = { x: number; width: number };
+type Measure = { x: number; y: number; width: number };
 
 export function TabBar({ state, descriptors, navigation, insets, tapOnlyRoutes }: BottomTabBarProps & { tapOnlyRoutes: readonly string[] }) {
   const reduceMotion = useReduceMotion();
@@ -39,20 +40,23 @@ export function TabBar({ state, descriptors, navigation, insets, tapOnlyRoutes }
   const tapOnly = new Set(routes.flatMap((route, index) => (tapOnlyRoutes.includes(route.name) ? [index] : [])));
 
   const rowRef = useRef<View>(null);
-  const measure = useRef<Measure>({ x: 0, width: 0 });
+  const measure = useRef<Measure>({ x: 0, y: 0, width: 0 });
   const [rowWidth, setRowWidth] = useState(0);
   const pillX = useRef(new Animated.Value(0)).current;
   const pillOpacity = useRef(new Animated.Value(0)).current;
   // Onglet sous le doigt pendant un glissé (null : pas de glissé en cours).
   const hovered = useRef<number | null>(null);
+  // Site : le clic du navigateur arrive aussi après un glissé à la souris ;
+  // jusqu'à cette heure, un appui sur un bouton est la fin d'un glissé et n'ouvre rien.
+  const slidUntil = useRef(0);
 
   // Le PanResponder est créé une fois : il lit l'état du moment ici.
   const latest = useRef({ state, navigation, count, tapOnly, reduceMotion });
   latest.current = { state, navigation, count, tapOnly, reduceMotion };
 
   function remeasure() {
-    rowRef.current?.measureInWindow((x, _y, width) => {
-      if (width > 0) measure.current = { x, width };
+    rowRef.current?.measureInWindow((x, y, width) => {
+      if (width > 0) measure.current = { x, y, width };
     });
   }
 
@@ -101,12 +105,15 @@ export function TabBar({ state, descriptors, navigation, insets, tapOnlyRoutes }
     if (!first && !skip.has(index) && Platform.OS !== "web") Haptics.selectionAsync().catch(() => {});
   }
 
-  function finish(open: boolean) {
+  function finish(open: boolean, releaseY?: number) {
     const index = hovered.current;
     hovered.current = null;
+    slidUntil.current = Date.now() + 300;
     if (latest.current.reduceMotion) pillOpacity.setValue(0);
     else Animated.timing(pillOpacity, { toValue: 0, duration: 160, useNativeDriver }).start();
     if (!open || index === null) return;
+    // Doigt levé bien au-dessus de la barre, dans le contenu : rien ne s'ouvre.
+    if (releaseY !== undefined && liftedAbove(releaseY, measure.current.y)) return;
     const target = slideTarget(index, latest.current.tapOnly);
     if (target !== null && target !== latest.current.state.index) openTab(target);
   }
@@ -115,14 +122,15 @@ export function TabBar({ state, descriptors, navigation, insets, tapOnlyRoutes }
     PanResponder.create({
       // Un toucher reste aux boutons ; seul un déplacement de côté prend la main.
       onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponderCapture: (_event, gesture) => isSlide(gesture.dx),
-      onMoveShouldSetPanResponder: (_event, gesture) => isSlide(gesture.dx),
+      onMoveShouldSetPanResponderCapture: (_event, gesture) => isSlide(gesture.dx, gesture.dy),
+      onMoveShouldSetPanResponder: (_event, gesture) => isSlide(gesture.dx, gesture.dy),
       onPanResponderGrant: (_event, gesture) => {
+        slidUntil.current = Number.MAX_SAFE_INTEGER;
         remeasure();
         follow(gesture.moveX || gesture.x0);
       },
       onPanResponderMove: (_event, gesture) => follow(gesture.moveX),
-      onPanResponderRelease: () => finish(true),
+      onPanResponderRelease: (_event, gesture) => finish(true, gesture.moveY),
       onPanResponderTerminate: () => finish(false),
       onPanResponderTerminationRequest: () => false,
     })
@@ -174,9 +182,12 @@ export function TabBar({ state, descriptors, navigation, insets, tapOnlyRoutes }
             <Pressable
               key={route.key}
               style={styles.item}
-              onPress={() => openTab(index)}
+              onPress={() => {
+                if (Date.now() < slidUntil.current) return;
+                openTab(index);
+              }}
               onLongPress={() => navigation.emit({ type: "tabLongPress", target: route.key })}
-              accessibilityRole="tab"
+              accessibilityRole={Platform.OS === "ios" ? "button" : "tab"}
               accessibilityState={{ selected: focused }}
               aria-selected={focused}
               accessibilityLabel={options.tabBarAccessibilityLabel}

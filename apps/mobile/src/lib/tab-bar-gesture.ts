@@ -8,9 +8,21 @@
 /** En dessous de ce déplacement horizontal (en points), c'est un toucher. */
 export const TAP_SLOP = 10;
 
-/** Le doigt a-t-il assez bougé de côté pour commencer un glissé ? */
-export function isSlide(dx: number): boolean {
-  return Math.abs(dx) >= TAP_SLOP;
+/** Au-delà de cette hauteur (en points) au-dessus de la rangée, lever le
+ * doigt n'ouvre rien : le doigt est parti dans le contenu. */
+export const LIFT_MARGIN = 24;
+
+/** Le doigt a-t-il assez bougé de côté (et plus de côté que vers le haut ou
+ * le bas) pour commencer un glissé ? Un pouce qui part faire défiler le
+ * contenu en dérivant un peu de côté n'est pas un glissé. */
+export function isSlide(dx: number, dy: number): boolean {
+  return Math.abs(dx) >= TAP_SLOP && Math.abs(dx) > Math.abs(dy);
+}
+
+/** Le doigt est-il levé bien au-dessus de la rangée (dont le haut est à
+ * `rowTop`, même repère que `y`) ? Alors le glissé n'ouvre rien. */
+export function liftedAbove(y: number, rowTop: number): boolean {
+  return y < rowTop - LIFT_MARGIN;
 }
 
 /** L'onglet sous le doigt : `x` est compté depuis le bord gauche de la rangée
