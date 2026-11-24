@@ -89,7 +89,9 @@ function attributesOf(tag: string): Map<string, string> {
  * l'ordre des noms (le premier nom trouvé gagne). */
 function metaContent(html: string, names: readonly string[]): string | null {
   const found = new Map<string, string>();
-  for (const tag of html.match(/<meta\b[^>]*>/gi) ?? []) {
+  // [^<>] et non [^>] : une balise jamais fermée s'arrête au « < » suivant,
+  // la lecture reste linéaire même sur une page hostile.
+  for (const tag of html.match(/<meta\b[^<>]*>/gi) ?? []) {
     const attributes = attributesOf(tag);
     const key = (attributes.get("property") ?? attributes.get("name") ?? "").toLowerCase();
     const content = attributes.get("content");
@@ -125,10 +127,17 @@ function firstImage(value: unknown): string | null {
 
 /** Image du premier « Product » décrit en JSON-LD (blocs, tableaux, @graph). */
 function jsonLdProductImage(html: string): string | null {
-  for (const match of html.matchAll(/<script\b[^>]*type\s*=\s*["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script>/gi)) {
+  // Seule la balise ouvrante passe par l'expression ([^<>] : linéaire) ; la
+  // fin du bloc est cherchée une seule fois par indexOf, et la boucle s'arrête
+  // dès qu'un bloc n'est jamais fermé (une page hostile ne bloque pas le serveur).
+  const lower = html.toLowerCase();
+  for (const match of html.matchAll(/<script\b[^<>]*type\s*=\s*["']?application\/ld\+json["']?[^<>]*>/gi)) {
+    const start = match.index + match[0].length;
+    const end = lower.indexOf("</script>", start);
+    if (end === -1) break;
     let data: unknown;
     try {
-      data = JSON.parse(match[1]!);
+      data = JSON.parse(html.slice(start, end));
     } catch {
       continue;
     }

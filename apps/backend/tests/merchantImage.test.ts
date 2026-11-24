@@ -114,6 +114,29 @@ describe("adresse de la grande image annoncée par la page", () => {
     );
   });
 
+  it("refusé : une page hostile de 512 Ko (balises jamais fermées) est lue en moins de 100 ms, sans image", () => {
+    const size = 512 * 1024;
+    const metas = "<meta ".repeat(Math.ceil(size / 6)).slice(0, size);
+    const scripts = `<script type="application/ld+json">`.repeat(Math.ceil(size / 35)).slice(0, size);
+    for (const html of [metas, scripts]) {
+      const started = performance.now();
+      expect(extractMerchantImageUrl(html, PAGE)).toBeNull();
+      expect(performance.now() - started).toBeLessThan(100);
+    }
+  });
+
+  it("permis : après un bloc JSON-LD illisible ou une balise <meta coupée, l'image suivante est trouvée", () => {
+    expect(
+      extractMerchantImageUrl(`<meta property="og:title" content="x"<meta property="og:image" content="https://cdn.example/m.jpg">`, PAGE)
+    ).toBe("https://cdn.example/m.jpg");
+    expect(
+      extractMerchantImageUrl(
+        `<SCRIPT type="application/ld+json">{oups</SCRIPT><script type='application/ld+json'>{"@type":"Product","image":"https://cdn.example/e.jpg"}</script>`,
+        PAGE
+      )
+    ).toBe("https://cdn.example/e.jpg");
+  });
+
   it("page de la boutique : https seulement, jamais une page de Google", () => {
     expect(isMerchantPage(PAGE)).toBe(true);
     expect(isMerchantPage("http://boutique.example/veste")).toBe(false);
