@@ -53,8 +53,10 @@ describe("0056 : vérification et registre", () => {
     expect(VERIFICATION).toContain("Résultat attendu : une seule ligne, true | true");
   });
 
-  it("le registre a sa ligne « à appliquer », ses fichiers, et ce que fait le serveur sans elle ; jamais avant 0054", () => {
-    expect(REGISTRY).toMatch(/\| 0056 \| Stock affiché : [^\n]*\| \*\*à appliquer\*\* \(sur spotto-dev-2 d'abord ; ne demande que 0001/);
+  it("le registre a sa ligne « appliquée en production », ses fichiers, et ce que fait le serveur sans elle ; jamais avant 0054", () => {
+    expect(REGISTRY).toMatch(/\| 0056 \| Stock affiché : [^\n]*\| appliquée en production \(ne demande que 0001 ; le fichier de la migration, après une copie de secours complète ; vérification juste, [a-z]+ `true`\) \| 24 nov\. 2026 \|/);
+    // Appliquée en production le 24 novembre 2026 : plus jamais « à appliquer ».
+    expect(REGISTRY).not.toMatch(/\| 0056 \| [^\n]*\*\*à appliquer\*\*/);
     expect(REGISTRY).toContain("| 0056 | le fichier de la migration lui-même | `supabase/verifications/0056-verification.sql` (une ligne, deux `true`) | en tête du fichier de la migration |");
     expect(REGISTRY).toContain("Sans 0056, aucune carte ne montre « En stock » ni « Épuisée », et « En stock seulement » ne retire rien (sonde du schéma, lib/stockColumn.ts).");
     const line = REGISTRY.split("\n").find((text) => text.startsWith("| 0056 | Stock affiché"))!;
