@@ -218,7 +218,17 @@ export default async function wishlistRoutes(fastify: FastifyInstance) {
       { id: row.id, userId, merchantUrl: row.merchant_url, merchantName: row.merchant_name, productMatchId: row.product_match_id },
       searchLocaleFor(request).country
     );
-    return reply.send(toWishlistItem(row));
+    // Retours du build 2 : l'image HD du résultat d'origine dans la réponse
+    // (champ déjà dans le type, ajouté : rien ne change pour une app plus
+    // ancienne), relue comme pour la liste et la fiche (lib/pieceImages.ts).
+    // Jamais un échec de « Garder » : sans elle, null, comme avant.
+    let imageHdUrl: string | null = null;
+    try {
+      [imageHdUrl = null] = await fetchHdImageUrls(fastify, [row]);
+    } catch (error) {
+      request.log.error({ error }, "Échec de lecture de l'image HD d'une envie créée");
+    }
+    return reply.send(toWishlistItem(row, undefined, imageHdUrl));
   });
 
   // Détail d'une Envie (Lot Q, bloc 3, UX-04) — seulement la sienne. Lot 5 :
