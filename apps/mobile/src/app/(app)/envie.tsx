@@ -217,7 +217,7 @@ export default function WishlistItemScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
-          <ProductFrame hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} accessibilityLabel={item.title} />
+          <ProductFrame hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} accessibilityLabel={item.title} enlargeable />
           <Text style={styles.title} accessibilityRole="header">{item.title}</Text>
           <Text style={styles.meta}>{[item.merchantName, displayPrice(item)].filter(Boolean).join(" · ")}</Text>
           {(() => {

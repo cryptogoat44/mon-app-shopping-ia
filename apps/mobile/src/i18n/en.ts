@@ -1974,4 +1974,12 @@ export const en: Catalog = {
     moderationStopped: "Page stopped.",
     tapToShare: "The link is ready: tap “Share the look” to send it.",
   },
+  imageViewer: {
+    openHint: "Opens the image full screen",
+    viewerLabel: "Large image of the piece. Pinch to zoom.",
+    viewerLabelWeb: "Large image of the piece. Use the buttons to zoom.",
+    zoomValue: (percent: number) => `Zoom ${percent}%`,
+    zoomIn: "Zoom in",
+    zoomOut: "Zoom out",
+  },
 };

@@ -54,6 +54,7 @@ import { useWishAlertsStatus } from "@/lib/use-wish-alerts-status";
 import { canReportResult, wishAlertsStatus, type StockReportTarget } from "@/lib/wish-alerts";
 import { Skeleton } from "@/components/skeleton";
 import { SpotImage } from "@/components/spot-image";
+import { EnlargeableImage } from "@/components/image-viewer";
 import { ErrorMessage } from "@/components/error-message";
 import { NoPriceNotice } from "@/components/no-price-notice";
 import { CorrectionButtons, CorrectionsLink, CorrectionsSheet, useCorrections } from "@/components/spot-corrections";
@@ -868,7 +869,9 @@ export default function ResultScreen() {
         {showBigCard ? (
           <>
             <View style={styles.hero} onLayout={heroReveal.onHeroLayout}>
-              <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} accessibilityLabel={piece.name} />
+              <EnlargeableImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} label={piece.name} style={styles.fill}>
+                <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} accessibilityLabel={piece.name} />
+              </EnlargeableImage>
             </View>
 
             <Text style={styles.rankLabel}>{bigCardLabelText(bigCardLabel(selectedIndex, bestIndex, firstAvailableIndex(result), allPieces(result)[selectedIndex]))}</Text>

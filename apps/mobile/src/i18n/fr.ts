@@ -2142,4 +2142,14 @@ export const fr = {
     // Site : le navigateur a refusé le partage après l'attente de la création du lien.
     tapToShare: "Le lien est créé : touchez « Partager le look » pour l'envoyer.",
   },
+  // Image d'une pièce en plein écran (retours du build 2) : envie, Vault, grande carte d'un résultat.
+  imageViewer: {
+    // Indice lu par VoiceOver sur l'image d'une fiche (iPhone et site).
+    openHint: "Ouvre l'image en grand",
+    viewerLabel: "Image de la pièce en grand. Pincez pour zoomer.",
+    viewerLabelWeb: "Image de la pièce en grand. Utilisez les boutons pour zoomer.",
+    zoomValue: (percent: number) => `Zoom ${percent} %`,
+    zoomIn: "Zoomer",
+    zoomOut: "Dézoomer",
+  },
 } as const;
