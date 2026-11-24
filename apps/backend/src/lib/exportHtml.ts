@@ -423,6 +423,7 @@ function accountSection(ctx: Ctx): Html {
     // Étagères des amis (migration 0058) : oui / non ; rien sans les colonnes.
     .field("wishes_shown_to_friends")
     .field("vault_shown_to_friends")
+    .field("friend_shelves_informed_at")
     .field("created_at")
     .field("updated_at");
   return section(ctx, "account", [article(null, account.rows(), profile.rows()), ...quotaParts(ctx)]);

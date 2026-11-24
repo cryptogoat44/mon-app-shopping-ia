@@ -247,11 +247,13 @@ describe("les phrases « privé » : exactes dans les deux cas", () => {
     expect(source("app/(app)/(tabs)/activite.tsx")).not.toContain("showsWishes(profile)");
   });
 
-  it("ces phrases sont vraies parce que le serveur retire ce que la modération masque des étagères des amis", () => {
+  it("ces phrases sont vraies parce que le serveur retire ce que la modération masque (et ce qui est « Privée ») des étagères des amis", () => {
     const users = readFileSync(join(__dirname, "../../backend/src/routes/users.ts"), "utf8");
-    // Envies d'une collection masquée : retirées de la page de l'étagère ; Vault : pièce d'une publication masquée.
-    expect(users).toContain("wishesInHiddenCollections(fastify, ownerId)");
-    expect(users).toContain('wishQuery.not("id", "in", hiddenWishes)');
+    const collections = readFileSync(join(__dirname, "../../backend/src/lib/collections.ts"), "utf8");
+    // Envies d'une collection privée ou masquée : retirées de la liste avant la page ; Vault : pièce d'une publication masquée.
+    expect(users).toContain("readShelfCollections(fastify, ownerId)");
+    expect(users).toContain(".filter((id) => !shelfCollections.offShelf.has(id))");
+    expect(collections).toContain('const shown = collection.visibility === "friends" && collection.hidden_at === null;');
     expect(users).toContain("vaultPiecesInHiddenPosts(fastify, ownerId)");
     expect(users).toContain('vaultQuery.not("id", "in", hiddenPieces)');
   });

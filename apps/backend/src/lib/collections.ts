@@ -342,43 +342,72 @@ async function eachLimited<T>(items: readonly T[], limit: number, run: (item: T)
   await Promise.all(workers);
 }
 
-/** Lot « étagères des amis » : les envies de `userId` rangées dans au moins
- * une de ses collections masquées par la modération (collections.hidden_at,
- * migration 0034 ; sans elle, aucune). Elles ne sont jamais montrées sur
- * l'étagère de ses amis, quel que soit le réglage, et reviennent quand la
- * modération rend la collection. Toutes les colonnes, comme readCollection
- * (hidden_at n'existe qu'après 0034) ; une collection contient au plus
- * COLLECTION_ITEMS_MAX envies, lue une par une (jamais tronquée). Lecture
- * impossible : DatabaseReadError, jamais « aucune ». */
-export async function wishesInHiddenCollections(fastify: FastifyInstance, userId: string): Promise<Set<string>> {
+/** Lot « étagères des amis » (refonte) : ce que les collections de `userId`
+ * changent à son étagère des Envies, en deux lectures complètes (jamais
+ * tronquées : au plus COLLECTIONS_MAX collections de COLLECTION_ITEMS_MAX
+ * envies). Toutes les colonnes des collections, comme readCollection
+ * (hidden_at n'existe qu'après 0034).
+ * - `offShelf` : les envies rangées dans au moins une collection « Privée »
+ *   (« Privée » reste privée, décision du fondateur) ou masquée par la
+ *   modération. Elles ne sont jamais sur l'étagère des amis ; une collection
+ *   « Mes amis » non masquée les montre encore par elle-même (la règle des
+ *   collections, inchangée).
+ * - `friendNames` : pour chaque envie, le nom de ses collections « Mes amis »
+ *   non masquées (celles qu'un ami voit déjà sur le profil), dans l'ordre de
+ *   leur création ; jamais le nom d'une collection privée ou masquée.
+ * Lecture impossible : DatabaseReadError, jamais « aucune ». */
+export async function readShelfCollections(fastify: FastifyInstance, userId: string): Promise<{ offShelf: Set<string>; friendNames: Map<string, string[]> }> {
   const db = fastify.supabaseAdmin;
-  const hidden = parseDbRows(COLLECTION_ROWS, await db.from("collections").select(COLLECTION_COLUMNS).eq("user_id", userId), "Collections masquées")
-    .filter((row) => row.hidden_at !== null)
-    .map((row) => row.id);
-  const wishes = new Set<string>();
-  for (const collectionId of hidden) {
-    const rows = parseDbRows(
-      z.array(z.object({ wishlist_item_id: ID })),
-      await db.from("collection_items").select("wishlist_item_id").eq("user_id", userId).eq("collection_id", collectionId),
-      "Envies d'une collection masquée"
+  const collections = parseDbRows(COLLECTION_ROWS, await db.from("collections").select(COLLECTION_COLUMNS).eq("user_id", userId), "Collections d'une étagère").sort(
+    (a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)
+  );
+  const offShelf = new Set<string>();
+  const friendNames = new Map<string, string[]>();
+  if (collections.length === 0) return { offShelf, friendNames };
+  let rows: unknown[];
+  try {
+    rows = await readAll<unknown>(
+      "Envies rangées dans les collections",
+      () => db.from("collection_items").select("id, collection_id, wishlist_item_id", { count: "exact" }).eq("user_id", userId),
+      ["id"]
     );
-    for (const row of rows) wishes.add(row.wishlist_item_id);
+  } catch {
+    throw new DatabaseReadError("Envies rangées dans les collections illisibles");
   }
-  return wishes;
+  const items = parseDbRows(z.array(z.object({ id: ID, collection_id: ID, wishlist_item_id: ID })), { data: rows, error: null }, "Envies rangées dans les collections");
+  const byCollection = new Map<string, string[]>();
+  for (const item of items) byCollection.set(item.collection_id, [...(byCollection.get(item.collection_id) ?? []), item.wishlist_item_id]);
+  for (const collection of collections) {
+    const wishIds = byCollection.get(collection.id) ?? [];
+    const shown = collection.visibility === "friends" && collection.hidden_at === null;
+    for (const wishId of wishIds) {
+      if (!shown) offShelf.add(wishId);
+      else friendNames.set(wishId, [...(friendNames.get(wishId) ?? []), collection.name]);
+    }
+  }
+  return { offShelf, friendNames };
+}
+
+/** Les envies de `userId` qui ne sont jamais sur l'étagère de ses amis
+ * (rangées dans une collection « Privée » ou masquée par la modération ; voir
+ * readShelfCollections). Lecture impossible : DatabaseReadError. */
+export async function wishesOffFriendShelf(fastify: FastifyInstance, userId: string): Promise<Set<string>> {
+  return (await readShelfCollections(fastify, userId)).offShelf;
 }
 
 /** Envies de `userId` visibles par ses amis (dans au moins une de ses
  * collections « Mes amis »), parmi `wishIds`. Lot « étagères des amis »
- * (migration 0058) : s'il montre ses Envies à ses amis, toutes celles qui ne
- * sont dans aucune collection masquée par la modération (celles-là ne sont
- * pas sur l'étagère : seule une collection « Mes amis » les garde, comme
+ * (migration 0058) : s'il montre ses Envies à ses amis (réglage allumé et
+ * information vue), toutes celles qui ne sont ni dans une collection
+ * « Privée » ni dans une collection masquée par la modération (celles-là ne
+ * sont pas sur l'étagère : seule une collection « Mes amis » les garde, comme
  * avant ce lot). Lecture impossible : DatabaseReadError (rien n'est effacé). */
 async function friendVisibleWishes(fastify: FastifyInstance, userId: string, wishIds: string[]): Promise<Set<string>> {
   const db = fastify.supabaseAdmin;
   const visible = new Set<string>();
   let candidates = wishIds;
   if (await showsWishesToFriends(fastify, userId)) {
-    const hidden = await wishesInHiddenCollections(fastify, userId);
+    const hidden = await wishesOffFriendShelf(fastify, userId);
     for (const id of wishIds) if (!hidden.has(id)) visible.add(id);
     candidates = wishIds.filter((id) => hidden.has(id));
     if (candidates.length === 0) return visible;

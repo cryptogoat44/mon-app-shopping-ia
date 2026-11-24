@@ -21,7 +21,9 @@ import { notInFilter, reportedIdsFor } from "../lib/reportedByViewer.js";
 import { profileExtrasShown } from "../lib/profileExtras.js";
 import { POST_ROWS, hydratePosts, type PostRow } from "./posts.js";
 import { NO_SHELVES, friendShelvesFor, vaultPiecesInHiddenPosts, type FriendShelves } from "../lib/friendShelves.js";
-import { collectionsReady, ownCopyUrl, readCopies, syncFriendCopiesQuietly, wishesInHiddenCollections } from "../lib/collections.js";
+import { collectionsReady, ownCopyUrl, readCopies, readShelfCollections, syncFriendCopiesQuietly } from "../lib/collections.js";
+import { readAll } from "../lib/pagedReads.js";
+import { wishAlertsReady } from "../lib/wishAlertsSchema.js";
 import { fetchAffiliateUrls, isAffiliateLink } from "../lib/affiliateLinks.js";
 import { fetchHdImageUrls } from "../lib/pieceImages.js";
 
@@ -51,7 +53,9 @@ const shelfQuerySchema = z.object({ cursor: z.string().regex(/^\d{1,6}$/).transf
 const SHELF_COPY_WAIT_MS = 4_000;
 
 // Ce que les amis peuvent lire d'une envie : jamais image_url (l'adresse du
-// marchand), reference (une note de la personne), ni rien des alertes.
+// marchand) ni reference (une référence enregistrée avec la pièce, que l'app
+// ne montre même pas à son propriétaire). L'alerte de prix se lit à part
+// (wish_watches), le nom des collections aussi (readShelfCollections).
 const FRIEND_WISH_ROWS = z.array(
   z.object({
     id: z.guid(),
@@ -63,11 +67,34 @@ const FRIEND_WISH_ROWS = z.array(
     product_match_id: z.guid().nullable(),
   })
 );
-// Ce que les amis peuvent lire d'une pièce du Vault : jamais created_at,
-// verified, affiliate_conversion_id. product_match_id sert seulement à
-// retrouver l'image HD, jamais renvoyé.
+// Ce que les amis peuvent lire d'une pièce du Vault (refonte : ce que le
+// membre voit lui-même, date d'ajout et « achat vérifié » compris) : jamais
+// affiliate_conversion_id. product_match_id sert seulement à retrouver
+// l'image HD, jamais renvoyé.
 const FRIEND_VAULT_ROWS = z.array(
-  z.object({ id: z.guid(), title: z.string(), category: z.string(), image_url: z.string(), product_match_id: z.guid().nullable() })
+  z.object({
+    id: z.guid(),
+    title: z.string(),
+    category: z.string(),
+    image_url: z.string(),
+    product_match_id: z.guid().nullable(),
+    created_at: z.string(),
+    verified: z.boolean().nullable(),
+  })
+);
+// L'ordre de l'étagère des Envies : les plus récentes d'abord (lu en entier,
+// au plus WISHLIST_MAX lignes, pour retirer les envies d'une collection
+// « Privée » sans une adresse de requête démesurée).
+const FRIEND_WISH_ORDER_ROWS = z.array(z.object({ id: z.guid(), created_at: z.string() }));
+// La cloche d'une envie, côté ami : seulement l'alerte de prix et son seuil
+// (jamais les autres sortes, l'historique ni les nouvelles d'alerte).
+const FRIEND_WATCH_ROWS = z.array(
+  z.object({
+    wishlist_item_id: z.guid(),
+    notify_price_drop: z.boolean(),
+    target_price: z.union([z.string(), z.number()]).nullable(),
+    target_currency: z.string().nullable(),
+  })
 );
 
 /** Page vide : la même pour tout refus, et pour un ami qui n'a rien. */
@@ -349,8 +376,11 @@ export default async function usersRoutes(fastify: FastifyInstance) {
   };
 
   // Ses Envies : titre, copie de l'image faite par Spotto (jamais l'adresse du
-  // marchand), prix, boutique et lien. Jamais sa note, ses alertes, le nom de
-  // ses collections, les pièces reçues ni la recherche d'origine. Les copies
+  // marchand), prix, boutique et lien, son alerte de prix (allumée, avec son
+  // seuil s'il y en a un) et le nom de ses collections « Mes amis » où elle
+  // est rangée. Jamais une envie rangée dans une collection « Privée » (ni le
+  // nom d'une collection privée), les pièces reçues, les publications
+  // enregistrées, la recherche d'origine ni les nouvelles d'alerte. Les copies
   // sont faites à la demande, quand un ami ouvre vraiment la page (jamais en
   // masse quand le réglage est allumé) : au plus SHELF_PAGE_SIZE par page,
   // une seule fois chacune ; une copie impossible : l'envie sans image.
@@ -363,29 +393,69 @@ export default async function usersRoutes(fastify: FastifyInstance) {
     const ownerId = params.userId;
     if (!(await openShelves(fastify, request.user!.id, ownerId)).wishes) return reply.send(emptyShelf());
 
-    // Une envie rangée dans au moins une collection masquée par la modération
-    // n'est pas montrée, quel que soit le réglage : retirée de la requête
-    // elle-même, pour que le rang (le curseur) ne laisse ni trou ni doublon,
-    // et que rien ne dise qu'elle existe. Elle revient quand la modération
-    // rend la collection. Lecture impossible : erreur, jamais tout montrer.
-    const hiddenWishes = notInFilter([...(await wishesInHiddenCollections(fastify, ownerId))]);
+    // Une envie rangée dans au moins une collection « Privée » ou masquée par
+    // la modération n'est pas montrée : retirée de la liste complète, triée,
+    // AVANT de couper la page, pour que le rang (le curseur) ne laisse ni trou
+    // ni doublon, et que rien ne dise qu'elle existe. Lecture impossible :
+    // erreur, jamais tout montrer.
+    const shelfCollections = await readShelfCollections(fastify, ownerId);
+    let ordered: unknown[];
+    try {
+      ordered = await readAll<unknown>(
+        "Envies d'un ami (ordre)",
+        () => fastify.supabaseAdmin.from("wishlist_items").select("id, created_at", { count: "exact" }).eq("user_id", ownerId),
+        ["created_at", "id"]
+      );
+    } catch {
+      throw new DatabaseReadError("Envies d'un ami illisibles");
+    }
+    const shownIds = parseDbRows(FRIEND_WISH_ORDER_ROWS, { data: ordered, error: null }, "Envies d'un ami (ordre)")
+      .reverse()
+      .map((row) => row.id)
+      .filter((id) => !shelfCollections.offShelf.has(id));
     const offset = pageQuery.cursor ?? 0;
-    let wishQuery = fastify.supabaseAdmin
-      .from("wishlist_items")
-      .select("id, title, price_min, currency, merchant_name, merchant_url, product_match_id")
-      .eq("user_id", ownerId);
-    if (hiddenWishes) wishQuery = wishQuery.not("id", "in", hiddenWishes);
-    const rows = parseDbRows(
-      FRIEND_WISH_ROWS,
-      await wishQuery
-        .order("created_at", { ascending: false })
-        .order("id", { ascending: false })
-        .range(offset, offset + SHELF_PAGE_SIZE),
-      "Envies d'un ami"
+    const wishIds = shownIds.slice(offset, offset + SHELF_PAGE_SIZE);
+    const hasMore = shownIds.length > offset + SHELF_PAGE_SIZE;
+    if (wishIds.length === 0) return reply.send(emptyShelf());
+    const byId = new Map(
+      parseDbRows(
+        FRIEND_WISH_ROWS,
+        await fastify.supabaseAdmin
+          .from("wishlist_items")
+          .select("id, title, price_min, currency, merchant_name, merchant_url, product_match_id")
+          .eq("user_id", ownerId)
+          .in("id", wishIds),
+        "Envies d'un ami"
+      ).map((row) => [row.id, row])
     );
-    const hasMore = rows.length > SHELF_PAGE_SIZE;
-    const pageRows = hasMore ? rows.slice(0, SHELF_PAGE_SIZE) : rows;
-    const wishIds = pageRows.map((row) => row.id);
+    // Une envie retirée entre les deux lectures : simplement absente.
+    const pageRows = wishIds.flatMap((id) => {
+      const row = byId.get(id);
+      return row ? [row] : [];
+    });
+
+    // L'alerte de prix de chaque envie de la page (migration 0041 : sans
+    // elle, aucune alerte annoncée). Lecture impossible : erreur.
+    const watches = new Map<string, { targetPrice: number | null; targetCurrency: string | null }>();
+    if (await wishAlertsReady(fastify)) {
+      const rows = parseDbRows(
+        FRIEND_WATCH_ROWS,
+        await fastify.supabaseAdmin
+          .from("wish_watches")
+          .select("wishlist_item_id, notify_price_drop, target_price, target_currency")
+          .eq("user_id", ownerId)
+          .in("wishlist_item_id", wishIds),
+        "Alertes de prix d'un ami"
+      );
+      for (const row of rows) {
+        if (!row.notify_price_drop) continue;
+        const price = row.target_price === null ? null : Number(row.target_price);
+        watches.set(row.wishlist_item_id, {
+          targetPrice: price !== null && Number.isFinite(price) && price > 0 ? price : null,
+          targetCurrency: price !== null && Number.isFinite(price) && price > 0 ? row.target_currency : null,
+        });
+      }
+    }
 
     let copies = await readCopies(fastify, ownerId, wishIds);
     const missing = wishIds.filter((id) => !copies.has(id));
@@ -400,6 +470,7 @@ export default async function usersRoutes(fastify: FastifyInstance) {
         const imageUrl = copy ? ownCopyUrl(copy.image_url, ownerId) : null;
         const imageThumbUrl = copy ? ownCopyUrl(copy.image_thumb_url, ownerId) : null;
         const affiliateUrl = row.product_match_id ? (affiliateUrls.get(row.product_match_id) ?? null) : null;
+        const alert = watches.get(row.id);
         return {
           id: row.id,
           title: row.title,
@@ -411,6 +482,8 @@ export default async function usersRoutes(fastify: FastifyInstance) {
           isAffiliate: isAffiliateLink(affiliateUrl, row.merchant_url),
           priceMin: row.price_min === null ? null : Number(row.price_min),
           currency: row.currency,
+          collections: shelfCollections.friendNames.get(row.id) ?? [],
+          ...(alert ? { priceAlert: alert } : {}),
         };
       }),
       nextCursor: hasMore ? String(offset + SHELF_PAGE_SIZE) : null,
@@ -420,8 +493,9 @@ export default async function usersRoutes(fastify: FastifyInstance) {
 
   // Son Vault : nom, catégorie et l'image que la pièce affiche (sa propre
   // photo, ou l'image du marchand chargée depuis le site du marchand), comme
-  // une publication « achat ». Jamais la date d'ajout, « achat vérifié », la
-  // recherche d'origine ni le nombre de pièces.
+  // une publication « achat », avec la date d'ajout et « achat vérifié »
+  // (refonte : ce que le membre voit lui-même). Jamais la recherche d'origine
+  // ni le nombre de pièces.
   fastify.get("/api/users/:userId/vault", shelfOptions, async (request, reply) => {
     reply.header("Cache-Control", "no-store");
     const params = parseInput(userIdParamsSchema, request.params, reply, INVALID_ID);
@@ -437,7 +511,7 @@ export default async function usersRoutes(fastify: FastifyInstance) {
     // erreur, jamais tout montrer.
     const hiddenPieces = notInFilter(await vaultPiecesInHiddenPosts(fastify, ownerId));
     const offset = pageQuery.cursor ?? 0;
-    let vaultQuery = fastify.supabaseAdmin.from("vault_items").select("id, title, category, image_url, product_match_id").eq("user_id", ownerId);
+    let vaultQuery = fastify.supabaseAdmin.from("vault_items").select("id, title, category, image_url, product_match_id, created_at, verified").eq("user_id", ownerId);
     if (hiddenPieces) vaultQuery = vaultQuery.not("id", "in", hiddenPieces);
     const rows = parseDbRows(
       FRIEND_VAULT_ROWS,
@@ -457,6 +531,8 @@ export default async function usersRoutes(fastify: FastifyInstance) {
         category: row.category as VaultCategory,
         imageUrl: webUrlOrNull(row.image_url),
         imageHdUrl: webUrlOrNull(hdUrls[index] ?? null),
+        createdAt: row.created_at,
+        verified: row.verified === true,
       })),
       nextCursor: hasMore ? String(offset + SHELF_PAGE_SIZE) : null,
     };

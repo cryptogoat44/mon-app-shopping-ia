@@ -45,10 +45,15 @@ export interface Profile {
   linkUrl?: string | null;
   /** « Proposer mon compte aux autres membres » (migration 0050) ; absent tant que la migration manque : l'app cache alors le réglage. */
   discoverable?: boolean;
-  /** « Montrer mes Envies à mes amis » (migration 0058), éteint au départ ; absent tant que la migration manque : l'app cache alors le réglage. */
+  /** « Montrer mes Envies à mes amis » (migration 0058), allumé au départ ; absent tant que la migration manque : l'app cache alors le réglage. */
   showWishesToFriends?: boolean;
-  /** « Montrer mon Vault à mes amis » (migration 0058), éteint au départ ; absent tant que la migration manque : l'app cache alors le réglage. */
+  /** « Montrer mon Vault à mes amis » (migration 0058), allumé au départ ; absent tant que la migration manque : l'app cache alors le réglage. */
   showVaultToFriends?: boolean;
+  /** Le membre a-t-il vu l'information sur les étagères des amis (migration
+   * 0058) ? Faux : ses étagères restent fermées à ses amis, même réglages
+   * allumés, et l'app lui montre l'information. Absent avec la migration
+   * absente (ou d'un serveur plus ancien) : l'app ne montre rien. */
+  friendShelvesInformed?: boolean;
 }
 
 /** Réglage « Qui peut m'envoyer des pièces » : les comptes que je suis (par
@@ -3217,9 +3222,11 @@ export interface FriendShelvesOpen {
   vault: boolean;
 }
 
-/** Une envie d'un ami, en lecture seule : jamais sa note, l'image du
- * marchand, une alerte, le nom d'une collection ni la recherche d'origine.
- * L'image est la copie faite par Spotto (les deux tailles ou aucune). */
+/** Une envie d'un ami, en lecture seule : ce que le membre voit lui-même de
+ * son envie (refonte), jamais l'image du marchand, la recherche d'origine, le
+ * nom d'une collection privée ni les nouvelles d'alerte. Une envie rangée
+ * dans une collection « Privée » n'est jamais sur l'étagère. L'image est la
+ * copie faite par Spotto (les deux tailles ou aucune). */
 export interface FriendWish {
   id: string;
   title: string;
@@ -3232,6 +3239,12 @@ export interface FriendWish {
   isAffiliate: boolean;
   priceMin: number | null;
   currency: string | null;
+  /** Le nom des collections « Mes amis » (non masquées) où l'envie est
+   * rangée, dans leur ordre de création. Absent d'un serveur plus ancien. */
+  collections?: string[];
+  /** Son alerte de prix, quand elle est allumée (absente : éteinte, alertes
+   * indisponibles, ou serveur plus ancien), avec son seuil s'il y en a un. */
+  priceAlert?: { targetPrice: number | null; targetCurrency: string | null };
 }
 
 /** GET /api/users/:userId/wishlist : les plus récentes d'abord. `nextCursor`
@@ -3242,15 +3255,19 @@ export interface FriendWishPage {
   nextCursor: string | null;
 }
 
-/** Une pièce du Vault d'un ami, en lecture seule : jamais la date d'ajout,
- * la mention « achat vérifié » ni la recherche d'origine. L'image est celle
- * que la pièce affiche (sa propre photo, ou l'image du marchand). */
+/** Une pièce du Vault d'un ami, en lecture seule : jamais la recherche
+ * d'origine. L'image est celle que la pièce affiche (sa propre photo, ou
+ * l'image du marchand). */
 export interface FriendVaultPiece {
   id: string;
   title: string;
   category: VaultCategory;
   imageUrl: string | null;
   imageHdUrl: string | null;
+  /** Date d'ajout au Vault (refonte). Absente d'un serveur plus ancien. */
+  createdAt?: string;
+  /** « Achat vérifié » (refonte). Absent d'un serveur plus ancien. */
+  verified?: boolean;
 }
 
 /** GET /api/users/:userId/vault : comme FriendWishPage. */
@@ -3259,10 +3276,13 @@ export interface FriendVaultPage {
   nextCursor: string | null;
 }
 
-/** PUT /api/me/friend-shelves : un réglage absent reste inchangé. */
+/** PUT /api/me/friend-shelves : un réglage absent reste inchangé.
+ * `informed: true` : seulement depuis l'information de l'app (« Compris » ou
+ * « Éteindre ») ; note la date à laquelle le membre l'a vue. */
 export interface UpdateFriendShelvesRequest {
   wishes?: boolean;
   vault?: boolean;
+  informed?: true;
 }
 
 /** 404 : les étagères des amis ne sont pas encore disponibles (migration 0058 absente). */

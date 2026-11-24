@@ -140,6 +140,8 @@ export const EXPORT_COLUMNS = {
     // Étagères des amis (migration 0058) : oui / non.
     wishes_shown_to_friends: shown("Envies montrées à vos amis", "Wishlist shown to your friends"),
     vault_shown_to_friends: shown("Vault montré à vos amis", "Vault shown to your friends"),
+    // Information sur les étagères des amis vue dans l'app (migration 0058) : la date, ou vide.
+    friend_shelves_informed_at: shown("Information « Ce que vos amis peuvent voir » vue le", "Notice “What your friends can see” seen on"),
     created_at: shown("Compte créé le", "Account created on"),
     updated_at: shown("Profil modifié le", "Profile updated on"),
   },

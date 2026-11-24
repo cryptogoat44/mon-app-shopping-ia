@@ -34,7 +34,7 @@ import { PROFILE_LINK_UNAVAILABLE, profileExtrasReady, profileExtrasShown } from
 import { LINK_INVALID, LINK_TOO_LONG, bioLinkProblem, bioLinkTexts } from "../lib/bioLink.js";
 import { DISCOVERY_SETTING_UNAVAILABLE, discoveryReady, discoveryShown } from "../lib/forYou.js";
 import { RATE_LIMITS } from "../lib/rateLimits.js";
-import { FRIEND_SHELVES_UNAVAILABLE, SHELF_COLUMNS, friendShelvesReady, friendShelvesShown } from "../lib/friendShelves.js";
+import { FRIEND_SHELVES_UNAVAILABLE, INFORMED_COLUMN, SHELF_COLUMNS, friendShelvesReady, friendShelvesShown } from "../lib/friendShelves.js";
 import { resyncAllFriendCopiesQuietly } from "../lib/collections.js";
 import { consumeRateLimit } from "../plugins/rateLimit.js";
 
@@ -76,11 +76,12 @@ const updateReadReceiptsSchema = z.object({ readReceipts: z.boolean() });
 const updatePrivateAccountSchema = z.object({ isPrivate: z.boolean() });
 const updateMentionsFromSchema = z.object({ mentionsFrom: z.enum(MENTIONS_FROM) });
 const updateDiscoverableSchema = z.object({ discoverable: z.boolean() });
-// Étagères des amis (migration 0058) : un vrai oui ou non pour chacun, au moins un des deux.
+// Étagères des amis (migration 0058) : un vrai oui ou non pour chacun, et
+// `informed: true` (seulement depuis l'information de l'app) ; au moins un.
 const updateFriendShelvesSchema = z
-  .object({ wishes: z.boolean().optional(), vault: z.boolean().optional() })
+  .object({ wishes: z.boolean().optional(), vault: z.boolean().optional(), informed: z.literal(true).optional() })
   .strict()
-  .refine((body) => body.wishes !== undefined || body.vault !== undefined);
+  .refine((body) => body.wishes !== undefined || body.vault !== undefined || body.informed !== undefined);
 
 // Ligne brute de la table `profiles` (colonnes en snake_case, cf. schema.sql), relue sans lui faire confiance.
 const profileRowSchema = z.object({
@@ -105,9 +106,10 @@ const profileRowSchema = z.object({
   link_url: z.string().nullable().optional(),
   // « Proposer mon compte aux autres membres » (migration 0050) ; proposé tant que la colonne n'existe pas.
   discoverable: z.boolean().optional(),
-  // Étagères des amis (migration 0058) ; éteintes tant que les colonnes n'existent pas.
+  // Étagères des amis (migration 0058) ; rien tant que les colonnes n'existent pas.
   wishes_shown_to_friends: z.boolean().optional(),
   vault_shown_to_friends: z.boolean().optional(),
+  friend_shelves_informed_at: z.string().nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -179,7 +181,7 @@ async function mentionsSettingShown(fastify: FastifyInstance): Promise<boolean> 
  * `receipts` : la base a la migration 0043 ; sans elle, le réglage
  * « Confirmations de lecture » n'est pas renvoyé (l'app ne le propose pas).
  * `withDiscovery` : la base a la migration 0050 (sinon, pas de `discoverable` : l'app cache le réglage).
- * `withShelves` : la base a la migration 0058 (sinon, ni `showWishesToFriends` ni `showVaultToFriends` : l'app cache les réglages). */
+ * `withShelves` : la base a la migration 0058 (sinon, ni `showWishesToFriends`, ni `showVaultToFriends`, ni `friendShelvesInformed` : l'app cache les réglages et l'information). */
 function toProfile(
   row: unknown,
   counts: ProfileCounts,
@@ -213,8 +215,15 @@ function toProfile(
     ...(withMentions ? { mentionsFrom: profile.mentions_from } : {}),
     ...(withLink ? { linkUrl: profile.link_url ?? null } : {}),
     ...(withDiscovery ? { discoverable: profile.discoverable !== false } : {}),
-    // Éteints sauf vrai enregistré : jamais montré par défaut.
-    ...(withShelves ? { showWishesToFriends: profile.wishes_shown_to_friends === true, showVaultToFriends: profile.vault_shown_to_friends === true } : {}),
+    // Ce qui est enregistré (allumé par défaut dans la base) ; « informé »
+    // seulement avec une date écrite par le geste du membre.
+    ...(withShelves
+      ? {
+          showWishesToFriends: profile.wishes_shown_to_friends === true,
+          showVaultToFriends: profile.vault_shown_to_friends === true,
+          friendShelvesInformed: typeof profile.friend_shelves_informed_at === "string" && profile.friend_shelves_informed_at.length > 0,
+        }
+      : {}),
   };
 }
 
@@ -583,13 +592,17 @@ export default async function meRoutes(fastify: FastifyInstance) {
   });
 
   // « Montrer mes Envies à mes amis », « Montrer mon Vault à mes amis » (lot
-  // « étagères des amis », migration 0058) : éteints au départ. Allumés, les
-  // amis (chacun suit l'autre, sans blocage, compte non suspendu) voient
-  // l'étagère en lecture seule sur le profil (routes/users.ts). Allumer ne
-  // copie aucune image : les copies sont faites quand un ami ouvre vraiment
-  // la page. Éteindre les Envies efface aussitôt les copies qui ne servent
-  // plus à aucune collection montrée aux amis. Un réglage de confidentialité :
-  // modifiable même par un compte suspendu. Sans la migration : indisponible.
+  // « étagères des amis », migration 0058, refonte) : allumés au départ.
+  // Allumés ET l'information vue, les amis (chacun suit l'autre, sans
+  // blocage, compte non suspendu) voient l'étagère en lecture seule sur le
+  // profil (routes/users.ts). `informed: true` note la date de l'information
+  // vue : seule l'information de l'app l'envoie (« Compris », ou « Éteindre »
+  // avec les deux réglages éteints) ; jamais écrite par le serveur seul.
+  // Allumer ne copie aucune image : les copies sont faites quand un ami ouvre
+  // vraiment la page. Éteindre les Envies efface aussitôt les copies qui ne
+  // servent plus à aucune collection montrée aux amis. Un réglage de
+  // confidentialité : modifiable même par un compte suspendu. Sans la
+  // migration : indisponible.
   fastify.put(
     "/api/me/friend-shelves",
     { preHandler: [fastify.requireAuth, fastify.rateLimit("friendShelvesSetting")], config: { rateLimitName: "friendShelvesSetting" } },
@@ -603,6 +616,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
         .update({
           ...(body.wishes !== undefined ? { [SHELF_COLUMNS.wishes]: body.wishes } : {}),
           ...(body.vault !== undefined ? { [SHELF_COLUMNS.vault]: body.vault } : {}),
+          ...(body.informed ? { [INFORMED_COLUMN]: new Date().toISOString() } : {}),
           updated_at: new Date().toISOString(),
         })
         .eq("id", userId);
@@ -611,7 +625,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
         return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
       }
       if (body.wishes === false) await resyncAllFriendCopiesQuietly(fastify, request.log, userId);
-      request.log.info({ wishes: body.wishes ?? null, vault: body.vault ?? null }, "Étagères des amis changées");
+      request.log.info({ wishes: body.wishes ?? null, vault: body.vault ?? null, informed: body.informed === true }, "Étagères des amis changées");
       return reply.code(204).send();
     }
   );

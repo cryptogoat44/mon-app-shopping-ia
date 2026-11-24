@@ -11,18 +11,21 @@ import collectionsRoutes from "../src/routes/collections.js";
 import { RATE_LIMITS } from "../src/lib/rateLimits.js";
 import type { Audience } from "../src/lib/audience.js";
 import { resetPrivateAccountsProbe } from "../src/lib/audience.js";
-import { canSeeFriendCollections, resetCollectionsProbe, syncFriendCopies, wishesInHiddenCollections } from "../src/lib/collections.js";
+import { canSeeFriendCollections, resetCollectionsProbe, syncFriendCopies, wishesOffFriendShelf } from "../src/lib/collections.js";
 import { friendShelfAllowed, friendShelvesFor, friendShelvesReady, resetFriendShelvesProbe, vaultPiecesInHiddenPosts } from "../src/lib/friendShelves.js";
 import { DatabaseReadError } from "../src/lib/validation.js";
 import { isBlockedEitherWay, isFollowing } from "../src/lib/visibility.js";
 import { resetWishAlertsProbe } from "../src/lib/wishAlertsSchema.js";
 import { STORAGE_ORIGIN, fakeSupabase, type FakeDbOptions, type Row } from "./fakeSupabase.js";
 
-// Étagères des amis (lot « étagères des amis », migration 0058), SANS base ni
+// Étagères des amis (lot « étagères des amis », migration 0058, refondue
+// selon le fondateur : allumées par défaut, ouvertes seulement après
+// l'information vue, un ami voit tout, « Privée » reste privée), SANS base ni
 // réseau : les vraies routes sur une fausse base en mémoire. Chaque règle a
-// son cas refusé ET son cas permis : pas ami, simple abonné, blocage dans
-// chaque sens, compte suspendu, réglage éteint, migration absente, lecture
-// impossible. Le même parcours sur la vraie base : etageresAmisBase.test.ts.
+// son cas refusé ET son cas permis : information non vue, pas ami, simple
+// abonné, blocage dans chaque sens, compte suspendu, réglage éteint,
+// migration absente ou incomplète, lecture impossible, collection privée.
+// Le même parcours sur la vraie base : etageresAmisBase.test.ts.
 
 // Images des marchands : jamais téléchargées pour de vrai.
 const downloads = vi.hoisted(() => ({ images: new Map<string, Buffer>(), calls: [] as string[], onDownload: null as null | (() => void) }));
@@ -62,9 +65,10 @@ const OWN_PHOTO = `${STORAGE_ORIGIN}/storage/v1/object/public/vault-media/${ALIC
 const OWN_FOLDER = `${STORAGE_ORIGIN}/storage/v1/object/public/post-media/${ALICE}/`;
 const SECRET_NOTE = "Note privée : taille M";
 
-const COLUMNS = ["wishes_shown_to_friends", "vault_shown_to_friends"];
+const COLUMNS = ["wishes_shown_to_friends", "vault_shown_to_friends", "friend_shelves_informed_at"];
+const INFORMED_AT = "2026-11-25T09:00:00+00:00";
 
-function profile(id: string, username: string, shelves: { wishes?: boolean; vault?: boolean } = {}): Row {
+function profile(id: string, username: string, shelves: { wishes?: boolean; vault?: boolean; informed?: boolean } = {}): Row {
   return {
     id,
     username,
@@ -76,8 +80,10 @@ function profile(id: string, username: string, shelves: { wishes?: boolean; vaul
     piece_sends_from: "following",
     messages_from: "everyone",
     is_private: false,
-    wishes_shown_to_friends: shelves.wishes ?? false,
-    vault_shown_to_friends: shelves.vault ?? false,
+    // Allumés par défaut (comme la migration 0058) ; information pas vue.
+    wishes_shown_to_friends: shelves.wishes ?? true,
+    vault_shown_to_friends: shelves.vault ?? true,
+    friend_shelves_informed_at: shelves.informed ? INFORMED_AT : null,
     created_at: "2026-10-01T00:00:00+00:00",
     updated_at: "2026-10-01T00:00:00+00:00",
   };
@@ -89,6 +95,8 @@ interface Seed {
   suspended?: string[];
   wishes?: boolean;
   vault?: boolean;
+  /** Alice a-t-elle vu l'information ? Oui par défaut dans ces tests. */
+  informed?: boolean;
 }
 
 const DEFAULT_FOLLOWS: [string, string][] = [
@@ -100,15 +108,15 @@ const DEFAULT_FOLLOWS: [string, string][] = [
 
 function seeded(seed: Seed = {}, options: FakeDbOptions = {}) {
   const fake = fakeSupabase(options);
-  const migrated = !(options.missingColumns?.profiles ?? []).includes(COLUMNS[0]!);
+  const missing = options.missingColumns?.profiles ?? [];
   const rows = [
-    profile(ALICE, "alice", { wishes: seed.wishes ?? true, vault: seed.vault ?? true }),
+    profile(ALICE, "alice", { wishes: seed.wishes ?? true, vault: seed.vault ?? true, informed: seed.informed ?? true }),
     profile(BOB, "bob"),
     profile(CHLOE, "chloe"),
     profile(DAN, "dan"),
     profile(EVE, "eve"),
   ];
-  if (!migrated) for (const row of rows) for (const column of COLUMNS) delete row[column];
+  for (const row of rows) for (const column of missing) delete row[column];
   fake.table("profiles").push(...rows);
   for (const [follower, followee] of seed.follows ?? DEFAULT_FOLLOWS) fake.table("follows").push({ follower_id: follower, followee_id: followee, created_at: "2026-10-01T00:00:00+00:00" });
   for (const [blocker, blocked] of seed.blocks ?? []) fake.table("blocks").push({ blocker_id: blocker, blocked_id: blocked, created_at: "2026-10-01T00:00:00+00:00" });
@@ -244,9 +252,9 @@ afterEach(async () => {
 describe("la règle, sans base", () => {
   const friend: Audience = { self: false, blocked: false, suspended: false, isPrivate: false, follows: true, requested: false };
 
-  it("permis : un ami (chacun suit l'autre), réglage exactement vrai", () => {
-    expect(friendShelfAllowed(friend, true, true)).toBe(true);
-    expect(friendShelfAllowed({ ...friend, isPrivate: true }, true, true)).toBe(true);
+  it("permis : un ami (chacun suit l'autre), réglage exactement vrai, information vue", () => {
+    expect(friendShelfAllowed(friend, true, true, INFORMED_AT)).toBe(true);
+    expect(friendShelfAllowed({ ...friend, isPrivate: true }, true, true, INFORMED_AT)).toBe(true);
   });
 
   it("refusé dans tous les autres cas", () => {
@@ -263,7 +271,11 @@ describe("la règle, sans base", () => {
       ["réglage en texte", friend, true, "true"],
       ["réglage en nombre", friend, true, 1],
     ];
-    for (const [why, audience, ownerFollows, setting] of refused) expect(friendShelfAllowed(audience, ownerFollows, setting), why).toBe(false);
+    for (const [why, audience, ownerFollows, setting] of refused) expect(friendShelfAllowed(audience, ownerFollows, setting, INFORMED_AT), why).toBe(false);
+  });
+
+  it("refusé : information pas vue (date vide, absente ou mal formée), même réglage allumé et entre amis", () => {
+    for (const informedAt of [null, undefined, "", 0, true, {}]) expect(friendShelfAllowed(friend, true, true, informedAt), String(informedAt)).toBe(false);
   });
 });
 
@@ -293,6 +305,7 @@ describe("profil d'un membre : les étagères annoncées seulement à ses amis",
     ["un ami bloqué par Alice", { blocks: [[ALICE, BOB]] }, BOB],
     ["un ami, Alice suspendue", { suspended: [ALICE] }, BOB],
     ["un ami, les deux réglages éteints", { wishes: false, vault: false }, BOB],
+    ["un ami, réglages allumés mais information pas encore vue par Alice", { informed: false }, BOB],
   ] as [string, Seed, string][]) {
     it(`refusé : ${why} — aucun champ, pages vides, rien qui dise pourquoi`, async () => {
       await withImages();
@@ -313,20 +326,28 @@ describe("profil d'un membre : les étagères annoncées seulement à ses amis",
     expect(seen.wishes.items).toEqual([]);
   });
 
-  it("migration 0058 absente : rien d'annoncé, pages vides, réglages absents de /api/me, enregistrement « indisponible »", async () => {
-    const target = await shelvesApp(seeded({}, { missingColumns: { profiles: COLUMNS } }).db);
-    const seen = await whatSees(target, BOB);
-    expect(seen.status).toEqual([200, 200, 200]);
-    expect(seen.hasField).toBe(false);
-    expect(seen.wishes.items).toEqual([]);
-    expect(seen.vault.items).toEqual([]);
-    const me = (await as(target, ALICE).get("/api/me")).json() as Profile;
-    expect("showWishesToFriends" in me).toBe(false);
-    expect("showVaultToFriends" in me).toBe(false);
-    const put = await as(target, ALICE).put("/api/me/friend-shelves", { wishes: true });
-    expect(put.statusCode).toBe(404);
-    expect(put.json().error).toBe("friend_shelves_unavailable");
-  });
+  for (const [why, missing] of [
+    ["migration 0058 absente", COLUMNS],
+    ["migration incomplète (les deux réglages sans la date de l'information)", ["friend_shelves_informed_at"]],
+  ] as [string, string[]][]) {
+    it(`${why} : rien d'annoncé, pages vides, réglages absents de /api/me, enregistrement « indisponible »`, async () => {
+      const target = await shelvesApp(seeded({}, { missingColumns: { profiles: missing } }).db);
+      const seen = await whatSees(target, BOB);
+      expect(seen.status).toEqual([200, 200, 200]);
+      expect(seen.hasField).toBe(false);
+      expect(seen.wishes.items).toEqual([]);
+      expect(seen.vault.items).toEqual([]);
+      const me = (await as(target, ALICE).get("/api/me")).json() as Profile;
+      expect("showWishesToFriends" in me).toBe(false);
+      expect("showVaultToFriends" in me).toBe(false);
+      expect("friendShelvesInformed" in me).toBe(false);
+      for (const body of [{ wishes: true }, { informed: true }]) {
+        const put = await as(target, ALICE).put("/api/me/friend-shelves", body);
+        expect(put.statusCode).toBe(404);
+        expect(put.json().error).toBe("friend_shelves_unavailable");
+      }
+    });
+  }
 
   it("schéma illisible (ni « présent » ni « absent ») : la sonde ne répond pas « absent », et rien n'est montré", async () => {
     const fake = seeded();
@@ -370,7 +391,7 @@ describe("profil d'un membre : les étagères annoncées seulement à ses amis",
 });
 
 describe("les Envies d'un ami : lecture seule, jamais ce qui est privé", () => {
-  it("permis : titre, copie Spotto de l'image, prix, boutique, lien ; les clés exactes, rien d'autre", async () => {
+  it("permis : titre, copie Spotto de l'image, prix, boutique, lien, collections ; les clés exactes, rien d'autre", async () => {
     await withImages();
     const fake = seeded();
     const target = await shelvesApp(fake.db);
@@ -380,7 +401,9 @@ describe("les Envies d'un ami : lecture seule, jamais ce qui est privé", () => 
     const page = res.json() as FriendWishPage;
     expect(page.items.map((item) => item.id)).toEqual([WISH_2, WISH]);
     for (const item of page.items) {
-      expect(Object.keys(item).sort()).toEqual(["currency", "id", "imageThumbUrl", "imageUrl", "isAffiliate", "merchantName", "merchantUrl", "priceMin", "title"]);
+      // Aucune alerte allumée ici : pas de champ priceAlert ; aucune collection : liste vide.
+      expect(Object.keys(item).sort()).toEqual(["collections", "currency", "id", "imageThumbUrl", "imageUrl", "isAffiliate", "merchantName", "merchantUrl", "priceMin", "title"]);
+      expect(item.collections).toEqual([]);
       // Toujours une copie de notre stockage, dans le dossier d'Alice : jamais l'image du marchand.
       expect(item.imageUrl?.startsWith(OWN_FOLDER)).toBe(true);
       expect(item.imageThumbUrl?.startsWith(OWN_FOLDER)).toBe(true);
@@ -405,7 +428,7 @@ describe("les Envies d'un ami : lecture seule, jamais ce qui est privé", () => 
     for (const item of page.items) expect([item.imageUrl, item.imageThumbUrl]).toEqual([null, null]);
   });
 
-  it("allumer le réglage ne copie rien ; l'éteindre efface les copies, sauf celles d'une collection montrée aux amis", async () => {
+  it("allumer le réglage ne copie rien ; l'éteindre efface les copies, sauf celles d'une collection « Mes amis »", async () => {
     await withImages();
     const fake = seeded({ wishes: false });
     const target = await shelvesApp(fake.db);
@@ -495,18 +518,18 @@ describe("les Envies d'un ami : lecture seule, jamais ce qui est privé", () => 
 });
 
 describe("le Vault d'un ami : lecture seule", () => {
-  it("permis : nom, catégorie, image ; jamais la date, « achat vérifié » ni la recherche d'origine", async () => {
+  it("permis : nom, catégorie, image, date d'ajout et « achat vérifié » ; jamais la recherche d'origine ni l'affiliation", async () => {
     const target = await shelvesApp(seeded().db);
     const res = await as(target, BOB).get(`/api/users/${ALICE}/vault`);
     expect(res.statusCode).toBe(200);
     expect(res.headers["cache-control"]).toBe("no-store");
     const page = res.json() as FriendVaultPage;
     expect(page.items.map((item) => item.id)).toEqual([VAULT_MATCH, VAULT_PHOTO]);
-    for (const item of page.items) expect(Object.keys(item).sort()).toEqual(["category", "id", "imageHdUrl", "imageUrl", "title"]);
-    expect(page.items[0]).toEqual({ id: VAULT_MATCH, title: "Sac cabas", category: "bags", imageUrl: THUMB, imageHdUrl: HD });
-    expect(page.items[1]).toEqual({ id: VAULT_PHOTO, title: "Veste en laine", category: "clothing", imageUrl: OWN_PHOTO, imageHdUrl: null });
+    for (const item of page.items) expect(Object.keys(item).sort()).toEqual(["category", "createdAt", "id", "imageHdUrl", "imageUrl", "title", "verified"]);
+    expect(page.items[0]).toEqual({ id: VAULT_MATCH, title: "Sac cabas", category: "bags", imageUrl: THUMB, imageHdUrl: HD, createdAt: "2026-11-04T00:00:00+00:00", verified: false });
+    expect(page.items[1]).toEqual({ id: VAULT_PHOTO, title: "Veste en laine", category: "clothing", imageUrl: OWN_PHOTO, imageHdUrl: null, createdAt: "2026-11-03T00:00:00+00:00", verified: true });
     const text = JSON.stringify(page);
-    for (const secret of ["verified", "2026-11-0", MATCH, "productMatchId", "createdAt", "affiliate"]) expect(text, secret).not.toContain(secret);
+    for (const secret of [MATCH, "productMatchId", "affiliate", "search"]) expect(text, secret).not.toContain(secret);
   });
 
   it("le profil n'annonce jamais le nombre de pièces du Vault", async () => {
@@ -517,23 +540,62 @@ describe("le Vault d'un ami : lecture seule", () => {
 });
 
 describe("le réglage : PUT /api/me/friend-shelves", () => {
-  it("/api/me renvoie les deux réglages, éteints au départ", async () => {
-    const target = await shelvesApp(seeded({ wishes: false, vault: false }).db);
-    const me = (await as(target, BOB).get("/api/me")).json() as Profile;
-    expect(me.showWishesToFriends).toBe(false);
-    expect(me.showVaultToFriends).toBe(false);
+  it("/api/me renvoie les deux réglages tels qu'enregistrés (allumés au départ) et si l'information a été vue", async () => {
+    const target = await shelvesApp(seeded().db);
+    const bob = (await as(target, BOB).get("/api/me")).json() as Profile;
+    expect(bob).toMatchObject({ showWishesToFriends: true, showVaultToFriends: true, friendShelvesInformed: false });
+    const alice = (await as(target, ALICE).get("/api/me")).json() as Profile;
+    expect(alice.friendShelvesInformed).toBe(true);
+    // Jamais la date elle-même, ni le nom de la colonne.
+    expect(JSON.stringify(alice)).not.toContain(INFORMED_AT);
+    expect(JSON.stringify(alice)).not.toContain("informed_at");
   });
 
-  it("permis : un vrai oui ou non, pour l'un, l'autre ou les deux ; refusé : texte, nombre, corps vide, clé inconnue", async () => {
+  it("l'information vue (« Compris ») : la date est notée par ce seul geste, et les étagères s'ouvrent", async () => {
+    const fake = seeded({ informed: false });
+    const target = await shelvesApp(fake.db);
+    // Refusé : rien d'ouvert tant qu'Alice n'a pas vu l'information, même
+    // après avoir touché ses réglages (le réglage seul n'écrit pas la date).
+    expect((await whatSees(target, BOB)).hasField).toBe(false);
+    expect((await as(target, ALICE).put("/api/me/friend-shelves", { vault: true })).statusCode).toBe(204);
+    expect(fake.table("profiles").find((row) => row.id === ALICE)!.friend_shelves_informed_at).toBeNull();
+    expect((await whatSees(target, BOB)).hasField).toBe(false);
+    // Lire son profil ou celui d'un autre n'écrit jamais la date.
+    await as(target, ALICE).get("/api/me");
+    await as(target, BOB).get(`/api/users/${ALICE}`);
+    expect(fake.table("profiles").find((row) => row.id === ALICE)!.friend_shelves_informed_at).toBeNull();
+    // Permis : « Compris ».
+    expect((await as(target, ALICE).put("/api/me/friend-shelves", { informed: true })).statusCode).toBe(204);
+    expect(typeof fake.table("profiles").find((row) => row.id === ALICE)!.friend_shelves_informed_at).toBe("string");
+    const seen = await whatSees(target, BOB);
+    expect(seen.shelves).toEqual({ wishes: true, vault: true });
+    expect(seen.vault.items).toHaveLength(2);
+  });
+
+  it("l'information refusée (« Éteindre ») : les deux réglages éteints et la date notée, en une fois ; rien n'est ouvert", async () => {
+    const fake = seeded({ informed: false });
+    const target = await shelvesApp(fake.db);
+    expect((await as(target, ALICE).put("/api/me/friend-shelves", { wishes: false, vault: false, informed: true })).statusCode).toBe(204);
+    expect(fake.table("profiles").find((row) => row.id === ALICE)).toMatchObject({ wishes_shown_to_friends: false, vault_shown_to_friends: false });
+    expect(typeof fake.table("profiles").find((row) => row.id === ALICE)!.friend_shelves_informed_at).toBe("string");
+    const seen = await whatSees(target, BOB);
+    expect(seen.hasField).toBe(false);
+    expect(seen.wishes).toEqual({ items: [], nextCursor: null });
+    expect(seen.vault).toEqual({ items: [], nextCursor: null });
+    expect(((await as(target, ALICE).get("/api/me")).json() as Profile).friendShelvesInformed).toBe(true);
+  });
+
+  it("permis : un vrai oui ou non, pour l'un, l'autre ou les deux ; refusé : texte, nombre, corps vide, clé inconnue, « informé » autre que vrai", async () => {
     const fake = seeded({ wishes: false, vault: false });
     const target = await shelvesApp(fake.db);
     const bob = as(target, BOB);
-    expect((await bob.put("/api/me/friend-shelves", { vault: true })).statusCode).toBe(204);
-    expect(fake.table("profiles").find((row) => row.id === BOB)).toMatchObject({ vault_shown_to_friends: true, wishes_shown_to_friends: false });
-    for (const body of [{ wishes: "true" }, { vault: 1 }, {}, { wishes: true, autre: true }, null]) {
+    // Bob a ses deux réglages allumés (par défaut) : il éteint le Vault, les Envies ne bougent pas.
+    expect((await bob.put("/api/me/friend-shelves", { vault: false })).statusCode).toBe(204);
+    expect(fake.table("profiles").find((row) => row.id === BOB)).toMatchObject({ vault_shown_to_friends: false, wishes_shown_to_friends: true });
+    for (const body of [{ wishes: "true" }, { vault: 1 }, {}, { wishes: true, autre: true }, null, { informed: false }, { informed: "true" }, { informed: 1 }]) {
       expect((await bob.put("/api/me/friend-shelves", body)).statusCode, JSON.stringify(body)).toBe(400);
     }
-    expect(fake.table("profiles").find((row) => row.id === BOB)).toMatchObject({ vault_shown_to_friends: true, wishes_shown_to_friends: false });
+    expect(fake.table("profiles").find((row) => row.id === BOB)).toMatchObject({ vault_shown_to_friends: false, wishes_shown_to_friends: true, friend_shelves_informed_at: null });
   });
 
   it("limité : au-delà de la limite horaire, 429", async () => {
@@ -636,7 +698,7 @@ function breakSelect(fake: ReturnType<typeof fakeSupabase>, table: string, colum
 }
 
 describe("Envies d'une collection masquée par la modération : jamais sur l'étagère des amis", () => {
-  it("refusé : une envie d'une collection masquée (privée ou « Mes amis ») n'est pas montrée ; permis : les autres, et elle revient quand la modération rend la collection", async () => {
+  it("refusé : une envie d'une collection masquée (privée ou « Mes amis ») n'est pas montrée ; permis : les autres, et elle revient quand la modération rend une collection « Mes amis » (une collection privée la garde privée)", async () => {
     for (const visibility of ["private", "friends"] as const) {
       const fake = seeded();
       aliceCollection(fake, PRIVATE_COLLECTION, visibility, true, [WISH]);
@@ -644,18 +706,18 @@ describe("Envies d'une collection masquée par la modération : jamais sur l'ét
       const page = (await as(target, BOB).get(`/api/users/${ALICE}/wishlist`)).json() as FriendWishPage;
       expect(page, visibility).toEqual({ items: [expect.objectContaining({ id: WISH_2 })], nextCursor: null });
       expect(JSON.stringify(page)).not.toContain("Sac cabas");
-      // Rendue par la modération : l'envie revient.
+      // Rendue par la modération : l'envie revient… sauf d'une collection « Privée ».
       fake.table("collections").find((row) => row.id === PRIVATE_COLLECTION)!.hidden_at = null;
       const back = (await as(target, BOB).get(`/api/users/${ALICE}/wishlist`)).json() as FriendWishPage;
-      expect(back.items.map((item) => item.id)).toEqual([WISH_2, WISH]);
+      expect(back.items.map((item) => item.id), visibility).toEqual(visibility === "friends" ? [WISH_2, WISH] : [WISH_2]);
       await target.close();
       app = null;
     }
   });
 
-  it("refusé même si l'envie est aussi dans une collection « Mes amis » non masquée ; permis : une collection non masquée ne retire rien", async () => {
+  it("refusé même si l'envie est aussi dans une collection « Mes amis » non masquée ; permis : une collection « Mes amis » non masquée ne retire rien", async () => {
     const fake = seeded();
-    aliceCollection(fake, PRIVATE_COLLECTION, "private", true, [WISH]);
+    aliceCollection(fake, PRIVATE_COLLECTION, "friends", true, [WISH]);
     aliceCollection(fake, FRIENDS_COLLECTION, "friends", false, [WISH, WISH_2]);
     const target = await shelvesApp(fake.db);
     expect(((await as(target, BOB).get(`/api/users/${ALICE}/wishlist`)).json() as FriendWishPage).items.map((item) => item.id)).toEqual([WISH_2]);
@@ -673,7 +735,7 @@ describe("Envies d'une collection masquée par la modération : jamais sur l'ét
     }
     // 32 envies, dont 5 masquées réparties sur les deux pages : 27 montrées.
     const hidden = [WISH, ids[29]!, ids[20]!, ids[3]!, ids[0]!];
-    aliceCollection(fake, PRIVATE_COLLECTION, "private", true, hidden);
+    aliceCollection(fake, PRIVATE_COLLECTION, "friends", true, hidden);
     const target = await shelvesApp(fake.db);
     const first = (await as(target, BOB).get(`/api/users/${ALICE}/wishlist`)).json() as FriendWishPage;
     expect(first.items).toHaveLength(24);
@@ -688,7 +750,7 @@ describe("Envies d'une collection masquée par la modération : jamais sur l'ét
     expect((await as(target, BOB).get(`/api/users/${ALICE}/wishlist?cursor=27`)).json()).toEqual({ items: [], nextCursor: null });
   });
 
-  it("lecture des collections masquées impossible : erreur, jamais une envie (et wishesInHiddenCollections ne répond jamais « aucune »)", async () => {
+  it("lecture des collections masquées impossible : erreur, jamais une envie (et wishesOffFriendShelf ne répond jamais « aucune »)", async () => {
     const fake = seeded();
     aliceCollection(fake, PRIVATE_COLLECTION, "private", true, [WISH]);
     const target = await shelvesApp(fake.db);
@@ -696,11 +758,11 @@ describe("Envies d'une collection masquée par la modération : jamais sur l'ét
     expect((await as(target, BOB).get(`/api/users/${ALICE}/wishlist`)).statusCode).toBe(200);
     const restore = breakSelect(fake, "collections", (columns) => columns === "*");
     const res = await as(target, BOB).get(`/api/users/${ALICE}/wishlist`);
-    await expect(wishesInHiddenCollections({ supabaseAdmin: fake.db, log: { warn: () => {} } } as unknown as FastifyInstance, ALICE)).rejects.toBeInstanceOf(DatabaseReadError);
+    await expect(wishesOffFriendShelf({ supabaseAdmin: fake.db, log: { warn: () => {} } } as unknown as FastifyInstance, ALICE)).rejects.toBeInstanceOf(DatabaseReadError);
     restore();
     expect(res.statusCode).toBe(500);
     expect(JSON.stringify(res.json())).not.toMatch(/Sac cabas|Montre/);
-    const restoreItems = breakSelect(fake, "collection_items", (columns) => columns === "wishlist_item_id");
+    const restoreItems = breakSelect(fake, "collection_items", (columns) => columns === "id, collection_id, wishlist_item_id");
     const resItems = await as(target, BOB).get(`/api/users/${ALICE}/wishlist`);
     restoreItems();
     expect(resItems.statusCode).toBe(500);
@@ -783,5 +845,176 @@ describe("Vault : une pièce dont la publication « achat » est masquée par la
     expect(JSON.stringify(res.json())).not.toMatch(/Veste|Sac cabas/);
     // Permis : la même base, publications lisibles.
     expect(await vaultPiecesInHiddenPosts({ supabaseAdmin: fake.db } as unknown as FastifyInstance, ALICE)).toEqual([VAULT_PHOTO]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Refonte (décisions du fondateur, 25 novembre) : « Privée » reste privée, et
+// un ami voit tout le reste, en lecture seule.
+
+describe("« Privée » reste privée : une envie d'une collection privée n'est jamais sur l'étagère", () => {
+  it("refusé : l'envie d'une collection « Privée » (non masquée) est absente, et le nom de la collection n'apparaît nulle part ; permis : les autres", async () => {
+    await withImages();
+    const fake = seeded();
+    aliceCollection(fake, PRIVATE_COLLECTION, "private", false, [WISH]);
+    fake.table("collections").find((row) => row.id === PRIVATE_COLLECTION)!.name = "Cadeaux secrets";
+    const target = await shelvesApp(fake.db);
+    const page = (await as(target, BOB).get(`/api/users/${ALICE}/wishlist`)).json() as FriendWishPage;
+    expect(page.items.map((item) => item.id)).toEqual([WISH_2]);
+    const text = JSON.stringify(page);
+    expect(text).not.toContain("Sac cabas");
+    expect(text).not.toContain("Cadeaux secrets");
+    // Aucune copie faite pour l'envie privée.
+    expect(fake.table("collection_image_copies").map((row) => row.wishlist_item_id)).toEqual([WISH_2]);
+  });
+
+  it("permis : l'envie aussi rangée dans une collection « Mes amis » reste visible par cette collection (règle des collections), pas sur l'étagère", async () => {
+    const fake = seeded();
+    aliceCollection(fake, PRIVATE_COLLECTION, "private", false, [WISH]);
+    aliceCollection(fake, FRIENDS_COLLECTION, "friends", false, [WISH]);
+    const target = await shelvesApp(fake.db);
+    const page = (await as(target, BOB).get(`/api/users/${ALICE}/wishlist`)).json() as FriendWishPage;
+    expect(page.items.map((item) => item.id)).toEqual([WISH_2]);
+    const shared = await as(target, BOB).get(`/api/collections/${FRIENDS_COLLECTION}/shared`);
+    expect(shared.statusCode).toBe(200);
+    expect(JSON.stringify(shared.json())).toContain("Sac cabas");
+  });
+
+  it("ranger une envie dans une collection privée la retire de l'étagère et efface sa copie (remise en ordre existante) ; la sortir la remet", async () => {
+    await withImages();
+    const fake = seeded();
+    const target = await shelvesApp(fake.db);
+    const alice = as(target, ALICE);
+    await as(target, BOB).get(`/api/users/${ALICE}/wishlist`);
+    expect(new Set(fake.table("collection_image_copies").map((row) => row.wishlist_item_id))).toEqual(new Set([WISH, WISH_2]));
+    const created = await alice.post("/api/collections", { name: "Rien que pour moi" });
+    expect(created.statusCode).toBe(201);
+    // Une nouvelle collection est « Privée » au départ (inchangé).
+    expect(created.json().visibility).toBe("private");
+    expect((await alice.put(`/api/wishlist/${WISH}/collections`, { collectionIds: [created.json().id] })).statusCode).toBe(200);
+    expect(fake.table("collection_image_copies").map((row) => row.wishlist_item_id)).toEqual([WISH_2]);
+    expect(((await as(target, BOB).get(`/api/users/${ALICE}/wishlist`)).json() as FriendWishPage).items.map((item) => item.id)).toEqual([WISH_2]);
+    expect((await alice.put(`/api/wishlist/${WISH}/collections`, { collectionIds: [] })).statusCode).toBe(200);
+    expect(((await as(target, BOB).get(`/api/users/${ALICE}/wishlist`)).json() as FriendWishPage).items.map((item) => item.id)).toEqual([WISH_2, WISH]);
+  });
+
+  it("pages : des envies privées réparties sur les deux pages ne laissent ni trou ni doublon", async () => {
+    const fake = seeded();
+    const ids: string[] = [];
+    for (let i = 0; i < 30; i += 1) {
+      const id = `e2000000-0000-4000-8000-0000000000${String(i).padStart(2, "0")}`;
+      ids.push(id);
+      fake.table("wishlist_items").push({ id, user_id: ALICE, title: `Envie ${i}`, image_url: THUMB, reference: null, price_min: null, currency: null, merchant_name: null, merchant_url: null, product_match_id: null, created_at: `2026-10-${String(i + 1).padStart(2, "0")}T00:00:00+00:00` });
+    }
+    const privateIds = [WISH_2, ids[28]!, ids[15]!, ids[2]!];
+    aliceCollection(fake, PRIVATE_COLLECTION, "private", false, privateIds);
+    const target = await shelvesApp(fake.db);
+    const first = (await as(target, BOB).get(`/api/users/${ALICE}/wishlist`)).json() as FriendWishPage;
+    expect(first.items).toHaveLength(24);
+    expect(first.nextCursor).toBe("24");
+    const second = (await as(target, BOB).get(`/api/users/${ALICE}/wishlist?cursor=24`)).json() as FriendWishPage;
+    expect(second.items).toHaveLength(4);
+    expect(second.nextCursor).toBeNull();
+    const seen = [...first.items, ...second.items].map((item) => item.id);
+    expect(new Set(seen).size).toBe(28);
+    for (const id of privateIds) expect(seen).not.toContain(id);
+    // Toujours les plus récentes d'abord.
+    expect(seen[0]).toBe(WISH);
+    expect(seen[1]).toBe(ids[29]);
+  });
+
+  it("au-delà de « Max rows » de Supabase : l'ordre est lu en entier, jamais tronqué", async () => {
+    const fake = seeded({}, { maxRows: 10 });
+    for (let i = 0; i < 30; i += 1) {
+      fake.table("wishlist_items").push({ id: `e2000000-0000-4000-8000-0000000000${String(i).padStart(2, "0")}`, user_id: ALICE, title: `Envie ${i}`, image_url: THUMB, reference: null, price_min: null, currency: null, merchant_name: null, merchant_url: null, product_match_id: null, created_at: `2026-10-${String(i + 1).padStart(2, "0")}T00:00:00+00:00` });
+    }
+    const target = await shelvesApp(fake.db);
+    const second = (await as(target, BOB).get(`/api/users/${ALICE}/wishlist?cursor=24`)).json() as FriendWishPage;
+    expect(second.items).toHaveLength(8);
+  });
+});
+
+describe("un ami voit tout le reste : collections « Mes amis », alerte de prix", () => {
+  const ALERTS_READY: FakeDbOptions = { rpc: async (fn) => (fn === "wish_alerts_version" ? { data: 3, error: null } : { data: null, error: { code: "PGRST202", message: "absente" } }) };
+
+  it("permis : le nom des collections « Mes amis » où l'envie est rangée ; refusé : le nom d'une collection masquée ou privée", async () => {
+    const fake = seeded();
+    aliceCollection(fake, FRIENDS_COLLECTION, "friends", false, [WISH]);
+    fake.table("collections").find((row) => row.id === FRIENDS_COLLECTION)!.name = "Pour l'hiver";
+    const HIDDEN_FRIENDS = "c1000000-0000-4000-8000-000000000003";
+    aliceCollection(fake, HIDDEN_FRIENDS, "friends", true, [WISH_2]);
+    fake.table("collections").find((row) => row.id === HIDDEN_FRIENDS)!.name = "Masquée";
+    const target = await shelvesApp(fake.db);
+    const page = (await as(target, BOB).get(`/api/users/${ALICE}/wishlist`)).json() as FriendWishPage;
+    expect(page.items.map((item) => [item.id, item.collections])).toEqual([[WISH, ["Pour l'hiver"]]]);
+    expect(JSON.stringify(page)).not.toContain("Masquée");
+  });
+
+  it("permis : l'alerte de prix allumée, avec son seuil ; refusé : une cloche sans alerte de prix, et les nouvelles d'alerte", async () => {
+    const fake = seeded({}, ALERTS_READY);
+    fake.table("wish_watches").push(
+      { wishlist_item_id: WISH, user_id: ALICE, notify_price_drop: true, notify_restock: false, notify_sold_out: false, target_price: "99.00", target_currency: "EUR", target_country: "fr", below_target: false },
+      { wishlist_item_id: WISH_2, user_id: ALICE, notify_price_drop: false, notify_restock: true, notify_sold_out: false, target_price: null, target_currency: null, target_country: null, below_target: false }
+    );
+    fake.table("wish_alert_events").push({ id: UNKNOWN, wishlist_item_id: WISH, user_id: ALICE, kind: "price_drop", old_price: "129.00", new_price: "89.00", currency: "EUR", created_on: "2026-11-20", status: "sent" });
+    const target = await shelvesApp(fake.db);
+    const page = (await as(target, BOB).get(`/api/users/${ALICE}/wishlist`)).json() as FriendWishPage;
+    expect(page.items.find((item) => item.id === WISH)!.priceAlert).toEqual({ targetPrice: 99, targetCurrency: "EUR" });
+    expect("priceAlert" in page.items.find((item) => item.id === WISH_2)!).toBe(false);
+    const text = JSON.stringify(page);
+    for (const secret of ["89", "restock", "soldOut", "price_drop", "fr\"", "below"]) expect(text, secret).not.toContain(secret);
+  });
+
+  it("alerte allumée sans seuil : allumée, seuil vide ; alertes indisponibles (0041 absente) : aucune alerte annoncée", async () => {
+    const watch = { wishlist_item_id: WISH, user_id: ALICE, notify_price_drop: true, notify_restock: false, notify_sold_out: false, target_price: null, target_currency: null, target_country: null, below_target: false };
+    const ready = seeded({}, ALERTS_READY);
+    ready.table("wish_watches").push({ ...watch });
+    const target = await shelvesApp(ready.db);
+    expect(((await as(target, BOB).get(`/api/users/${ALICE}/wishlist`)).json() as FriendWishPage).items.find((item) => item.id === WISH)!.priceAlert).toEqual({ targetPrice: null, targetCurrency: null });
+    await target.close();
+    app = null;
+    resetWishAlertsProbe();
+    const absent = seeded();
+    absent.table("wish_watches").push({ ...watch });
+    const without = await shelvesApp(absent.db);
+    const page = (await as(without, BOB).get(`/api/users/${ALICE}/wishlist`)).json() as FriendWishPage;
+    expect(page.items.every((item) => !("priceAlert" in item))).toBe(true);
+  });
+
+  it("refusé : l'alerte, les collections, la date et « Achat vérifié » n'apparaissent dans aucune autre réponse (profil, publications, visiteur refusé)", async () => {
+    const fake = seeded({}, ALERTS_READY);
+    aliceCollection(fake, FRIENDS_COLLECTION, "friends", false, [WISH]);
+    fake.table("wish_watches").push({ wishlist_item_id: WISH, user_id: ALICE, notify_price_drop: true, notify_restock: false, notify_sold_out: false, target_price: "99.00", target_currency: "EUR", target_country: "fr", below_target: false });
+    const target = await shelvesApp(fake.db);
+    for (const url of [`/api/users/${ALICE}`, `/api/users/${ALICE}/posts`]) {
+      const text = (await as(target, BOB).get(url)).body;
+      for (const secret of ["priceAlert", "targetPrice", "verified", "2026-11-03", "2026-11-04"]) expect(text, `${url} ${secret}`).not.toContain(secret);
+    }
+    for (const viewer of [CHLOE, DAN, EVE]) {
+      const seen = await whatSees(target, viewer);
+      expect(JSON.stringify([seen.wishes, seen.vault])).toBe(JSON.stringify([{ items: [], nextCursor: null }, { items: [], nextCursor: null }]));
+    }
+  });
+
+  it("refusé : les pièces reçues et les publications enregistrées ne sont jamais renvoyées", async () => {
+    const fake = seeded();
+    fake.table("piece_sends").push({ id: UNKNOWN, sender_id: BOB, recipient_id: ALICE, title: "Pièce reçue de Bob", created_at: "2026-11-06T00:00:00+00:00" });
+    fake.table("saved_posts").push({ user_id: ALICE, post_id: UNKNOWN, created_at: "2026-11-06T00:00:00+00:00" });
+    const target = await shelvesApp(fake.db);
+    const seen = await whatSees(target, BOB);
+    const text = JSON.stringify([seen.wishes, seen.vault]);
+    expect(text).not.toContain("Pièce reçue de Bob");
+    expect(text).not.toContain(UNKNOWN);
+    expect(seen.wishes.items.map((item) => item.id).sort()).toEqual([WISH, WISH_2].sort());
+  });
+
+  it("vieille app : aucun champ nouveau n'est exigé (le réglage s'enregistre sans « informé », la page reste lisible sans les champs ajoutés)", async () => {
+    const fake = seeded();
+    const target = await shelvesApp(fake.db);
+    expect((await as(target, ALICE).put("/api/me/friend-shelves", { wishes: false })).statusCode).toBe(204);
+    expect((await as(target, ALICE).put("/api/me/friend-shelves", { wishes: true })).statusCode).toBe(204);
+    const page = (await as(target, BOB).get(`/api/users/${ALICE}/vault`)).json() as FriendVaultPage;
+    // Les champs qu'une app d'avant la refonte lit sont toujours là.
+    for (const item of page.items) for (const key of ["id", "title", "category", "imageUrl", "imageHdUrl"]) expect(key in item).toBe(true);
   });
 });
