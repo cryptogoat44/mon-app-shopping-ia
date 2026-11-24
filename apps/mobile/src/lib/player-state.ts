@@ -1,6 +1,7 @@
 // Lecteur intégré (mission « liens vidéo ») : messages de la page hôte,
 // commandes du lecteur TikTok, accord préalable, taille du lecteur. Logique
 // pure, testée. Imports relatifs : fichier testé par vitest.
+import type { FrameSample } from "./frame-sample";
 import { HOST_MESSAGE_SOURCE } from "./player-host-page";
 import { PLAYER_PLATFORM_LIST, type PlayerPlatform } from "./player-link";
 
@@ -77,9 +78,71 @@ export function isPlaybackSignal(message: HostMessage): boolean {
   return (message.kind === "state" && message.state === "playing") || message.kind === "time";
 }
 
+/** Le lecteur a répondu (retours du build 2) : prêt, état, temps, son, code
+ * Instagram chargé ou sa taille, ou lecture automatique refusée (3002 : il
+ * attend un toucher). Il n'est alors plus remplacé au bout de 12 s. Toute
+ * autre erreur, ou un message non prévu : non. */
+export function isPlayerAnswer(message: HostMessage): boolean {
+  if (message.kind === "error") return tiktokErrorAction(message.code) === "tap_to_play";
+  return message.kind !== "other";
+}
+
 /** Moment de la vidéo envoyé avec un spot : secondes entières, arrondies vers le bas ; null s'il n'est pas connu. */
 export function momentSeconds(currentTime: number | null): number | null {
   return currentTime !== null && Number.isFinite(currentTime) && currentTime >= 0 ? Math.floor(currentTime) : null;
+}
+
+// ---- Image noire ou blanche (retours du build 2) ----
+// Un CONTRÔLE de l'instantané de « Spotter ce moment », pas une autre méthode
+// de capture : une image vide est refusée (snapshot_failed) au lieu d'être
+// envoyée. Repris tel quel du contrôle retiré au commit 93ba4d1 (il a déjà
+// tourné dans l'app), sur une petite copie de 96 px lue dans l'app.
+
+export interface FrameRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/** Zone examinée (fractions de l'image) : presque toute l'image, sans le
+ * bord droit (colonne de boutons de TikTok) ni le haut et le bas (en-tête de
+ * l'auteur, commandes). */
+export const BLANK_ZONE: FrameRect = { left: 0.06, top: 0.15, right: 0.8, bottom: 0.85 };
+/** Retiré de la zone : le bouton lecture central, dessiné en pause. */
+export const BLANK_HOLE: FrameRect = { left: 0.4, top: 0.42, right: 0.6, bottom: 0.58 };
+
+/** Seules les deux signatures d'échec connues : image noire (99ᵉ centile
+ * ≤ 24/255) et rectangle blanc (1ᵉʳ centile ≥ 245, WebKit 161450). Un mur uni
+ * ou un fond de studio sombre avec une personne restent des images. */
+export const BLANK_LIMITS = { blackP99Max: 24, whiteP1Min: 245 } as const;
+
+const inside = (x: number, y: number, rect: FrameRect) => x >= rect.left && x < rect.right && y >= rect.top && y < rect.bottom;
+
+export function isBlankFrame(sample: FrameSample): boolean {
+  if (sample.width < 3 || sample.height < 3) return true;
+  const histogram = new Array<number>(256).fill(0);
+  let count = 0;
+  for (let y = 0; y < sample.height; y += 1) {
+    const fy = (y + 0.5) / sample.height;
+    for (let x = 0; x < sample.width; x += 1) {
+      const fx = (x + 0.5) / sample.width;
+      if (!inside(fx, fy, BLANK_ZONE) || inside(fx, fy, BLANK_HOLE)) continue;
+      histogram[sample.gray[y * sample.width + x] ?? 0]! += 1;
+      count += 1;
+    }
+  }
+  if (count === 0) return true;
+  const percentile = (fraction: number) => {
+    const target = Math.max(1, Math.ceil(fraction * count));
+    let seen = 0;
+    for (let value = 0; value < 256; value += 1) {
+      seen += histogram[value]!;
+      if (seen >= target) return value;
+    }
+    return 255;
+  };
+  return percentile(0.99) <= BLANK_LIMITS.blackP99Max || percentile(0.01) >= BLANK_LIMITS.whiteP1Min;
 }
 
 // ---- Commandes au lecteur TikTok (relayées par la page hôte) ----

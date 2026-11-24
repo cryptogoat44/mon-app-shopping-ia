@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decidePlayer, playerOffered, playerPossible, type PlayerDecisionInput } from "../src/lib/player-decision";
+import { afterPlayerFailure, decidePlayer, openingPath, playerOffered, playerPossible, type PlayerDecisionInput } from "../src/lib/player-decision";
 
 // Mission « liens vidéo » : lecteur officiel ou écran de secours ? Option du
 // build × interrupteur du serveur × module de l'instantané × accord ×
@@ -102,5 +102,38 @@ describe("lecteur possible dans ce build (sans le serveur ni l'accord)", () => {
     expect(playerPossible("ios", { tiktokPlayer: true, instagramPlayer: false }, "instagram")).toBe(false);
     expect(playerPossible("ios", { tiktokPlayer: false, instagramPlayer: false })).toBe(false);
     expect(playerPossible("web", { tiktokPlayer: true, instagramPlayer: true })).toBe(false);
+  });
+});
+
+describe("la vidéo d'abord (retours du build 2) : premier écran d'un lien reconnu", () => {
+  it("permis : app iPhone, lecteur possible, analyse allumée → l'accord puis le lecteur", () => {
+    expect(openingPath({ os: "ios", offered: true, analysis: true })).toBe("decide");
+    expect(openingPath({ os: "ios", offered: true, analysis: false })).toBe("decide");
+  });
+
+  it("refusé : jamais le lecteur d'abord sur le site, même si on prétend qu'il est proposé", () => {
+    expect(openingPath({ os: "web", offered: true, analysis: true })).toBe("auto");
+    expect(openingPath({ os: "web", offered: false, analysis: false })).toBe("decide");
+  });
+
+  it("lecteur impossible (coupé par le build ou le serveur) : comme avant, l'analyse si elle est allumée", () => {
+    expect(openingPath({ os: "ios", offered: false, analysis: true })).toBe("auto");
+    expect(openingPath({ os: "ios", offered: false, analysis: false })).toBe("decide");
+  });
+
+  it("interrupteur du serveur coupé (TIKTOK_PLAYER_ENABLED=false) : la recherche automatique revient, sans nouveau build", () => {
+    const offered = playerOffered({ platform: "tiktok", os: "ios", build: { tiktokPlayer: true, instagramPlayer: true }, server: { tiktok: false, instagram: true }, snapshotReady: true });
+    expect(openingPath({ os: "ios", offered, analysis: true })).toBe("auto");
+  });
+});
+
+describe("après un lecteur en échec ou refusé (retours du build 2)", () => {
+  it("permis : app, analyse allumée → la recherche automatique", () => {
+    expect(afterPlayerFailure({ os: "ios", analysis: true })).toBe("ai");
+  });
+
+  it("refusé : analyse coupée, ou site → l'écran de secours, comme avant", () => {
+    expect(afterPlayerFailure({ os: "ios", analysis: false })).toBe("screenshot");
+    expect(afterPlayerFailure({ os: "web", analysis: true })).toBe("screenshot");
   });
 });

@@ -7,8 +7,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // illisible effacé, image à ne pas garder effacée quand on quitte « Entourez
 // la pièce », lien en attente oublié à la déconnexion, et l'étiquette qui dit
 // que les pièces trouvées seront ajoutées, sans le nom de la personne, à la
-// vidéo. Doubles : fichiers, module natif, taille d'image.
-const { disk, native, getSize, discardLocalFile } = vi.hoisted(() => {
+// vidéo. Doubles : fichiers, module natif, taille d'image, petite copie du
+// contrôle « image noire » (retours du build 2 : une vraie image, ici).
+const { disk, native, getSize, discardLocalFile, smallCopy } = vi.hoisted(() => {
   const CACHE = "file:///var/mobile/Containers/Data/Application/ABC/Library/Caches/";
   const disk = { CACHE, files: new Set<string>(), deleted: [] as string[] };
   const join = (parts: (string | { uri: string })[]) => parts.map((part) => (typeof part === "string" ? part : part.uri)).reduce((base, part) => `${base.replace(/\/?$/, "/")}${part}`);
@@ -39,6 +40,7 @@ const { disk, native, getSize, discardLocalFile } = vi.hoisted(() => {
     native: { snapshot: vi.fn(async (_tag: number) => `${CACHE}lecteur-instantane/lecteur-instantane-1.jpg`) },
     getSize: vi.fn((_uri: string, ok: (width: number, height: number) => void, _fail: (error: Error) => void) => ok(1600, 900)),
     discardLocalFile: vi.fn(),
+    smallCopy: { uri: `${CACHE}ImageManipulator/controle.png`, base64: "" },
   };
 });
 
@@ -46,11 +48,19 @@ vi.mock("react-native", () => ({ Platform: { OS: "ios" }, Image: { getSize } }))
 vi.mock("expo", () => ({ requireOptionalNativeModule: () => native }));
 vi.mock("expo-file-system", () => ({ File: disk.File, Directory: disk.Directory, Paths: { cache: new disk.Directory(disk.CACHE) } }));
 vi.mock("../src/lib/video-frames", () => ({ discardLocalFile }));
+vi.mock("expo-image-manipulator", () => ({
+  SaveFormat: { PNG: "png" },
+  ImageManipulator: { manipulate: () => ({ resize: () => {}, renderAsync: async () => ({ saveAsync: async () => ({ ...smallCopy }) }) }) },
+}));
 
 import { PLAYER_SNAPSHOT_FOLDER, clearPlayerSnapshots } from "../src/lib/player-snapshot-files";
 import { snapshotPlayer } from "../src/lib/player-snapshot";
 import { fr } from "../src/i18n/fr";
 import { en } from "../src/i18n/en";
+import { grayPngBase64 } from "./fake-png";
+
+// Une vraie image (damier), que le contrôle « image noire » laisse passer.
+smallCopy.base64 = grayPngBase64(96, 171, (x, y) => (((x >> 2) + (y >> 2)) % 2 ? 200 : 60));
 
 const MOBILE = join(__dirname, "..");
 const read = (path: string) => readFileSync(join(MOBILE, path), "utf8");
@@ -85,9 +95,29 @@ describe("lecteur-01 / reception-03 : instantanés du lecteur", () => {
     getSize.mockImplementationOnce((_uri, _ok, fail) => fail(new Error("illisible")));
     await expect(snapshotPlayer(7)).rejects.toThrow("illisible");
     expect(discardLocalFile).toHaveBeenCalledWith(`${disk.CACHE}lecteur-instantane/lecteur-instantane-1.jpg`);
-    // Taille lue : rien n'est effacé, l'adresse est rendue.
+    // Taille lue, image non vide : l'instantané n'est pas effacé (seule la petite copie du contrôle l'est), l'adresse est rendue.
     await expect(snapshotPlayer(7)).resolves.toEqual({ uri: `${disk.CACHE}lecteur-instantane/lecteur-instantane-1.jpg`, width: 1600, height: 900 });
-    expect(discardLocalFile).toHaveBeenCalledTimes(1);
+    expect(discardLocalFile.mock.calls.map(([uri]) => uri)).toEqual([`${disk.CACHE}lecteur-instantane/lecteur-instantane-1.jpg`, smallCopy.uri]);
+  });
+
+  it("retours du build 2 : image noire, blanche ou illisible refusée (« blank_frame ») et effacée ; l'écran y voit snapshot_failed", async () => {
+    const snapshot = `${disk.CACHE}lecteur-instantane/lecteur-instantane-1.jpg`;
+    const real = smallCopy.base64;
+    try {
+      smallCopy.base64 = grayPngBase64(96, 171, (x, y) => (x + y) % 20);
+      await expect(snapshotPlayer(7)).rejects.toThrow("blank_frame");
+      expect(discardLocalFile).toHaveBeenCalledWith(snapshot);
+      discardLocalFile.mockClear();
+      smallCopy.base64 = "";
+      await expect(snapshotPlayer(7)).rejects.toThrow("blank_frame");
+      expect(discardLocalFile).toHaveBeenCalledWith(snapshot);
+    } finally {
+      smallCopy.base64 = real;
+    }
+    // Permis : une vraie image passe.
+    await expect(snapshotPlayer(7)).resolves.toMatchObject({ uri: snapshot });
+    // Toute erreur de l'instantané mène au même chemin (lecteur.tsx).
+    expect(code("src/app/(app)/spot/lecteur.tsx")).toMatch(/shot = await snapshotPlayer\(tag\);\s*\} catch \{\s*return fallback\("snapshot_failed"\);/);
   });
 
   it("« Entourez la pièce » quitté : le brouillon dont l'image n'est pas à garder est abandonné (effet de démontage)", () => {
