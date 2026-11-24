@@ -85,7 +85,7 @@ describe("champ du lien toujours visible sur l'accueil (point 6)", () => {
   it("plus de question à déplier ; ordre : messages, champ du lien, tuiles, dernière vidéo, « Récemment spottées »", () => {
     expect(home).not.toContain("linkQuestion");
     expect(home).not.toContain("function LinkHelp");
-    const order = ["<ScreenshotHelp", "<LinkEntry onHelp={entries.showLinkHelp} />", "<EntryTiles", "<LatestVideoCard", "<LatestVideoQuestion", "<RecentRow recent={recent} />"].map((part) => home.indexOf(part));
+    const order = ["<ScreenshotHelp", "<LinkEntry onHelp={entries.showLinkHelp} />", "<EntryTiles", "<LatestVideoCard", "<LatestVideoQuestion", "<HistoryHeader history={history} />"].map((part) => home.indexOf(part));
     for (const position of order) expect(position).toBeGreaterThan(-1);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(fr.player).not.toHaveProperty("linkQuestion");

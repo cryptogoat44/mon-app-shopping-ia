@@ -125,6 +125,7 @@ import { linkAnalysisStatus, linkModeOf, parseLinkAnalysis, type LinkAnalysis, t
 import { waitNow, waitSince } from "./wait-clock";
 import { serverRequestStarted } from "./server-first-response";
 import { wasTimedOut } from "./app-timeout";
+import { recentSearchesPath } from "./recent-searches";
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
 
@@ -375,9 +376,9 @@ export async function fetchSearch(searchId: string, signal?: AbortSignal): Promi
   return response.json();
 }
 
-export async function listRecentSearches(limit?: number): Promise<ProductSearch[]> {
-  const query = limit ? `?limit=${limit}` : "";
-  const response = await authorizedFetch(`/api/searches${query}`);
+/** `before` et `q` (lot « historique ») : facultatifs, voir lib/recent-searches.ts. */
+export async function listRecentSearches(limit?: number, options: { before?: string | null; q?: string | null } = {}): Promise<ProductSearch[]> {
+  const response = await authorizedFetch(recentSearchesPath({ limit, ...options }));
   return response.json();
 }
 

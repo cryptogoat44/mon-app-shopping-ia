@@ -1,9 +1,8 @@
-import { Pressable, Text, View } from "react-native";
-import { useRouter } from "expo-router";
-import { color, font, radius, space } from "@/theme/tokens";
+import { Pressable, Text, TextInput, View } from "react-native";
+import { color, font, radius, size, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import type { Piece } from "@/api/types";
-import { ClockIcon } from "@/components/icons";
+import { ClockIcon, SearchIcon } from "@/components/icons";
 import { SpotImage } from "@/components/spot-image";
 import { recentDayLabel } from "@/lib/recent-searches";
 import { themedStyles } from "@/theme/themed-styles";
@@ -15,19 +14,7 @@ export interface RecentSearch {
   piece: Piece;
 }
 
-/** « Tout voir » à côté de « Récemment spottées » (lot « Retrouver ses
- * pièces ») : la liste complète, avec les jours. Sur le site, la rangée de
- * l'accueil ne défile pas à la souris (barre de défilement cachée). */
-export function SeeAllRecentLink() {
-  const router = useRouter();
-  return (
-    <Pressable onPress={() => router.push("/recentes")} hitSlop={12} accessibilityRole="link" accessibilityLabel={t.retrouverPieces.seeAllLabel}>
-      <Text style={styles.seeAll}>{t.retrouverPieces.seeAll}</Text>
-    </Pressable>
-  );
-}
-
-/** Une ligne de « Tout voir » : vignette, nom, jour et boutique. */
+/** Une ligne de « Récemment spottées » (accueil de Spotter) : vignette, nom, jour et boutique. */
 export function RecentSearchRow({ entry, onOpen }: { entry: RecentSearch; onOpen: () => void }) {
   const { piece } = entry;
   const meta = [recentDayLabel(entry.createdAt, getActiveLocale()), piece.merchantName].filter(Boolean).join(" · ");
@@ -54,12 +41,52 @@ export function RecentSearchRow({ entry, onOpen }: { entry: RecentSearch; onOpen
   );
 }
 
+/** Recherche dans l'historique (lot « historique ») : sous le titre de la
+ * section, caché tant que l'historique est vide. Les mots partent au serveur
+ * pour filtrer vos propres recherches ; ils ne sont gardés nulle part. */
+export function HistorySearchField({ value, onChangeText, onClear }: { value: string; onChangeText: (value: string) => void; onClear: () => void }) {
+  return (
+    <View style={styles.searchBar}>
+      <SearchIcon size={18} tint={color.acier} strokeWidth={1.6} />
+      <TextInput
+        style={styles.searchInput}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={t.retrouverPieces.historySearchPlaceholder}
+        placeholderTextColor={color.acier}
+        accessibilityLabel={t.retrouverPieces.historySearchLabel}
+        autoCapitalize="none"
+        autoCorrect={false}
+        returnKeyType="search"
+        maxLength={60}
+        testID="recherche-historique"
+      />
+      {value.length > 0 ? (
+        <Pressable onPress={onClear} style={styles.clearButton} accessibilityRole="button" accessibilityLabel={t.retrouverPieces.historySearchClear}>
+          <Text style={styles.clearLabel}>×</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 const styles = themedStyles(() => ({
-  seeAll: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   row: { flexDirection: "row", alignItems: "center", gap: space.md, minHeight: 72, paddingVertical: space.sm, borderBottomWidth: 1, borderBottomColor: color.filet },
   thumb: { width: 64, height: 64, backgroundColor: color.plinthe, borderRadius: radius.sm, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   fill: { width: "100%", height: "100%" },
   text: { flex: 1, gap: 2 },
   name: { fontSize: font.secondary, color: color.encre, lineHeight: 20 },
   meta: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.sm,
+    minHeight: size.touchTarget,
+    backgroundColor: color.plinthe,
+    borderRadius: radius.full,
+    paddingLeft: space.md,
+  },
+  searchInput: { flex: 1, fontSize: font.secondary, color: color.encre, paddingVertical: 10 },
+  clearButton: { minWidth: size.touchTarget, minHeight: size.touchTarget, alignItems: "center", justifyContent: "center" },
+  clearLabel: { fontSize: 22, color: color.acier, lineHeight: 24 },
 }));
