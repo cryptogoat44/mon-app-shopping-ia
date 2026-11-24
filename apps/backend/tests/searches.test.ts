@@ -147,3 +147,56 @@ describe("recherches récentes : meilleur rang existant", () => {
     expect(entry!.matches[0]!.productName).toBe("Meilleur");
   });
 });
+
+// Retours du build 2, lot « historique » : `before` et `q` sur la vraie base
+// (PostgREST : filtres ilike et dates avec fuseau). Les mêmes règles, cas par
+// cas, sans base : historiqueRecherches.test.ts.
+describe("historique : `before` et `q` sur la vraie base", () => {
+  let app: FastifyInstance;
+  let owner: TestUser;
+  let other: TestUser;
+
+  beforeAll(async () => {
+    app = await buildTestApp();
+    owner = await createTestUser(app, "shist");
+    other = await createTestUser(app, "shist2");
+  });
+
+  afterAll(async () => {
+    await deleteTestUser(app, owner.id);
+    await deleteTestUser(app, other.id);
+    await app.close();
+  });
+
+  async function searchWith(userId: string, createdAt: string, names: string[]): Promise<string> {
+    const { data: search } = await app.supabaseAdmin
+      .from("product_searches")
+      .insert({ user_id: userId, source_url: null, source_platform: "photo", method: "manual_screenshot", status: "completed", created_at: createdAt })
+      .select("id")
+      .single();
+    await app.supabaseAdmin.from("product_matches").insert(
+      names.map((name, index) => ({ search_id: search!.id, rank: index + 1, product_name: name, image_url: `https://example.com/${index}.jpg`, merchant_url: `https://example.com/p/${index}` }))
+    );
+    return search!.id as string;
+  }
+
+  it("permis : la suite plus ancienne que `before`, et la proposition qui correspond à `q` ; refusé : la recherche d'un autre membre, un joker tapé", async () => {
+    const older = await searchWith(owner.id, "2026-11-20T10:00:00.000001+00:00", ["Pull bleu", "Veste en daim (100%), marron"]);
+    const newer = await searchWith(owner.id, "2026-11-21T10:00:00.000002+00:00", ["Sac noir", "Ceinture"]);
+    await searchWith(other.id, "2026-11-21T11:00:00Z", ["Veste en daim de quelqu'un d'autre"]);
+    const get = (params: Record<string, string>) =>
+      app.inject({ method: "GET", url: `/api/searches?${new URLSearchParams(params).toString()}`, headers: authHeaders(owner.token) });
+
+    const first = (await get({ limit: "20" })).json() as { id: string; createdAt: string }[];
+    expect(first.map((search) => search.id)).toEqual([newer, older]);
+    const next = (await get({ limit: "20", before: first[0]!.createdAt })).json() as { id: string }[];
+    expect(next.map((search) => search.id)).toEqual([older]);
+    expect((await get({ limit: "20", before: first[1]!.createdAt })).json()).toEqual([]);
+
+    const found = (await get({ q: "daim (100%)", limit: "20" })).json() as { id: string; matches: { productName: string }[] }[];
+    expect(found.map((search) => search.id)).toEqual([older]);
+    expect(found[0]!.matches[0]!.productName).toBe("Veste en daim (100%), marron");
+    for (const q of ["%%", "**", "a,b(c)"]) expect((await get({ q, limit: "20" })).json(), q).toEqual([]);
+    expect((await get({ q: "a" })).statusCode).toBe(400);
+  });
+});

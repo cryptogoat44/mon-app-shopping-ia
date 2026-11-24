@@ -52,7 +52,9 @@ import { launchDating } from "../lib/launchDating.js";
 import { ANALYSIS_BUCKET, analysisImagePath, legacyAnalysisImagePath, purgeStaleAnalysisImages } from "../lib/storage.js";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
 import { searchLocaleFor } from "../lib/locale.js";
-import { INVALID_ID, idParamsSchema, parseInput } from "../lib/validation.js";
+import { DatabaseReadError, INVALID_ID, idParamsSchema, parseInput } from "../lib/validation.js";
+import { IncompleteReadError } from "../lib/pagedReads.js";
+import { readHistory, recentSearchesQuerySchema, type HistoryEntry } from "../lib/searchHistory.js";
 import { ImageSourceError, prepareImageForAnalysis } from "../lib/imageProcessing.js";
 import {
   releaseReservation,
@@ -1247,15 +1249,14 @@ async function markInterrupted(fastify: FastifyInstance, row: SearchRow): Promis
 const RECENT_SEARCHES_DEFAULT_LIMIT = 6;
 const RECENT_SEARCHES_MAX_LIMIT = 20;
 
-const recentSearchesQuerySchema = z.object({
-  limit: z.coerce.number().int().positive().optional(),
-});
-
 export default async function searchesRoutes(fastify: FastifyInstance) {
   // Alimente "Récemment spottées" (Spotter et le sélecteur de pièces de
   // Publier) : les recherches réussies les plus récentes, avec seulement
   // leur meilleur résultat (plus petit rang) — le mobile n'affiche qu'une vignette
   // par recherche, pas la liste complète des correspondances.
+  // Lot « historique » : `before` (la suite) et `q` (une recherche dans
+  // l'historique), facultatifs, passent par lib/searchHistory.ts ; sans eux,
+  // l'ancien chemin ci-dessous, inchangé (apps déjà installées).
   fastify.get("/api/searches", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const userId = request.user!.id;
     const query = parseInput(recentSearchesQuerySchema, request.query, reply, {
@@ -1264,6 +1265,23 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
     });
     if (!query) return;
     const limit = Math.min(query.limit ?? RECENT_SEARCHES_DEFAULT_LIMIT, RECENT_SEARCHES_MAX_LIMIT);
+
+    if (query.before !== undefined || query.q !== undefined) {
+      let entries: HistoryEntry[];
+      try {
+        entries = await readHistory(fastify, userId, { limit, before: query.before, q: query.q });
+      } catch (error) {
+        // Jamais les mots tapés dans le journal : seulement la nature de la panne.
+        if (!(error instanceof DatabaseReadError) && !(error instanceof IncompleteReadError)) throw error;
+        request.log.error("Échec de lecture de la suite de l'historique des recherches");
+        return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+      }
+      const shownIds = entries.map((entry) => entry.match.id);
+      const affiliateUrls = await fetchAffiliateUrls(fastify, shownIds);
+      const feedback = await fetchFeedbackReasons(fastify, userId, shownIds);
+      const textOn = await voieCActive(fastify);
+      return reply.send(entries.map((entry) => toProductSearch(entry.row, [entry.match], affiliateUrls, feedback, textOn)));
+    }
 
     const { data: searches, error } = await fastify.supabaseAdmin
       .from("product_searches")
