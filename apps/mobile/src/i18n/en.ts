@@ -1466,6 +1466,8 @@ export const en: Catalog = {
     moderationOther: "A moderation decision concerns you.",
     moderationReason: (reason: string) => `Reason: ${reason}`,
     moderationNote: (note: string) => `Details: ${note}`,
+    moderationHiddenCollectionFriendsSeeWishes:
+      "One of your collections was hidden by moderation: your friends no longer see its name; its wishes stay visible (setting “Show my Wishlist to my friends”).",
   },
   searchLimits: {
     pausedTitle: (until: string) => `Spotter is taking a break ${until}.`,

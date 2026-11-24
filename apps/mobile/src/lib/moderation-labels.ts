@@ -108,7 +108,7 @@ export function profileRemovalActions(item: Pick<ModerationItem, "preview"> & Pa
   ];
 }
 
-function noticeSentence({ action, targetType }: ModerationNotice): string {
+function noticeSentence({ action, targetType }: ModerationNotice, showsWishesToFriends = false): string {
   const comment = targetType === "comment";
   // Lot « conformité Apple » (migration 0037) : la bio ou la photo du profil.
   if (action === "remove_bio") return t.notifications.moderationBioRemoved;
@@ -120,8 +120,11 @@ function noticeSentence({ action, targetType }: ModerationNotice): string {
     return targetType === "piece" ? t.notifications.moderationImageRemovedPiece : t.notifications.moderationImageRemovedPost;
   }
   // Lot modération des collections : une collection montrée aux amis.
+  // Étagères des amis : « Montrer mes Envies à mes amis » allumé, ses envies
+  // restent visibles des amis ; seul son nom ne l'est plus.
   if (targetType === "collection" && (action === "hide" || action === "restore")) {
-    return action === "hide" ? t.notifications.moderationHiddenCollection : t.notifications.moderationRestoredCollection;
+    if (action === "restore") return t.notifications.moderationRestoredCollection;
+    return showsWishesToFriends ? t.notifications.moderationHiddenCollectionFriendsSeeWishes : t.notifications.moderationHiddenCollection;
   }
   // Lot 5 : une pièce envoyée à une personne.
   if (targetType === "piece" && (action === "hide" || action === "restore")) {
@@ -147,19 +150,19 @@ function noticeSentence({ action, targetType }: ModerationNotice): string {
 
 /** Ce que lit la personne concernée : la décision, son motif et la précision
  * éventuelle — jamais qui l'a prise. */
-export function moderationNoticeLines(notice: ModerationNotice | null): string[] {
+export function moderationNoticeLines(notice: ModerationNotice | null, showsWishesToFriends = false): string[] {
   if (!notice) return [t.notifications.moderationOther];
-  const lines = [noticeSentence(notice)];
+  const lines = [noticeSentence(notice, showsWishesToFriends)];
   if (notice.reason) lines.push(t.notifications.moderationReason(moderationReasonLabel(notice.reason)));
   if (notice.note) lines.push(t.notifications.moderationNote(t.common.quoted(notice.note)));
   return lines;
 }
 
 /** Notification sans auteur (modération, signalement traité) : ses lignes de texte ; null pour les autres. */
-export function systemNotificationLines(notification: AppNotification): string[] | null {
+export function systemNotificationLines(notification: AppNotification, showsWishesToFriends = false): string[] | null {
   if (notification.type === "report_handled") {
     return [notification.reportedType ? t.notifications.reportHandledAbout[notification.reportedType] : t.notifications.reportHandled];
   }
-  if (notification.type === "moderation") return moderationNoticeLines(notification.moderation);
+  if (notification.type === "moderation") return moderationNoticeLines(notification.moderation, showsWishesToFriends);
   return null;
 }

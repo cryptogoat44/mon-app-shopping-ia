@@ -19,6 +19,7 @@ import {
   wishShareHint,
 } from "../src/lib/friend-shelves";
 import { collectionState, visibilityState } from "../src/lib/collections";
+import { moderationNoticeLines, systemNotificationLines } from "../src/lib/moderation-labels";
 
 // Étagères des amis (lot « étagères des amis », migration 0058) : la logique
 // des écrans sans rendu (réglages cachés sans le serveur, onglets seulement
@@ -217,6 +218,28 @@ describe("les phrases « privé » : exactes dans les deux cas", () => {
       "Hidden by moderation: your friends no longer see its name; its wishes stay visible (setting “Show my Wishlist to my friends”).",
     );
     expect(collectionState({ visibility: "friends", hidden: true }, false)).toBe(en.collections.hiddenState);
+  });
+
+  it("notification de collection masquée : « vos amis ne la voient plus » seulement si les Envies ne sont pas montrées", () => {
+    const hide = { action: "hide" as const, targetType: "collection" as const, reason: null, note: null };
+    const notification = { id: "n1", type: "moderation" as const, actor: null, createdAt: "2026-11-24T10:00:00.000Z", read: false, postId: null, moderation: hide, reportedType: null };
+    // Éteint (ou non dit) : la phrase d'avant.
+    expect(moderationNoticeLines(hide)).toEqual(["Une de vos collections a été masquée par la modération : vos amis ne la voient plus."]);
+    expect(systemNotificationLines(notification, false)).toEqual([fr.notifications.moderationHiddenCollection]);
+    // Allumé : refusé « ne la voient plus » ; ses envies restent visibles.
+    expect(systemNotificationLines(notification, true)).not.toEqual([fr.notifications.moderationHiddenCollection]);
+    expect(systemNotificationLines(notification, true)).toEqual([
+      "Une de vos collections a été masquée par la modération : vos amis ne voient plus son nom ; ses envies restent visibles (réglage « Montrer mes Envies à mes amis »).",
+    ]);
+    // Le rétablissement ne change pas.
+    expect(moderationNoticeLines({ ...hide, action: "restore" }, true)).toEqual([fr.notifications.moderationRestoredCollection]);
+    setActiveLocale("en");
+    expect(systemNotificationLines(notification, true)).toEqual([
+      "One of your collections was hidden by moderation: your friends no longer see its name; its wishes stay visible (setting “Show my Wishlist to my friends”).",
+    ]);
+    expect(systemNotificationLines(notification, false)).toEqual(["One of your collections was hidden by moderation: your friends can no longer see it."]);
+    // L'onglet Activité passe le réglage.
+    expect(source("app/(app)/(tabs)/activite.tsx")).toContain("systemNotificationLines(notification, showsWishes(profile))");
   });
 
   it("chaque écran passe par ces phrases", () => {

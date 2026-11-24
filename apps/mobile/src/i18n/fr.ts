@@ -1603,6 +1603,9 @@ export const fr = {
     moderationOther: "Une décision de la modération vous concerne.",
     moderationReason: (reason: string) => `Motif : ${reason}`,
     moderationNote: (note: string) => `Précision : ${note}`,
+    // Étagères des amis : collection masquée alors que « Montrer mes Envies à mes amis » est allumé.
+    moderationHiddenCollectionFriendsSeeWishes:
+      "Une de vos collections a été masquée par la modération : vos amis ne voient plus son nom ; ses envies restent visibles (réglage « Montrer mes Envies à mes amis »).",
   },
   // Lot limites annoncées (2026-11-03) : les limites dites AVANT l'effort
   // (accueil du Spotter, écran de cadrage), et le chiffre et l'heure de
