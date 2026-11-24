@@ -59,12 +59,13 @@ describe("guide de la première recherche", () => {
     expect([nextGuideStep(0), nextGuideStep(1), nextGuideStep(2)]).toEqual([1, 2, null]);
     expect(fr.firstRunGuide.start).toBe("Lancer ma première recherche");
     const screen = code("app/(app)/(tabs)/index.tsx");
-    expect(screen).toContain("const guide = useFirstRunGuide(recentLoaded ? recent.length === 0 : null);");
+    // Lot « historique » : l'historique entier vient de useSearchHistory (`empty` : vide une fois lu).
+    expect(screen).toContain("const guide = useFirstRunGuide(recentLoaded ? history.empty : null);");
     const shown = screen.slice(screen.indexOf('guide.state === "shown" ? ('), screen.indexOf("<SearchLimitsNotice"));
     expect(shown).toContain("onClose={guide.close}");
     expect(shown).toContain("entries.addPhoto();");
     // Jamais deux cartes de bienvenue : « Comment ça marche » et l'astuce attendent le guide.
-    expect(screen).toContain('recentLoaded && recent.length === 0 && guide.state !== "shown" ? <HowItWorksCard /> : null');
+    expect(screen).toContain('recentLoaded && history.empty && guide.state !== "shown" ? <HowItWorksCard /> : null');
     expect(screen).toContain('guide.state === "hidden" ? <VisualSearchTip /> : null');
   });
 

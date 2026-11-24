@@ -828,15 +828,20 @@ export const fr = {
   // Lot « Retrouver ses pièces » : toutes les recherches récentes (« Tout
   // voir ») et « Je l'ai achetée » depuis la fiche d'une envie.
   retrouverPieces: {
-    seeAll: "Tout voir",
-    seeAllLabel: "Voir toutes vos pièces récemment spottées",
     recentLead: "Rouvrir un résultat ne compte pas dans vos recherches du jour.",
-    recentEmpty: "Aucune recherche réussie pour l'instant. Les pièces que vous retrouvez avec Spotter s'afficheront ici.",
     recentLoadError: "Impossible d'afficher vos recherches récentes. Vérifiez votre connexion, puis réessayez.",
-    recentLimitNote: (n: number) => `Seules vos ${n} dernières recherches réussies s'affichent ici. Pour retrouver une pièce plus tard, gardez-la dans vos Envies.`,
     today: "Aujourd'hui",
     yesterday: "Hier",
     alreadyInVault: "Déjà dans votre Vault",
+    historySearchPlaceholder: "Une pièce, une marque, une boutique",
+    historySearchLabel: "Rechercher dans vos recherches passées",
+    historySearchClear: "Effacer la recherche",
+    historyNoMatch: (q: string) => `Aucune recherche ne correspond à « ${q} ».`,
+    historyEnd: "Fin de votre historique.",
+    historyMoreFailed: "La suite de votre historique n'a pas pu être chargée.",
+    historyLoading: "Chargement de votre historique",
+    historyUnavailable: "La recherche dans votre historique n'est pas encore disponible. Réessayez un peu plus tard.",
+    historyResultsShown: "Résultats de votre recherche affichés.",
   },
   // Lot 5 : envoyer une envie à une personne sur Spotto.
   sendPiece: {
