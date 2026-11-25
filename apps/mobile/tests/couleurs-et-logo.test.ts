@@ -23,23 +23,36 @@ function interrupteurs(code: string): string[] {
   return [...code.matchAll(/<Switch\b[\s\S]*?\/>/g)].map((match) => match[0]);
 }
 
+/** La règle : l'interrupteur a une valeur, prend couleursInterrupteur(cette valeur), et aucune piste ni curseur écrits à la main. */
+function interrupteurConforme(bloc: string): boolean {
+  // Sans accolade dans la valeur : sinon, sur une seule ligne, la capture avalerait la suite du bloc.
+  const valeur = bloc.match(/\bvalue=\{([^{}\n]*)\}/)?.[1];
+  return !!valeur && bloc.includes(`{...couleursInterrupteur(${valeur})}`) && !/trackColor|thumbColor/.test(bloc);
+}
+
 describe("interrupteurs : couleurs communes (theme/accent.ts)", () => {
   it("chaque interrupteur de l'app prend couleursInterrupteur(sa valeur), jamais une piste écrite à la main", () => {
     const tous = sources.flatMap(({ fichier, code }) => interrupteurs(code).map((bloc) => ({ fichier, bloc })));
     expect(tous.length).toBeGreaterThanOrEqual(11);
     for (const { fichier, bloc } of tous) {
-      const valeur = bloc.match(/\bvalue=\{(.*)\}/)?.[1];
-      expect(valeur, fichier).toBeTruthy();
-      expect(bloc, fichier).toContain(`{...couleursInterrupteur(${valeur})}`);
-      expect(bloc, fichier).not.toMatch(/trackColor|thumbColor/);
+      expect(interrupteurConforme(bloc), `${fichier} : ${bloc}`).toBe(true);
     }
   });
 
   it("le garde-fou refuse une piste écrite à la main (le curseur blanc d'iOS se perdrait sur l'ivoire)", () => {
     const [bloc] = interrupteurs(`<Switch value={on} trackColor={{ true: color.vert, false: color.filet }} />`);
     expect(bloc).toBeDefined();
-    expect(bloc).not.toContain("couleursInterrupteur(");
-    expect(bloc).toMatch(/trackColor/);
+    expect(interrupteurConforme(bloc!)).toBe(false);
+    // Même avec les couleurs communes, une piste ajoutée en plus est refusée.
+    expect(interrupteurConforme(`<Switch value={on} {...couleursInterrupteur(on)} thumbColor="#FFFFFF" />`)).toBe(false);
+    // Couleurs communes prises sur une autre valeur que celle de l'interrupteur : refusé.
+    expect(interrupteurConforme(`<Switch value={on} {...couleursInterrupteur(autre)} />`)).toBe(false);
+  });
+
+  it("le garde-fou permet un interrupteur qui prend couleursInterrupteur(sa valeur)", () => {
+    const [bloc] = interrupteurs(`<Switch value={on} {...couleursInterrupteur(on)} />`);
+    expect(bloc).toBeDefined();
+    expect(interrupteurConforme(bloc!)).toBe(true);
   });
 
   it("allumé : curseur `blanc` du thème ; éteint : blanc ; sur le site, le curseur allumé suit (activeThumbColor)", () => {
