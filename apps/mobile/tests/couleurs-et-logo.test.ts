@@ -197,13 +197,20 @@ describe("le « + » de la barre du bas : seule touche de couleur, aux couleurs 
 // commune de +html.tsx le décale sur le fond, à la couleur de texte du
 // navigateur pour le thème posé sur <html>.
 describe("site : anneau de focus visible sur les boutons pleins (app/+html.tsx)", () => {
-  /** La règle : un :focus-visible avec un trait plein d'au moins 2 px, en CanvasText (suit le thème choisi), décalé d'au moins 2 px. */
+  /**
+   * La règle : un :focus-visible avec un trait plein d'au moins 2 px, en CanvasText (suit le thème choisi), décalé d'au
+   * moins 2 px, et une bande en Canvas qui comble tout l'écart (box-shadow 0 0 0, au moins aussi large que le décalage) :
+   * l'anneau a deux tons, l'un des deux se voit sur le fond comme dans un conteneur plein (bulle de mes messages).
+   */
   function anneauVisible(css: string): boolean {
     const regle = css.match(/:focus-visible\{([^}]*)\}/)?.[1];
     if (!regle) return false;
     const trait = regle.match(/(?:^|;)outline:(\d+)px solid CanvasText(?:;|$)/);
     const decalage = regle.match(/(?:^|;)outline-offset:(\d+)px(?:;|$)/);
-    return !!trait && Number(trait[1]) >= 2 && !!decalage && Number(decalage[1]) >= 2;
+    const bande = regle.match(/(?:^|;)box-shadow:0 0 0 (\d+)px Canvas(?:;|$)/);
+    return (
+      !!trait && Number(trait[1]) >= 2 && !!decalage && Number(decalage[1]) >= 2 && !!bande && Number(bande[1]) >= Number(decalage[1])
+    );
   }
 
   const html = readFileSync(join(SRC, "app/+html.tsx"), "utf8");
@@ -216,12 +223,18 @@ describe("site : anneau de focus visible sur les boutons pleins (app/+html.tsx)"
     expect(readFileSync(join(SRC, "lib/preferences-context.tsx"), "utf8")).toContain("document.documentElement.style.colorScheme = scheme;");
   });
 
-  it("refusé : pas de règle, anneau collé au bouton, couleur fixe (invisible dans l'autre thème), trait d'1 px ; permis : la règle commune", () => {
+  it("refusé : pas de règle, anneau collé au bouton, couleur fixe (invisible dans l'autre thème), trait d'1 px, anneau d'un seul ton ; permis : la règle commune", () => {
+    const bande = ";box-shadow:0 0 0 2px Canvas";
     expect(anneauVisible("")).toBe(false);
-    expect(anneauVisible(":focus-visible{outline:2px solid CanvasText;outline-offset:0px}")).toBe(false);
-    expect(anneauVisible(":focus-visible{outline:2px solid #1D1D1F;outline-offset:2px}")).toBe(false);
-    expect(anneauVisible(":focus-visible{outline:1px solid CanvasText;outline-offset:2px}")).toBe(false);
-    expect(anneauVisible(":focus-visible{outline:2px solid CanvasText;outline-offset:2px}")).toBe(true);
+    expect(anneauVisible(`:focus-visible{outline:2px solid CanvasText;outline-offset:0px${bande}}`)).toBe(false);
+    expect(anneauVisible(`:focus-visible{outline:2px solid #1D1D1F;outline-offset:2px${bande}}`)).toBe(false);
+    expect(anneauVisible(`:focus-visible{outline:1px solid CanvasText;outline-offset:2px${bande}}`)).toBe(false);
+    // Un seul ton (ce que le lot avait d'abord posé) : invisible sur la bulle de mes messages.
+    expect(anneauVisible(":focus-visible{outline:2px solid CanvasText;outline-offset:2px}")).toBe(false);
+    // Bande trop étroite (laisse passer la bulle entre le trait et la carte), ou d'une couleur fixe.
+    expect(anneauVisible(":focus-visible{outline:2px solid CanvasText;outline-offset:2px;box-shadow:0 0 0 1px Canvas}")).toBe(false);
+    expect(anneauVisible(":focus-visible{outline:2px solid CanvasText;outline-offset:2px;box-shadow:0 0 0 2px #FFFFFF}")).toBe(false);
+    expect(anneauVisible(`:focus-visible{outline:2px solid CanvasText;outline-offset:2px${bande}}`)).toBe(true);
   });
 
   it("CanvasText (noir en clair, blanc en sombre) se détache du fond et des cartes, au moins 3:1, dans les deux thèmes", () => {
@@ -238,5 +251,26 @@ describe("site : anneau de focus visible sur les boutons pleins (app/+html.tsx)"
     }
     // Refusé : l'anneau par défaut de Chrome sur le bouton ivoire (ce que le lot avait cassé).
     expect(contraste("#EEEEEE", darkPalette.vert)).toBeLessThan(3);
+  });
+
+  it("dans la bulle de mes messages (remplie à l'accent `vert`), la bande Canvas se détache, au moins 3:1, dans les deux thèmes", () => {
+    const luminance = (hex: string) => {
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+      return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+    };
+    const contraste = (a: string, b: string) => {
+      const [haut, bas] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return (haut! + 0.05) / (bas! + 0.05);
+    };
+    // Trait (CanvasText) et bande (Canvas) de Chrome : noir sur blanc en clair, blanc sur #121212 en sombre.
+    for (const [trait, bande, palette] of [["#000000", "#FFFFFF", lightPalette], ["#FFFFFF", "#121212", darkPalette]] as const) {
+      expect(contraste(bande, palette.vert), `bande ${bande} sur la bulle ${palette.vert}`).toBeGreaterThanOrEqual(3);
+      expect(contraste(trait, bande), `trait ${trait} sur la bande ${bande}`).toBeGreaterThanOrEqual(3);
+      // Refusé : le trait seul sur la bulle (l'anneau d'un seul ton du premier passage).
+      expect(contraste(trait, palette.vert), `trait ${trait} sur la bulle ${palette.vert}`).toBeLessThan(3);
+    }
+    // La bulle de mes messages est bien remplie à l'accent : c'est sur elle que tombe l'anneau d'une publication partagée.
+    const conversation = readFileSync(join(SRC, "app/(app)/conversation.tsx"), "utf8");
+    expect(conversation).toMatch(/bubbleMine:\s*\{[^}]*backgroundColor:\s*color\.vert/);
   });
 });
