@@ -9,8 +9,9 @@
 // « Noir et ivoire ». Plus aucune couleur d'accent dans l'app : l'accent
 // (jeton `vert`, nom gardé) est l'encre en clair et l'ivoire en sombre. Un
 // lien ne se distingue donc plus par sa couleur : il est souligné
-// (theme/lien.ts). Seule exception, le « + » de la barre du bas, aux couleurs
-// du logo (`vertAnglais` et `dorure`, identiques dans les deux thèmes).
+// (`lienSouligne`, theme/accent.ts). Seule exception, le « + » de la barre du
+// bas, aux couleurs du logo (`vertAnglais` et `dorure`, identiques dans les
+// deux thèmes).
 
 export interface Palette {
   porcelaine: string; // fond de toute l'app
