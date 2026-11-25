@@ -9,6 +9,7 @@ import { helpContactText } from "@/lib/help";
 import { splitPlaceholders } from "@/lib/legal";
 import { getActiveLocale, t } from "@/i18n";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { themedStyles } from "@/theme/themed-styles";
 
 // « Aide et contact » (chantier 3, point 6 de la feuille de route V1) :
@@ -106,6 +107,6 @@ const styles = themedStyles(() => ({
   questionTitle: { fontSize: font.secondary, fontWeight: "600", color: color.encre, marginBottom: space.xs },
   body: { fontSize: font.secondary, color: color.encre, lineHeight: 22, marginBottom: space.xs },
   placeholder: { fontWeight: "700", textDecorationLine: "underline" },
-  link: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  link: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   docLink: { paddingVertical: space.xs },
 }));

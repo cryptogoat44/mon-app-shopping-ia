@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { color, font, size, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { themedStyles } from "@/theme/themed-styles";
 import { getActiveLocale } from "@/i18n";
 import { tryonText } from "@/i18n/tryon.web";
@@ -331,7 +332,7 @@ const styles = themedStyles(() => ({
   },
   heading: { fontSize: font.secondary, fontWeight: "600", color: color.acier },
   close: { minHeight: size.touchTarget, minWidth: size.touchTarget, alignItems: "flex-end", justifyContent: "center" },
-  closeLabel: { fontSize: font.secondary, fontWeight: "600", color: color.vert },
+  closeLabel: { ...lienSouligne, fontSize: font.secondary, fontWeight: "600", color: color.vert },
   content: { padding: space.lg, paddingBottom: space.xxl, maxWidth: size.contentMaxWidth, alignSelf: "center", width: "100%" },
   piece: { fontSize: font.caption, color: color.acier, marginBottom: space.sm },
 }));

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Modal, Pressable, Text, TextInput, View } from "react-native";
 import { color, font, radius, size, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { searchFieldOpen, type WishlistSort } from "@/lib/wishlist-view";
 import { SearchIcon } from "@/components/icons";
@@ -213,5 +214,5 @@ const styles = themedStyles(() => ({
   empty: { alignItems: "center", paddingHorizontal: space.md, paddingTop: space.lg },
   emptyText: { fontSize: font.secondary, color: color.acier, textAlign: "center", lineHeight: 20 },
   emptyButton: { minHeight: size.touchTarget, justifyContent: "center", paddingHorizontal: space.md, marginTop: space.xs },
-  emptyButtonLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  emptyButtonLabel: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
 }));

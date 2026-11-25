@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import type { BlockedUser } from "@monapp/shared-types";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { ApiError, fetchBlockedUsers, unblockUser } from "@/lib/api";
 import { Skeleton } from "@/components/skeleton";
@@ -130,5 +131,5 @@ const styles = themedStyles(() => ({
   rowText: { flex: 1 },
   displayName: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
   username: { fontSize: font.caption, color: color.acier },
-  unblockLabel: { fontSize: font.caption, fontWeight: "600", color: color.vert },
+  unblockLabel: { ...lienSouligne, fontSize: font.caption, fontWeight: "600", color: color.vert },
 }));

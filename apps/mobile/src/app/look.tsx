@@ -26,6 +26,7 @@ import { OfferMarkNote } from "@/components/offer-mark";
 import { PUBLIC_WEB_URL } from "@/constants/brand";
 import { ConnectingNotice } from "@/components/connecting";
 import { color, font, radius, serifFont, serifLineHeight, size, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { themedStyles } from "@/theme/themed-styles";
 
 // La page look (lot « page look », migration 0057, décisions du fondateur du
@@ -274,11 +275,11 @@ const styles = themedStyles(() => ({
   small: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
   sectionTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, lineHeight: serifLineHeight.body, color: color.encre, marginBottom: space.sm },
   row: { borderTopWidth: 1, borderTopColor: color.filet, paddingVertical: space.sm, gap: 2 },
-  link: { fontSize: font.secondary, color: color.vert, fontWeight: "600", minHeight: 32 },
+  link: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600", minHeight: 32 },
   note: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginTop: space.lg },
   primary: { backgroundColor: color.encre, borderRadius: radius.sm, minHeight: 48, justifyContent: "center", alignItems: "center", paddingHorizontal: space.md, paddingVertical: space.sm, marginTop: space.sm },
   primaryLabel: { color: color.porcelaine, fontSize: font.body, fontWeight: "600", textAlign: "center" },
   footer: { marginTop: space.xl, gap: space.sm, borderTopWidth: 1, borderTopColor: color.filet, paddingTop: space.md },
   footerRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center" },
-  footerLink: { fontSize: font.caption, color: color.vert, fontWeight: "600" },
+  footerLink: { ...lienSouligne, fontSize: font.caption, color: color.vert, fontWeight: "600" },
 }));

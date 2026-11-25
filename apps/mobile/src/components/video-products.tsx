@@ -8,6 +8,7 @@ import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { VideoProduct } from "@monapp/shared-types";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { getActiveLocale, t } from "@/i18n";
 import { confirmVideoProduct } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
@@ -87,7 +88,7 @@ const styles = themedStyles(() => ({
   details: { fontSize: font.caption, color: color.acier, lineHeight: 17 },
   confirm: { minHeight: 44, alignItems: "center", justifyContent: "center" },
   confirmDone: { opacity: 0.7 },
-  confirmLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600", textDecorationLine: "underline" },
+  confirmLabel: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   confirmDoneLabel: { color: color.acier, textDecorationLine: "none" },
   error: { fontSize: font.caption, lineHeight: 18 },
   empty: { fontSize: font.caption, color: color.acier, lineHeight: 18, textAlign: "center", marginTop: space.lg, alignSelf: "stretch" },

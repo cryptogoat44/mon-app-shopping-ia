@@ -3,6 +3,7 @@ import { AccessibilityInfo, ActivityIndicator, FlatList, Platform, Pressable, Re
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { color, font, serifDisplayLetterSpacing, serifFont, serifLineHeight, size, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { clearLastSpotResult } from "@/api/spotSession";
 import { ErrorMessage } from "@/components/error-message";
@@ -424,6 +425,6 @@ const styles = themedStyles(() => ({
   historyNote: { alignItems: "center", marginTop: space.lg },
   historyMessage: { fontSize: font.secondary, textAlign: "center", lineHeight: 21 },
   retry: { marginTop: space.sm, minHeight: size.touchTarget, minWidth: size.touchTarget, justifyContent: "center", alignItems: "center" },
-  retryLabel: { fontSize: font.body, color: color.vert, fontWeight: "600" },
+  retryLabel: { ...lienSouligne, fontSize: font.body, color: color.vert, fontWeight: "600" },
   historyEnd: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginTop: space.lg, textAlign: "center" },
 }));

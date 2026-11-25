@@ -4,6 +4,7 @@
 import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import { color, font, radius, serifFont, serifLineHeight, size, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { themedStyles } from "@/theme/themed-styles";
 
 export function StepTitle({ children }: { children: string }) {
@@ -143,5 +144,5 @@ const styles = themedStyles(() => ({
   secondaryLabel: { fontSize: font.secondary, fontWeight: "600", color: color.vert },
   labelOff: { color: color.acier },
   textButton: { minHeight: size.touchTarget, justifyContent: "center", alignSelf: "flex-start" },
-  textButtonLabel: { fontSize: font.secondary, fontWeight: "600", color: color.vert },
+  textButtonLabel: { ...lienSouligne, fontSize: font.secondary, fontWeight: "600", color: color.vert },
 }));

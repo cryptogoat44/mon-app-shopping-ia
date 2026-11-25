@@ -3,6 +3,7 @@ import { Pressable, Text } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import type { MerchantLinkContext } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { openMerchantLink } from "@/lib/merchant-links";
 import { useShopWatch } from "@/lib/use-purchase-question";
@@ -97,6 +98,6 @@ const styles = themedStyles(() => ({
   primary: { backgroundColor: color.vert, borderColor: color.vert },
   primaryLabel: { color: color.blanc },
   compact: { minHeight: 32, justifyContent: "center" },
-  compactLabel: { fontSize: 11.5, color: color.vert, fontWeight: "600" },
-  blocked: { fontSize: font.caption, color: color.vert, marginTop: 6 },
+  compactLabel: { ...lienSouligne, fontSize: 11.5, color: color.vert, fontWeight: "600" },
+  blocked: { ...lienSouligne, fontSize: font.caption, color: color.vert, marginTop: 6 },
 }));

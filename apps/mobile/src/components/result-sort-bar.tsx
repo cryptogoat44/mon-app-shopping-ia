@@ -1,5 +1,6 @@
 import { Pressable, Text, View } from "react-native";
 import { color, font, radius, size, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import type { ResultSort, ResultView } from "@/lib/result-sort";
 import { themedStyles } from "@/theme/themed-styles";
@@ -158,5 +159,5 @@ const styles = themedStyles(() => ({
   empty: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.sm, padding: space.md, marginBottom: space.md },
   emptyText: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
   emptyButton: { minHeight: size.touchTarget, justifyContent: "center", marginTop: space.xs },
-  emptyButtonLabel: { fontSize: font.caption, color: color.vert, fontWeight: "600", textDecorationLine: "underline" },
+  emptyButtonLabel: { ...lienSouligne, fontSize: font.caption, color: color.vert, fontWeight: "600" },
 }));

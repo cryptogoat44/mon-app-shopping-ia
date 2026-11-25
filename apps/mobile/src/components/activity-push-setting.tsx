@@ -3,7 +3,7 @@ import { Linking, Platform, Pressable, Switch, Text, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { ACTIVITY_PUSH_KINDS, type ActivityPushKind } from "@monapp/shared-types";
 import { color, font, space } from "@/theme/tokens";
-import { couleursInterrupteur } from "@/theme/accent";
+import { couleursInterrupteur, lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { disablePush, enablePush, loadActivityDecisions, pushPermission, pushSupported } from "@/lib/push";
@@ -114,5 +114,5 @@ const styles = themedStyles(() => ({
   title: { flex: 1, fontSize: font.secondary, color: color.encre },
   body: { fontSize: font.secondary, color: color.acier, marginBottom: space.sm, lineHeight: 19 },
   link: { minHeight: 44, justifyContent: "center", marginBottom: space.sm },
-  linkLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  linkLabel: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
 }));

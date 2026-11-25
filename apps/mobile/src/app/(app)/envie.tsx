@@ -20,6 +20,7 @@ import { vaultChanged } from "@/lib/vault-changes";
 import { FROM_ALERT } from "@/lib/push-state";
 import { shareWishOutside } from "@/lib/share-wish";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { acceptLanguage, getActiveLocale, t } from "@/i18n";
 import { PrivateAccountNote } from "@/components/private-account-note";
 import { ProductFrame } from "@/components/product-frame";
@@ -413,7 +414,7 @@ const styles = themedStyles(() => ({
   centered: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl },
   message: { fontSize: font.secondary, textAlign: "center", marginBottom: space.sm },
   retry: { marginTop: space.md, minHeight: 44, justifyContent: "center" },
-  retryLabel: { fontSize: font.body, color: color.vert, fontWeight: "600" },
+  retryLabel: { ...lienSouligne, fontSize: font.body, color: color.vert, fontWeight: "600" },
   content: { padding: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre, marginTop: space.md },
   meta: { fontSize: font.secondary, color: color.acier, marginTop: 4, marginBottom: space.lg },
@@ -442,7 +443,7 @@ const styles = themedStyles(() => ({
   secondaryLabel: { color: color.vert, fontSize: font.secondary, fontWeight: "600" },
   sharedBox: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md, gap: 6 },
   sharedTitle: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
-  sharedLink: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  sharedLink: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   removeRow: { alignItems: "center", minHeight: 44, justifyContent: "center" },
   removeLabel: { color: color.danger, fontSize: font.secondary, fontWeight: "600" },
   confirm: { backgroundColor: color.plinthe, borderRadius: radius.md, padding: space.md },

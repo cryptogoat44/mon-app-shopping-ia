@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import type { Piece } from "@/api/types";
 import { color, font, radius, size, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { getActiveLocale, t } from "@/i18n";
 import { formatPrice } from "@/lib/format";
 import { openMerchantLink } from "@/lib/merchant-links";
@@ -192,8 +193,8 @@ const styles = themedStyles(() => ({
   cardName: { fontSize: font.caption, color: color.encre, marginTop: 8, lineHeight: 17 },
   cardMeta: { fontSize: 12, color: color.acier, marginTop: 2 },
   shopLink: { minHeight: size.touchTarget, justifyContent: "center" },
-  shopLinkLabel: { fontSize: font.caption, color: color.vert, fontWeight: "600", lineHeight: 17 },
-  blockedLink: { fontSize: font.caption, color: color.vert, fontWeight: "600", textDecorationLine: "underline", marginBottom: space.xs },
+  shopLinkLabel: { ...lienSouligne, fontSize: font.caption, color: color.vert, fontWeight: "600", lineHeight: 17 },
+  blockedLink: { ...lienSouligne, fontSize: font.caption, color: color.vert, fontWeight: "600", marginBottom: space.xs },
   // Ligne de la liste triée par prix : vignette à gauche, texte et prix à droite, le lien sous le texte.
   row: { width: "100%", paddingVertical: space.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.filet },
   rowMain: { flexDirection: "row", gap: 12 },

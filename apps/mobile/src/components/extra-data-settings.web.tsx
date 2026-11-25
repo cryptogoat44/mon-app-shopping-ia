@@ -7,6 +7,7 @@
 import { useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { color, font, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { themedStyles } from "@/theme/themed-styles";
 import { tryonText } from "@/i18n/tryon.web";
 import { withdrawTryonConsent } from "@/lib/tryon-api.web";
@@ -86,7 +87,7 @@ const styles = themedStyles(() => ({
   title: { fontSize: font.secondary, color: color.encre, fontWeight: "600", minHeight: 44, textAlignVertical: "center", paddingTop: space.sm },
   body: { fontSize: font.secondary, color: color.acier, marginBottom: space.sm, lineHeight: 19 },
   link: { minHeight: 44, justifyContent: "center", marginBottom: space.sm },
-  linkLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  linkLabel: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   confirm: { marginBottom: space.sm },
   buttons: { flexDirection: "row", gap: space.lg },
   cancelLabel: { fontSize: font.secondary, color: color.acier, fontWeight: "600" },

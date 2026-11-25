@@ -3,6 +3,7 @@ import { AccessibilityInfo, ActivityIndicator, Platform, Pressable, Text, View }
 import { Image } from "expo-image";
 import { VIDEO_AI } from "@monapp/shared-types";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { CameraIcon, TakePhotoIcon, VideoIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
@@ -221,7 +222,7 @@ const styles = themedStyles(() => ({
   dismissedNote: { marginTop: space.lg },
   cardNoteTight: { fontSize: font.secondary, color: color.acier, lineHeight: 21 },
   settingsLink: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start" },
-  settingsLinkLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600", textDecorationLine: "underline" },
+  settingsLinkLabel: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   cardText: { flex: 1 },
   cardTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, lineHeight: serifLineHeight.body, color: color.encre },
   cardMeta: { fontSize: font.caption, color: color.acier, marginTop: 4, fontVariant: ["tabular-nums"] },

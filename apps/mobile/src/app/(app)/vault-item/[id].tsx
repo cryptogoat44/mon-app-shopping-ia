@@ -5,6 +5,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import type { PrivacyLevel, VaultCategory, VaultItemDetail } from "@monapp/shared-types";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { ApiError, changeVaultItemPhoto, deleteVaultItem, fetchVaultItem, sharePurchasePost, updateVaultItem } from "@/lib/api";
 import { importPhotoForSpotter } from "@/lib/image-import";
@@ -437,7 +438,7 @@ const styles = themedStyles(() => ({
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre, flexShrink: 1 },
   metaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.md, marginBottom: space.lg },
   subtitle: { fontSize: font.secondary, color: color.acier, flexShrink: 1 },
-  editLinkLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  editLinkLabel: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   editBox: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md, marginBottom: space.lg },
   input: { borderBottomWidth: 1, borderBottomColor: color.filet, paddingVertical: 10, fontSize: font.body, color: color.encre, marginBottom: space.md },
   editError: { fontSize: font.secondary, marginTop: space.md },
@@ -461,7 +462,7 @@ const styles = themedStyles(() => ({
   label: { fontSize: font.caption, color: color.acier, marginBottom: 10 },
   sharedBox: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md, marginBottom: space.lg, gap: 6 },
   sharedTitle: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
-  sharedLink: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  sharedLink: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   sharedHint: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
   privateNote: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginBottom: space.md },
   pillRow: { flexDirection: "row", flexWrap: "wrap", gap: space.xs, marginBottom: space.lg },

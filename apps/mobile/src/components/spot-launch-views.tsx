@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, Text, TextInput, View, type StyleProp, ty
 import { Image } from "expo-image";
 import { SEARCH_QUERY_MAX_LENGTH } from "@monapp/shared-types";
 import { color, font, radius, serifFont, serifLineHeight, size, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { ErrorMessage } from "@/components/error-message";
 import { VideoIcon } from "@/components/icons";
@@ -326,7 +327,7 @@ const styles = themedStyles(() => ({
   inputFocused: { borderBottomWidth: 2, borderBottomColor: color.vert },
   notice: { marginTop: space.md },
   link: { minHeight: 44, justifyContent: "center", marginTop: space.sm },
-  linkLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  linkLabel: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   discreet: { minHeight: 44, alignItems: "center", justifyContent: "center", marginTop: space.xs },
   discreetLabel: { fontSize: font.secondary, color: color.acier, textDecorationLine: "underline" },
   message: { fontSize: font.secondary, marginTop: space.md, lineHeight: 21 },

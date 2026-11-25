@@ -8,6 +8,7 @@ import * as WebBrowser from "expo-web-browser";
 import * as Haptics from "expo-haptics";
 import type { MatchFeedbackReason, ProductSearch, VaultCategory, VerdictLevel } from "@monapp/shared-types";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { acceptLanguage, getActiveLocale, t } from "@/i18n";
 import { closeSpotter } from "@/lib/spot-navigation";
 import { addToWishlist, loadSpotResult } from "@/api/client";
@@ -1169,7 +1170,7 @@ const styles = themedStyles(() => ({
   secondaryLabel: { color: color.encre, fontSize: font.body, fontWeight: "500" },
   textButton: { minHeight: 44, alignItems: "center", justifyContent: "center", marginTop: space.sm },
   textButtonLabel: { fontSize: font.secondary, color: color.acier, fontWeight: "600" },
-  blockedLink: { textAlign: "center", fontSize: font.caption, color: color.vert, fontWeight: "600", marginTop: 10, textDecorationLine: "underline" },
+  blockedLink: { ...lienSouligne, textAlign: "center", fontSize: font.caption, color: color.vert, fontWeight: "600", marginTop: 10 },
   actions: { flexDirection: "row", gap: 10, marginTop: space.md },
   action: { flex: 1, minHeight: 44, borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
   actionLabel: { fontSize: font.caption, color: color.encre, fontWeight: "500", textAlign: "center" },

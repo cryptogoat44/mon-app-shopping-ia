@@ -40,6 +40,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import type { WebView } from "react-native-webview";
 import type { VideoLink, VideoLookupResponse } from "@monapp/shared-types";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { PUBLIC_WEB_URL } from "@/constants/brand";
 import { EmbeddedPlayer } from "@/components/embedded-player";
@@ -758,7 +759,7 @@ const styles = themedStyles(() => ({
   captionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.sm, alignSelf: "stretch", minHeight: 44 },
   caption: { fontSize: font.caption, color: color.acier, flexShrink: 1 },
   link: { minHeight: 44, justifyContent: "center" },
-  linkLabel: { fontSize: font.caption, color: color.vert, fontWeight: "600", textDecorationLine: "underline" },
+  linkLabel: { ...lienSouligne, fontSize: font.caption, color: color.vert, fontWeight: "600" },
   notice: { fontSize: font.caption, color: color.acier, lineHeight: 18, alignSelf: "stretch", textAlign: "center" },
   primary: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 52, flexDirection: "row", gap: space.sm, alignItems: "center", justifyContent: "center", paddingHorizontal: space.md, alignSelf: "stretch" },
   primaryDisabled: { backgroundColor: color.inactif },

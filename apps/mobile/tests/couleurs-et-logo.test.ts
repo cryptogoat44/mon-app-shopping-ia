@@ -49,3 +49,74 @@ describe("interrupteurs : couleurs communes (theme/accent.ts)", () => {
     expect(accent).toContain("activeThumbColor: color.blanc");
   });
 });
+
+/** Styles d'un source écrits avec l'accent comme couleur de texte : « clé » et définition (une ligne). */
+function textesEnAccent(code: string): { cle: string; definition: string }[] {
+  return [...code.matchAll(/^\s*(\w+): \{([^\n]*\bcolor: color\.vert\b[^\n]*)\},?$/gm)].map((match) => ({ cle: match[1]!, definition: match[2]! }));
+}
+
+// Textes en accent qui ne sont PAS des liens, donc pas soulignés : libellés
+// d'un bouton encadré (filet) ou plein, textes d'état qu'on ne touche pas,
+// mentions « ⓘ » qui ouvrent une explication (le signe dit qu'on peut toucher).
+const PAS_DES_LIENS: Record<string, string> = {
+  "app/(app)/(tabs)/activite.tsx:secondaryLabel": "bouton encadré",
+  "app/(app)/collection-ami.tsx:actionLabel": "bouton encadré",
+  "app/(app)/enregistrees.tsx:moreLabel": "bouton encadré",
+  "app/(app)/envie.tsx:secondaryLabel": "bouton encadré",
+  "app/(app)/messages.tsx:secondaryLabel": "bouton encadré",
+  "app/(app)/moderation.tsx:secondaryLabel": "bouton encadré",
+  "components/collection-settings-sheet.tsx:buttonLabel": "bouton encadré",
+  "components/load-failure.tsx:buttonLabel": "bouton encadré",
+  "components/member-list.tsx:moreLabel": "bouton encadré",
+  "components/moderation-item.tsx:actionLabel": "bouton encadré",
+  "components/piece-extra-actions.web.tsx:label": "bouton encadré",
+  "components/private-account-setting.tsx:buttonLabel": "bouton encadré",
+  "components/received-pieces.tsx:loadMoreLabel": "bouton encadré",
+  "components/robot-check.tsx:retryLabel": "bouton encadré",
+  "components/signup-help.tsx:buttonLabel": "bouton encadré",
+  "components/tryon-ui.web.tsx:secondaryLabel": "bouton encadré",
+  "components/wish-alert-sheet.tsx:buttonLabel": "bouton encadré",
+  "components/wish-bought-button.tsx:label": "bouton encadré",
+  "components/wishlist-panel.tsx:chipNewLabel": "puce encadrée en pointillés",
+  "app/(app)/envie.tsx:priceDrop": "texte d'état",
+  "app/(app)/moderation.tsx:lookOk": "texte d'état",
+  "app/(app)/vault-item/[id].tsx:verifiedBadgeText": "texte d'état",
+  "components/add-to-collection-sheet.tsx:badge": "texte d'état",
+  "components/link-entry.tsx:detectedLabel": "texte d'état",
+  "components/wishlist-panel.tsx:priceDrop": "texte d'état, dans une vignette",
+  "components/offer-mark.tsx:known": "mention ⓘ",
+  "components/stock-note.tsx:inStock": "mention ⓘ",
+};
+
+const souligne = (definition: string) => definition.includes("...lienSouligne");
+
+describe("liens : soulignés, puisque l'accent a la couleur du texte", () => {
+  const tous = sources.flatMap(({ fichier, code }) => textesEnAccent(code).map(({ cle, definition }) => ({ id: `${fichier}:${cle}`, definition })));
+
+  it("chaque texte en accent est soit souligné (lien), soit un libellé de bouton ou un texte d'état listé ici", () => {
+    expect(tous.length).toBeGreaterThanOrEqual(80);
+    const nonClasses = tous.filter(({ id, definition }) => !souligne(definition) && !(id in PAS_DES_LIENS)).map(({ id }) => id);
+    expect(nonClasses).toEqual([]);
+    // Un texte listé comme « pas un lien » n'est pas souligné, et la liste ne garde rien de périmé.
+    const ids = new Set(tous.map(({ id }) => id));
+    expect(Object.keys(PAS_DES_LIENS).filter((id) => !ids.has(id))).toEqual([]);
+    expect(tous.filter(({ id, definition }) => id in PAS_DES_LIENS && souligne(definition)).map(({ id }) => id)).toEqual([]);
+    // Au moins les liens des réglages, des documents et de l'inscription.
+    expect(tous.filter(({ definition }) => souligne(definition)).length).toBeGreaterThanOrEqual(50);
+  });
+
+  it("un seul style commun : plus de soulignement écrit à la main sur un texte en accent", () => {
+    expect(tous.filter(({ definition }) => definition.includes("textDecorationLine")).map(({ id }) => id)).toEqual([]);
+    const accent = readFileSync(join(SRC, "theme/accent.ts"), "utf8");
+    expect(accent).toContain('textDecorationLine: "underline"');
+    expect(accent).toContain("textUnderlineOffset: 3, textDecorationThickness: 1");
+  });
+
+  it("le garde-fou refuse un lien en accent sans soulignement, et accepte le style commun", () => {
+    const [nu] = textesEnAccent(`  lienNu: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },`);
+    const [ok] = textesEnAccent(`  lien: { ...lienSouligne, fontSize: font.secondary, color: color.vert },`);
+    expect(nu && souligne(nu.definition)).toBe(false);
+    expect(ok && souligne(ok.definition)).toBe(true);
+    expect(textesEnAccent(`  plein: { backgroundColor: color.vert },`)).toEqual([]);
+  });
+});

@@ -9,6 +9,7 @@ import { missingFieldsText, missingSignUpFields, signUpOutcome } from "@/lib/sig
 import { supabase } from "@/lib/supabase";
 import { getActiveLocale, t } from "@/i18n";
 import { color, font, radius, serifDisplayLetterSpacing, serifFont, serifLineHeight, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { ErrorMessage } from "@/components/error-message";
 import { CHECKBOX_SIZE, CheckboxRow } from "@/components/checkbox-row";
 import { ExistingAccountNotice, ResendEmailButton } from "@/components/signup-help";
@@ -282,7 +283,7 @@ const styles = themedStyles(() => ({
   fieldHint: { fontSize: font.caption, color: color.acier, marginTop: space.xs },
   consentRow: { marginTop: space.sm },
   legalLinks: { marginLeft: CHECKBOX_SIZE + space.sm, marginTop: space.xs, gap: space.sm },
-  legalLink: { fontSize: font.caption, color: color.vert, fontWeight: "600", minHeight: 20 },
+  legalLink: { ...lienSouligne, fontSize: font.caption, color: color.vert, fontWeight: "600", minHeight: 20 },
   cta: { backgroundColor: color.vert, borderRadius: radius.md, paddingVertical: 16, alignItems: "center", marginTop: space.lg },
   ctaDisabled: { backgroundColor: color.inactif, borderColor: color.inactif },
   ctaLabelDisabled: { color: color.surInactif },

@@ -6,6 +6,7 @@ import { ImageUnavailable } from "@/components/image-unavailable";
 import { WishlistPanel } from "@/components/wishlist-panel";
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, fetchMyLifestylePosts, fetchVault } from "@/lib/api";
@@ -476,7 +477,7 @@ const styles = themedStyles(() => ({
   // … dans une liste qui a ses marges (Vault) : il les annule, et garde l'écart d'avant sous les onglets.
   headerInset: { marginHorizontal: -space.lg, marginTop: -space.md, marginBottom: space.md },
   emptyText: { fontSize: font.secondary, color: color.acier, textAlign: "center", lineHeight: 20, marginBottom: space.md },
-  emptyCta: { fontSize: font.body, color: color.vert, fontWeight: "600" },
+  emptyCta: { ...lienSouligne, fontSize: font.body, color: color.vert, fontWeight: "600" },
   // Vault vide : l'ajout à la main en bouton plein, Spotter en lien dessous.
   emptyButton: {
     backgroundColor: color.vert,
@@ -488,7 +489,7 @@ const styles = themedStyles(() => ({
   },
   emptyButtonLabel: { color: color.blanc, fontSize: font.secondary, fontWeight: "600" },
   addPiece: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 6, minHeight: 44, marginBottom: space.xs },
-  addPieceLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  addPieceLabel: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   piece: { width: "31%" },
   thumb: {
     backgroundColor: color.plinthe,

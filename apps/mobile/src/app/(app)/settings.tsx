@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { LEGAL_DOCUMENT_VERSIONS, type ConsentStatus } from "@monapp/shared-types";
 import { color, font, serifFont, serifLineHeight, space } from "@/theme/tokens";
-import { couleursInterrupteur } from "@/theme/accent";
+import { couleursInterrupteur, lienSouligne } from "@/theme/accent";
 import { getActiveLocale, t } from "@/i18n";
 import { SegmentedChoice } from "@/components/segmented-choice";
 import { usePreferences } from "@/lib/preferences-context";
@@ -312,7 +312,7 @@ const styles = themedStyles(() => ({
   hint: { marginTop: space.sm },
   choiceHint: { marginTop: space.xs },
   sectionBody: { fontSize: font.secondary, color: color.acier, marginBottom: space.sm, lineHeight: 19 },
-  link: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  link: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   secondLink: { marginTop: space.sm },
   cancelLabel: { color: color.acier, fontSize: font.secondary, fontWeight: "600" },
   adminSection: { marginTop: space.xl, borderTopWidth: 1, borderTopColor: color.filet, paddingTop: space.sm },

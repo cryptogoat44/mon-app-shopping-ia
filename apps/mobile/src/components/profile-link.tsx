@@ -4,6 +4,7 @@ import { linkDisplay } from "@/lib/bio-link";
 import { ExternalLinkSheet } from "@/components/external-link-sheet";
 import { LinkIcon } from "@/components/icons";
 import { color, font, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -46,5 +47,5 @@ export function ProfileLink({ url, align = "center" }: ProfileLinkProps) {
 const styles = themedStyles(() => ({
   row: { flexDirection: "row", alignItems: "center", alignSelf: "center", gap: space.xs, minHeight: 28, marginTop: space.xs, maxWidth: "100%" },
   start: { alignSelf: "flex-start" },
-  label: { fontSize: font.secondary, color: color.vert, fontWeight: "600", flexShrink: 1 },
+  label: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600", flexShrink: 1 },
 }));

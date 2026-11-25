@@ -6,6 +6,7 @@ import { useCallback, useState } from "react";
 import { Pressable, Text } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { color, font, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { isPlayerAvailable, readPlayerConsent, withdrawPlayerConsent } from "@/lib/player-access";
 import { themedStyles } from "@/theme/themed-styles";
@@ -42,5 +43,5 @@ const styles = themedStyles(() => ({
   title: { fontSize: font.secondary, color: color.encre, fontWeight: "600", minHeight: 44, textAlignVertical: "center", paddingTop: space.sm },
   body: { fontSize: font.secondary, color: color.acier, marginBottom: space.sm, lineHeight: 19 },
   link: { minHeight: 44, justifyContent: "center", marginBottom: space.sm },
-  linkLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  linkLabel: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
 }));

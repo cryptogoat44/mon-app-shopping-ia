@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { ActivityIndicator, FlatList, Modal, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { color, font, radius, size, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { acceptLanguage, getActiveLocale, t } from "@/i18n";
 import type { CollectionSummary, WishAlertState } from "@monapp/shared-types";
 import { getCollectionWishlist, getWishlist } from "@/api/client";
@@ -554,7 +555,7 @@ const styles = themedStyles(() => ({
   emptyContent: { flexGrow: 1 },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl },
   emptyText: { fontSize: font.secondary, color: color.acier, textAlign: "center", lineHeight: 20, marginBottom: space.md },
-  emptyCta: { fontSize: font.body, color: color.vert, fontWeight: "600" },
+  emptyCta: { ...lienSouligne, fontSize: font.body, color: color.vert, fontWeight: "600" },
   gridContent: {
     paddingHorizontal: space.lg,
     paddingTop: space.sm,

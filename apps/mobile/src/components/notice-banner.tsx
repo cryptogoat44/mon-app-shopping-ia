@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { AccessibilityInfo, Platform, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { color, font, radius, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Bandeau discret en bas de l'écran, au-dessus de la barre d'onglets (en
@@ -78,6 +79,6 @@ const styles = themedStyles(() => ({
   error: { fontSize: font.caption, color: color.erreur, marginTop: space.xs },
   actions: { flexDirection: "row", justifyContent: "flex-end", gap: space.lg, marginTop: space.sm },
   action: { minHeight: 44, justifyContent: "center" },
-  emphasis: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  emphasis: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   plain: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
 }));

@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, Text, TextInput, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { color, font, radius, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { ClipboardIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
@@ -163,7 +164,7 @@ const styles = themedStyles(() => ({
   clearButton: { minWidth: 32, minHeight: 44, alignItems: "center", justifyContent: "center" },
   clearLabel: { fontSize: 22, lineHeight: 24, color: color.acier },
   pasteButton: { flexDirection: "row", alignItems: "center", gap: 5, minHeight: 44, minWidth: 44 },
-  pasteLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  pasteLabel: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   detected: { flexDirection: "row", alignItems: "center", gap: space.sm, marginTop: space.md },
   platformChip: { backgroundColor: color.encre, borderRadius: radius.full, paddingHorizontal: 11, height: 26, justifyContent: "center" },
   platformChipLabel: { color: color.blanc, fontSize: font.caption, fontWeight: "600" },

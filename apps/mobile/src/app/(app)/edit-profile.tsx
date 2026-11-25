@@ -6,6 +6,7 @@ import { BIO_LINK_MAX_LENGTH, BIO_MAX_LENGTH, BIO_MAX_LINES, normalizeBio } from
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, updateMyProfile } from "@/lib/api";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { useToast } from "@/lib/toast-context";
 import { ErrorMessage } from "@/components/error-message";
@@ -218,7 +219,7 @@ const styles = themedStyles(() => ({
   fieldError: { fontSize: font.caption, marginTop: space.xs },
   photoRow: { flexDirection: "row", alignItems: "center", gap: space.md, marginBottom: space.lg },
   photoLink: { minHeight: 44, justifyContent: "center" },
-  photoLinkLabel: { fontSize: font.body, color: color.vert, fontWeight: "600" },
+  photoLinkLabel: { ...lienSouligne, fontSize: font.body, color: color.vert, fontWeight: "600" },
   cta: { backgroundColor: color.vert, borderRadius: radius.md, paddingVertical: 16, alignItems: "center", marginTop: space.lg },
   ctaDisabled: { backgroundColor: color.inactif, borderColor: color.inactif },
   ctaLabelDisabled: { color: color.surInactif },

@@ -13,6 +13,7 @@ import type { LegalDocument } from "@/legal/types";
 import { APP_NAME_DISPLAY } from "@/constants/brand";
 import { getActiveLocale, t } from "@/i18n";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { ErrorMessage } from "@/components/error-message";
 import { CheckboxRow } from "@/components/checkbox-row";
 import { themedStyles } from "@/theme/themed-styles";
@@ -192,7 +193,7 @@ const styles = themedStyles(() => ({
   listText: { flex: 1 },
   acceptance: { marginTop: space.xl },
   ageRow: { marginBottom: space.md },
-  link: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  link: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   cta: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 48, alignItems: "center", justifyContent: "center" },
   ctaDisabled: { backgroundColor: color.inactif, borderColor: color.inactif },
   ctaLabelDisabled: { color: color.surInactif },

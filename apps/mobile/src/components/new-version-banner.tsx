@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Platform, Pressable, Text, View } from "react-native";
 import { color, font, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { entryScriptOf, isNewVersion } from "@/lib/site-version";
 import { themedStyles } from "@/theme/themed-styles";
@@ -62,5 +63,5 @@ const styles = themedStyles(() => ({
   inner: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.md, maxWidth: 480, width: "100%", alignSelf: "center" },
   text: { flex: 1, fontSize: font.caption, color: color.encre, lineHeight: 18 },
   action: { minHeight: 44, minWidth: 44, justifyContent: "center", alignItems: "flex-end" },
-  actionLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  actionLabel: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
 }));
