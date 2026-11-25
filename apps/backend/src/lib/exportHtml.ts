@@ -1377,9 +1377,12 @@ export function exportContentSecurityPolicy(storageOrigin: string | null): strin
 
 // Palette de l'app (clair / sombre), texte en 16 px, 720 px de large au plus,
 // cartes « libellé : valeur » lisibles sur un téléphone, impression soignée.
+// « Noir et ivoire » (lot « couleurs et logo », 25 novembre 2026) : plus aucun
+// vert ; l'accent est l'encre en clair, l'ivoire en sombre, comme le texte, et
+// les liens se distinguent par leur soulignement (tests/couleursEmailsExport.test.ts).
 const STYLE = `
-:root{color-scheme:light dark;--bg:#FBFBFA;--surface:#FFFFFF;--text:#1D1D1F;--muted:#6E6E73;--accent:#1E3D32;--line:#E6E4E0}
-@media (prefers-color-scheme:dark){:root{--bg:#141312;--surface:#1E1D1B;--text:#F4F2EE;--muted:#A9A6A0;--accent:#9CC3AE;--line:#34322F}}
+:root{color-scheme:light dark;--bg:#FBFBFA;--surface:#FFFFFF;--text:#1D1D1F;--muted:#6E6E73;--accent:#1D1D1F;--line:#E6E4E0}
+@media (prefers-color-scheme:dark){:root{--bg:#141312;--surface:#1E1D1B;--text:#F4F2EE;--muted:#A9A6A0;--accent:#F4F2EE;--line:#34322F}}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
@@ -1393,7 +1396,7 @@ h4{font-size:.95rem;margin:16px 0 4px}
 p{margin:0 0 12px}
 .meta,.lead,.note,dt{color:var(--muted)}
 .note{font-size:.95rem}
-a{color:var(--accent);overflow-wrap:anywhere}
+a{color:var(--accent);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px;overflow-wrap:anywhere}
 nav ol{margin:0;padding-left:22px}
 nav li{margin:2px 0}
 .count{color:var(--muted)}

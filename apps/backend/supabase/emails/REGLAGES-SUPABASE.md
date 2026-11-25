@@ -16,6 +16,7 @@ Supabase → projet **spotto-prod** → **Authentication** → **Emails** → on
 
 - Si Supabase refuse un sujet avec `{{ … }}`, mettre un sujet simple dans les deux langues, par exemple : `Spotto — Confirmez votre compte / Confirm your account`.
 - **Magic Link**, **Invite user** et **Reauthentication** : à laisser tels quels, Spotto ne s'en sert pas.
+- **Les trois modèles ont changé de couleur le 25 novembre 2026** (« Noir et ivoire » : bouton noir, lien noir souligné, plus de vert) : il faut les recoller tous les trois dans Supabase, sans toucher aux sujets.
 - Ne rien changer d'autre dans les modèles : le bouton utilise `{{ .ConfirmationURL }}`, qui marche avec le nouveau flux de l'app (PKCE, voir le point 4).
 
 ## 2. Le service d'envoi (le plus urgent)
