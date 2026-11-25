@@ -9,6 +9,11 @@
           "glass": false,
           "image-name": "S.svg",
           "name": "S"
+        },
+        {
+          "glass": false,
+          "image-name": "Email.svg",
+          "name": "Email"
         }
       ],
       "shadow": {
