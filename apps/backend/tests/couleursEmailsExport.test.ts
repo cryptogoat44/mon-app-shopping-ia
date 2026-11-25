@@ -45,6 +45,24 @@ function liensDuCorps(html: string): string[] {
 }
 const lienConforme = (balise: string) => balise.includes(`color:${ENCRE};`) && balise.includes("text-decoration:underline");
 
+/**
+ * Les boutons d'un modèle : la cellule `<td>` qui porte le fond, suivie du lien
+ * en bloc (display:inline-block) qui porte le texte (bouton « à l'épreuve »
+ * des messageries).
+ */
+function boutons(html: string): { fond: string | undefined; balise: string }[] {
+  return [...html.matchAll(/<td\b([^>]*)>\s*(<a\b[^>]*display:inline-block[^>]*>)/g)].map((m) => ({
+    fond: m[1]!.match(/background-color:(#[0-9A-Fa-f]{6})/)?.[1]?.toUpperCase(),
+    balise: m[2]!,
+  }));
+}
+/** La règle : au moins un bouton, et chacun en fond encre avec un texte blanc. */
+function boutonConforme(html: string): boolean {
+  const liste = boutons(html);
+  const blancs = html.match(/<a\b[^>]*display:inline-block[^>]*>/g)?.length ?? 0;
+  return liste.length > 0 && liste.length === blancs && liste.every(({ fond, balise }) => fond === ENCRE && /[";]color:#FFFFFF;/.test(balise));
+}
+
 describe("e-mails du compte : « Noir et ivoire »", () => {
   it("aucun vert dans les trois modèles", () => {
     for (const nom of MODELES) {
@@ -64,12 +82,20 @@ describe("e-mails du compte : « Noir et ivoire »", () => {
   it("bouton : fond encre, texte blanc (au moins 4,5:1) ; le garde-fou refuse un bouton pâle", () => {
     for (const nom of MODELES) {
       const html = modele(nom);
-      expect(html.match(/background-color:#1D1D1F;/g), nom).toHaveLength(2); // un bouton en anglais, un en français
-      for (const bouton of [...html.matchAll(/<a\b[^>]*display:inline-block[^>]*>/g)].map((m) => m[0])) expect(bouton, nom).toContain("color:#FFFFFF;");
+      expect(boutons(html), nom).toHaveLength(2); // un bouton en anglais, un en français
+      expect(boutonConforme(html), nom).toBe(true);
     }
     expect(contraste("#FFFFFF", ENCRE)).toBeGreaterThanOrEqual(4.5);
-    // Refusé : un texte ivoire sur un bouton blanc.
-    expect(contraste(IVOIRE, "#FFFFFF")).toBeLessThan(4.5);
+    const td = (fond: string) => `<td style="border-radius:10px;background-color:${fond};">\n`;
+    const a = (texte: string) => `<a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 24px;color:${texte};text-decoration:none;">`;
+    // Permis : fond encre, texte blanc.
+    expect(boutonConforme(td(ENCRE) + a("#FFFFFF"))).toBe(true);
+    // Refusé : l'ancien vert en fond.
+    expect(boutonConforme(td("#1E3D32") + a("#FFFFFF"))).toBe(false);
+    // Refusé : un texte pâle (ivoire) sur le fond encre.
+    expect(boutonConforme(td(ENCRE) + a(IVOIRE))).toBe(false);
+    // Refusé : un bouton sans cellule de fond (le fond seul ne se lit plus).
+    expect(boutonConforme(a("#FFFFFF"))).toBe(false);
   });
 
   it("le lien de secours (adresse en toutes lettres) est à l'encre et souligné, lisible sur la carte blanche", () => {
@@ -127,11 +153,18 @@ describe("page « Mes données » : « Noir et ivoire »", () => {
     expect(contraste(ENCRE, variable(sombre, "bg")!)).toBeLessThan(4.5);
   });
 
+  /** La règle : un lien à l'accent, souligné d'un trait légèrement décalé. */
+  const lienSouligneCss = (regle: string) =>
+    regle.includes("color:var(--accent)") && regle.includes("text-decoration:underline") && regle.includes("text-underline-offset:3px");
+
   it("les liens sont soulignés (trait fin, léger décalage) ; le garde-fou refuse un lien sans trait", () => {
     const regle = style.match(/(?:^|\n)a\{[^}]*\}/)?.[0] ?? "";
-    expect(regle).toContain("color:var(--accent)");
-    expect(regle).toContain("text-decoration:underline");
-    expect(regle).toContain("text-underline-offset:3px");
-    expect("a{color:var(--accent);overflow-wrap:anywhere}").not.toContain("text-decoration:underline");
+    expect(lienSouligneCss(regle), regle).toBe(true);
+    // Refusé : un lien sans trait.
+    expect(lienSouligneCss("a{color:var(--accent);overflow-wrap:anywhere}")).toBe(false);
+    // Refusé : un trait sans décalage.
+    expect(lienSouligneCss("a{color:var(--accent);text-decoration:underline}")).toBe(false);
+    // Permis.
+    expect(lienSouligneCss("a{color:var(--accent);text-decoration:underline;text-underline-offset:3px}")).toBe(true);
   });
 });
