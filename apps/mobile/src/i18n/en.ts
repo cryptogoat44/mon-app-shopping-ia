@@ -1031,7 +1031,7 @@ export const en: Catalog = {
     ownOptionsLabel: (name: string) => `Options for the collection ${name}`,
     ownOptionsPosts: "Posts filed here",
     // Friends' shelves (rework): where you file a wish, while "Show my Wishlist to my friends" is on.
-    privateNotOnShelf: "A wish in a “Private” collection does not appear in the wishes your friends see.",
+    privateNotOnShelf: "A wish in a “Private” collection does not appear in the wishes your friends see, unless it is also in a “My friends” collection.",
   },
   received: {
     title: "Received pieces",
@@ -1147,7 +1147,7 @@ export const en: Catalog = {
     searchClose: "Close search",
     sortShort: { recent: "Recent", price_asc: "Price ↑", price_desc: "Price ↓" },
     sortButtonLabel: (current: string) => `Sort, currently: ${current}`,
-    privateNoteFriends: "Your friends see your wishes, except those in a “Private” collection. You can turn it off in Settings.",
+    privateNoteFriends: "Your friends see your wishes, except those only in “Private” collections. You can turn it off in Settings.",
     privateNoteOff: "You turned off “Show my Wishlist to my friends”: your wishes are private, except those you put in a “My friends” collection.",
   },
   profile: {
@@ -1994,7 +1994,7 @@ export const en: Catalog = {
   },
   friendShelves: {
     settingWishesTitle: "Show my Wishlist to my friends",
-    settingWishesHelp: `When on, your friends (members you follow who follow you back) see your wishes, except those in a “Private” collection: title, image (a copy made by ${BRAND}), price, link to the shop, your price alert and the names of your “My friends” collections. They cannot change anything. Never the pieces you received or your saved posts.`,
+    settingWishesHelp: `When on, your friends (members you follow who follow you back) see your wishes, except those only in “Private” collections: title, image (a copy made by ${BRAND}), price, link to the shop, your price alert and the names of your “My friends” collections. They cannot change anything. Never the pieces you received or your saved posts.`,
     settingVaultTitle: "Show my Vault to my friends",
     settingVaultHelp: "When on, your friends see the pieces in your Vault: name, category, photo (including photos you took yourself), date added and the “Verified purchase” mark. They cannot change anything.",
     wishesShown: "Your friends can now see your Wishlist.",
@@ -2012,12 +2012,12 @@ export const en: Catalog = {
     close: "Close",
     vaultItemNote: "Your friends see your Vault, with the date added and the “Verified purchase” mark (Settings); no one else can see it. To show this piece to others, share it in your feed.",
     vaultFormNote: "Your friends will see this piece in your Vault (Settings, “Show my Vault to my friends”).",
-    wishShareHint: "Your friends see your wishes, except those in a “Private” collection. You can turn it off in Settings.",
+    wishShareHint: "Your friends see your wishes, except those only in “Private” collections. You can turn it off in Settings.",
     noticeTitle: "What your friends can see",
     noticeIntro: "Your friends (members you follow who follow you back) will be able to see on your profile, without being able to change anything:",
-    noticeWishes: "Your wishes, with their price, your price alert and the names of your “My friends” collections. A wish in a “Private” collection does not appear there.",
+    noticeWishes: "Your wishes, with their price, your price alert and the names of your “My friends” collections. A wish in a “Private” collection does not appear there, unless it is also in a “My friends” collection.",
     noticeVault: "The pieces in your Vault, with their photo (including photos you took yourself), the date added and the “Verified purchase” mark.",
-    noticeOutro: "Nothing is shown before you answer. No one is told when your friends look. You can change your mind at any time in Settings.",
+    noticeOutro: "Your wishes and your Vault only open to your friends after you answer (your “My friends” collections stay shown as before). No one is told when your friends look. You can change your mind at any time in Settings.",
     noticeOk: "Got it",
     noticeOff: "Turn off",
     noticeOkDone: "Noted. You can turn it off at any time in Settings.",
