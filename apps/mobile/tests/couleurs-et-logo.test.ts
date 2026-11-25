@@ -120,3 +120,26 @@ describe("liens : soulignés, puisque l'accent a la couleur du texte", () => {
     expect(textesEnAccent(`  plein: { backgroundColor: color.vert },`)).toEqual([]);
   });
 });
+
+describe("le « + » de la barre du bas : seule touche de couleur, aux couleurs du logo", () => {
+  const onglets = readFileSync(join(SRC, "app/(app)/(tabs)/_layout.tsx"), "utf8");
+  const plus = onglets.slice(onglets.indexOf('name="publish"'), onglets.indexOf('name="activite"'));
+
+  it("disque vert anglais, cercle fin (1,5 point) et signe « + » dorés", () => {
+    expect(plus).toContain("backgroundColor: color.vertAnglais,");
+    expect(plus).toContain("borderWidth: 1.5,");
+    expect(plus).toContain("borderColor: color.dorure,");
+    expect(plus).toContain("<PlusIcon size={18} tint={color.dorure} />");
+    // Refusé : l'accent, qui serait devenu un disque noir ou ivoire.
+    expect(plus).not.toContain("color.vert,");
+  });
+
+  it("les deux couleurs de marque ne servent nulle part ailleurs dans l'app", () => {
+    const ailleurs = sources
+      .filter(({ fichier }) => fichier !== join("app", "(app)", "(tabs)", "_layout.tsx") && fichier !== join("theme", "tokens.ts"))
+      .filter(({ code }) => /color\.(vertAnglais|dorure)\b/.test(code))
+      .map(({ fichier }) => fichier);
+    expect(ailleurs).toEqual([]);
+    expect(/color\.(vertAnglais|dorure)\b/.test("<View style={{ backgroundColor: color.dorure }} />")).toBe(true);
+  });
+});

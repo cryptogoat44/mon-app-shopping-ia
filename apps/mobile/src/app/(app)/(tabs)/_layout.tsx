@@ -103,19 +103,24 @@ export default function TabsLayout() {
           title: t.profile.publish,
           tabBarLabel: () => null,
           tabBarAccessibilityLabel: t.profile.publish,
+          // Lot « couleurs et logo » : la seule touche de couleur de l'app, aux
+          // couleurs du logo et la même dans les deux thèmes — disque vert
+          // anglais, cercle fin et « + » dorés.
           tabBarIcon: () => (
             <View
               style={{
                 width: 34,
                 height: 34,
                 borderRadius: radius.full,
-                backgroundColor: color.vert,
+                backgroundColor: color.vertAnglais,
+                borderWidth: 1.5,
+                borderColor: color.dorure,
                 alignItems: "center",
                 justifyContent: "center",
                 marginBottom: -6,
               }}
             >
-              <PlusIcon size={18} tint={color.blanc} />
+              <PlusIcon size={18} tint={color.dorure} />
             </View>
           ),
         }}

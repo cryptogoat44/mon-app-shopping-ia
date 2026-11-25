@@ -216,7 +216,8 @@ const styles = themedStyles(() => ({
   icon: { width: 31, height: 28, alignItems: "center", justifyContent: "center" },
   label: { fontSize: 10, textAlign: "center" },
   badge: { position: "absolute", end: -3, top: -3, width: 9, height: 9, borderRadius: radius.full },
-  // La pastille qui suit le doigt : un vert très léger derrière l'icône et le libellé.
+  // La pastille qui suit le doigt : l'accent à 18 % derrière l'icône et le libellé
+  // (gris doux : 1,45:1 sur le fond clair, 1,66:1 sur le fond sombre, plus visible que l'ancien vert).
   pillTrack: { position: "absolute", top: 2, bottom: 2, left: 0, paddingHorizontal: 6 },
   pill: { flex: 1, borderRadius: radius.lg, backgroundColor: color.vert, opacity: 0.18 },
 }));
