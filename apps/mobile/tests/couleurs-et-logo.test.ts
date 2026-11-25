@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
+import { darkPalette, lightPalette } from "../src/theme/tokens";
 
 // Lot « couleurs et logo » (« Noir et ivoire », validé par le fondateur le
 // 25 novembre 2026) : l'accent (jeton `vert`) a la couleur du texte. Ce
@@ -187,5 +188,55 @@ describe("le « + » de la barre du bas : seule touche de couleur, aux couleurs 
       .map(({ fichier }) => fichier);
     expect(ailleurs).toEqual([]);
     expect(/color\.(vertAnglais|dorure)\b/.test("<View style={{ backgroundColor: color.dorure }} />")).toBe(true);
+  });
+});
+
+// Site, navigation au clavier : l'anneau par défaut de Chrome et d'Edge
+// (#101010 en clair, #EEEEEE en sombre) se confond avec un bouton plein à
+// l'accent (encre #1D1D1F, ivoire #F4F2EE : 1,13:1 et 1,04:1). La règle
+// commune de +html.tsx le décale sur le fond, à la couleur de texte du
+// navigateur pour le thème posé sur <html>.
+describe("site : anneau de focus visible sur les boutons pleins (app/+html.tsx)", () => {
+  /** La règle : un :focus-visible avec un trait plein d'au moins 2 px, en CanvasText (suit le thème choisi), décalé d'au moins 2 px. */
+  function anneauVisible(css: string): boolean {
+    const regle = css.match(/:focus-visible\{([^}]*)\}/)?.[1];
+    if (!regle) return false;
+    const trait = regle.match(/(?:^|;)outline:(\d+)px solid CanvasText(?:;|$)/);
+    const decalage = regle.match(/(?:^|;)outline-offset:(\d+)px(?:;|$)/);
+    return !!trait && Number(trait[1]) >= 2 && !!decalage && Number(decalage[1]) >= 2;
+  }
+
+  const html = readFileSync(join(SRC, "app/+html.tsx"), "utf8");
+
+  it("la page du site pose la règle dans <head>, et elle est conforme", () => {
+    const css = html.match(/const ANNEAU_DE_FOCUS = "([^"]*)";/)?.[1] ?? "";
+    expect(anneauVisible(css), css).toBe(true);
+    expect(html).toMatch(/<head>[\s\S]*<style>\{ANNEAU_DE_FOCUS\}<\/style>[\s\S]*<\/head>/);
+    // CanvasText ne suit le thème choisi par le membre que parce que l'app le pose sur <html>.
+    expect(readFileSync(join(SRC, "lib/preferences-context.tsx"), "utf8")).toContain("document.documentElement.style.colorScheme = scheme;");
+  });
+
+  it("refusé : pas de règle, anneau collé au bouton, couleur fixe (invisible dans l'autre thème), trait d'1 px ; permis : la règle commune", () => {
+    expect(anneauVisible("")).toBe(false);
+    expect(anneauVisible(":focus-visible{outline:2px solid CanvasText;outline-offset:0px}")).toBe(false);
+    expect(anneauVisible(":focus-visible{outline:2px solid #1D1D1F;outline-offset:2px}")).toBe(false);
+    expect(anneauVisible(":focus-visible{outline:1px solid CanvasText;outline-offset:2px}")).toBe(false);
+    expect(anneauVisible(":focus-visible{outline:2px solid CanvasText;outline-offset:2px}")).toBe(true);
+  });
+
+  it("CanvasText (noir en clair, blanc en sombre) se détache du fond et des cartes, au moins 3:1, dans les deux thèmes", () => {
+    const luminance = (hex: string) => {
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+      return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+    };
+    const contraste = (a: string, b: string) => {
+      const [haut, bas] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return (haut! + 0.05) / (bas! + 0.05);
+    };
+    for (const [anneau, palette] of [["#000000", lightPalette], ["#FFFFFF", darkPalette]] as const) {
+      for (const fond of [palette.porcelaine, palette.surface]) expect(contraste(anneau, fond), `${anneau} sur ${fond}`).toBeGreaterThanOrEqual(3);
+    }
+    // Refusé : l'anneau par défaut de Chrome sur le bouton ivoire (ce que le lot avait cassé).
+    expect(contraste("#EEEEEE", darkPalette.vert)).toBeLessThan(3);
   });
 });
