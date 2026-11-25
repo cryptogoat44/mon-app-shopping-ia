@@ -1,4 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { AddressInfo } from "node:net";
 import sharp from "sharp";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -8,6 +10,7 @@ import {
   CONFIG_WARNING,
   VIDEO_WORKER_ERROR_CODES,
   VIDEO_WORKER_MAX_FRAMES,
+  VIDEO_WORKER_MAX_RESPONSE_BYTES,
   VideoWorkerError,
   WORKER_ERROR_BY_STATUS,
   fetchVideoFrames,
@@ -340,6 +343,20 @@ describe("client du service vidéo (fetchVideoFrames)", () => {
       response.end(" ".repeat(4000));
     };
     expect((await failure(fetchVideoFrames(config(), request, { maxResponseBytes: 1024 }))).kind).toBe("invalid_response");
+  });
+
+  it("retours du build 2 : le plafond de lecture couvre les images moins compressées du service vidéo, dans n'importe quel ordre de déploiement", () => {
+    const contract = readFileSync(join(__dirname, "../../video-worker/src/contract.js"), "utf8");
+    const total = Number(/maxTotalFrameBytes: ([\d_]+),/.exec(contract)?.[1]?.replaceAll("_", ""));
+    expect(total).toBe(9_000_000);
+    const base64 = Math.ceil(total / 3) * 4;
+    // Permis : base64 et un peu de JSON tiennent sous le plafond actuel ET sous celui du serveur en ligne (12 Mio).
+    expect(base64 + 64 * 1024).toBeLessThan(VIDEO_WORKER_MAX_RESPONSE_BYTES);
+    expect(VIDEO_WORKER_MAX_RESPONSE_BYTES).toBe(16 * 1024 * 1024);
+    expect(base64 + 64 * 1024).toBeLessThan(12 * 1024 * 1024);
+    // Refusé : 11 Mo d'images n'auraient pas tenu sous l'ancien plafond (12 Mio).
+    expect(Math.ceil(11_000_000 / 3) * 4).toBeGreaterThan(12 * 1024 * 1024);
+    expect(contract).toContain("jpegQscale: 2,");
   });
 
   it("délai dépassé : « timeout » ; service injoignable : « unreachable »", async () => {

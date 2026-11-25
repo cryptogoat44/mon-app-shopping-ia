@@ -149,8 +149,9 @@ export const ANALYTICS_EVENTS = {
   wish_republished: { visibility: VISIBILITY },
   piece_sent: {},
   // « Envoyer à un ami » (écran Résultat, lib/send-to-friend.ts) : une proposition
-  // envoyée dans une conversation, et d'où (grande carte, carte d'une section,
-  // ligne de la liste triée par prix) — jamais la pièce, le texte ni la personne.
+  // envoyée dans une conversation, et d'où — jamais la pièce, le texte ni la personne.
+  // Depuis les retours du build 2, l'app n'envoie plus que "big_card" (grande carte) ;
+  // "section" et "price_list" restent acceptés : des builds installés les envoient encore.
   piece_sent_to_friend: { from: oneOf(["big_card", "section", "price_list"]) },
   wish_shared_external: { method: oneOf(["native", "copy"]), affiliate: bool },
   received_piece_removed: {},
@@ -182,10 +183,15 @@ export const ANALYTICS_EVENTS = {
     platform: PLAYER_PLATFORM,
     reason: oneOf(["build_off", "server_off", "server_unknown", "not_ios", "no_snapshot", "consent_refused", "embed_unavailable", "player_error", "no_answer", "webview_error", "snapshot_failed"]),
     link_platform: PLAYER_PLATFORM,
+    // Retours du build 2 (« la vidéo d'abord ») : ce qui suit, « ai » (la recherche
+    // automatique) ou « screenshot » (l'écran de secours) ; absent : version d'avant.
+    next: oneOf(["ai", "screenshot"]),
   },
   player_fallback: { platform: PLAYER_PLATFORM, choice: oneOf(["screenshot", "open_app"]), link_platform: PLAYER_PLATFORM },
   player_consent: { platform: PLAYER_PLATFORM, choice: oneOf(["play", "refuse"]), link_platform: PLAYER_PLATFORM },
   player_spot: { platform: PLAYER_PLATFORM, link_platform: PLAYER_PLATFORM },
+  // Retours du build 2 : « Trouver la pièce automatiquement », touché sous le lecteur.
+  player_to_ai: { platform: PLAYER_PLATFORM, from: oneOf(["player"]), link_platform: PLAYER_PLATFORM },
   // Lot « vidéo auto » : analyse d'une vidéo à partir de son lien — la
   // plateforme, l'issue, la cause d'un échec et des nombres ; jamais le lien,
   // les mots, la vidéo ni ses images.

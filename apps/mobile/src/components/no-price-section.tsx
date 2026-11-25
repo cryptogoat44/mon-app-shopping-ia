@@ -5,8 +5,6 @@ import { t } from "@/i18n";
 import type { IndexedPiece } from "@/lib/result-sections";
 import { withoutPriceShown, type ClickPlacement } from "@/lib/price-first";
 import { ProposalCard } from "@/components/proposal-card";
-import type { SendAction } from "@/lib/send-to-friend";
-import type { StockAction } from "@/lib/wish-alerts";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Prix d'abord (décision du fondateur du 2026-11-03) : les propositions de la
@@ -27,8 +25,6 @@ export function NoPriceSection({
   caption = true,
   onSelect,
   placements,
-  sendAction,
-  stockAction,
 }: {
   /** Propositions sans prix, sans celle montrée en grand ; `index` désigne la liste complète de l'écran. */
   pieces: IndexedPiece[];
@@ -39,10 +35,6 @@ export function NoPriceSection({
   onSelect: (index: number) => void;
   /** Place de chaque proposition à l'écran, pour les statistiques du clic (lib/price-first.ts). */
   placements: ReadonlyMap<number, ClickPlacement>;
-  /** « Envoyer à un ami » de chaque carte, sur sa propre pièce (lib/send-to-friend.ts). */
-  sendAction?: SendAction;
-  /** Lot 2 : « Plus disponible ? » de chaque carte, sur sa propre pièce (lib/wish-alerts.ts). */
-  stockAction?: StockAction;
 }) {
   const [showAll, setShowAll] = useState(false);
   if (pieces.length === 0) return null;
@@ -71,7 +63,7 @@ export function NoPriceSection({
           {caption ? <Text style={styles.caption}>{t.result.noPriceText}</Text> : null}
           <View style={styles.grid}>
             {visible.map(({ piece, index }) => (
-              <ProposalCard key={piece.id} piece={piece} onSelect={() => onSelect(index)} placement={placements.get(index)} onSend={sendAction?.(piece)} onReportGone={stockAction?.(piece)} />
+              <ProposalCard key={piece.id} piece={piece} onSelect={() => onSelect(index)} placement={placements.get(index)} />
             ))}
           </View>
           {hiddenCount > 0 ? (

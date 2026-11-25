@@ -21,6 +21,16 @@ export const fr = {
     offline: "Vous semblez hors ligne. Vérifiez votre connexion internet, puis réessayez.",
     /** Lot 5, partie B : image copiée retirée par la modération. */
     imageUnavailable: "Image indisponible",
+    // Image d'une pièce en plein écran (retours du build 2) : envie, Vault, grande carte d'un résultat.
+    imageViewer: {
+      // Indice lu par VoiceOver sur l'image d'une fiche (iPhone et site).
+      openHint: "Ouvre l'image en grand",
+      viewerLabel: "Image de la pièce en grand. Balayez vers le haut ou le bas pour zoomer.",
+      viewerLabelWeb: "Image de la pièce en grand. Utilisez les boutons pour zoomer.",
+      zoomValue: (percent: number) => `Zoom ${percent} %`,
+      zoomIn: "Zoomer",
+      zoomOut: "Dézoomer",
+    },
   },
   tabs: {
     feed: "Fil",
@@ -73,11 +83,13 @@ export const fr = {
     whole: "Toute l'image",
   },
   peopleSearch: {
-    placeholder: "Rechercher",
+    placeholder: "Nom ou @pseudo",
     label: "Rechercher un profil",
     empty: "Aucun profil trouvé.",
     error: "La recherche a échoué.",
     following: "Suivi(e)",
+    // Retours du build 2 : titre de l'écran, à côté de « ‹ ».
+    title: "Rechercher un profil",
   },
   completeProfile: {
     title: "Dernière étape",
@@ -112,7 +124,6 @@ export const fr = {
       `Sans l'accès complet à vos photos, ${BRAND} ne peut pas repérer votre dernière vidéo : choisissez-la avec « Ajouter une vidéo ». L'accès se modifie dans les Réglages de l'iPhone.`,
     latestVideoEmpty: "Aucune vidéo dans votre galerie pour l'instant : la plus récente apparaîtra ici.",
     latestVideoChoiceFailed: "Votre réponse n'a pas pu être enregistrée. Réessayez.",
-    linkQuestion: "Vous avez un lien TikTok, Instagram ou Pinterest ?",
     recentlySpotted: "Récemment spottées",
     detected: {
       tiktok: "Vidéo TikTok reconnue",
@@ -131,6 +142,12 @@ export const fr = {
     prepareError: "La préparation a échoué. Vérifiez votre connexion, puis réessayez.",
     networkError: "Connexion impossible. Vérifiez votre connexion internet, puis réessayez.",
     serverError: `${BRAND} ne répond pas pour le moment. Réessayez dans une minute.`,
+    // Retours du build 2 : la carte « Votre dernière vidéo » repliée sur une ligne, et sa croix
+    // (elle éteint la proposition, exactement comme l'interrupteur de Réglages).
+    latestVideoExpand: "Rechercher dans cette vidéo",
+    latestVideoDismiss: "Ne plus proposer ma dernière vidéo",
+    latestVideoDismissed: "C'est noté : votre dernière vidéo ne vous sera plus proposée. Vous pouvez réactiver cette proposition dans Réglages.",
+    latestVideoSettingsLink: "Ouvrir Réglages",
   },
   // Lot 4 : choix d'une image dans une vidéo importée (la vidéo reste sur l'appareil).
   video: {
@@ -311,9 +328,7 @@ export const fr = {
   // lecteur coupé : l'écran « Spottez cette vidéo ». TEXTES À VALIDER PAR LE
   // FONDATEUR. Espaces insécables avant « : » et « ? », et dans « … ».
   player: {
-    linkQuestion: "Vous avez un lien TikTok ou Instagram ?",
     linkLabel: "Lien TikTok ou Instagram",
-    linkHint: `La vidéo s'ouvre ici, dans ${BRAND} : vous la mettrez en pause sur la pièce.`,
     linkHintWeb: "Les pièces déjà repérées dans cette vidéo s'affichent ici, avec la marche à suivre.",
     open: "Ouvrir la vidéo",
     opening: "Ouverture de la vidéo…",
@@ -331,16 +346,18 @@ export const fr = {
       body: (platform: string) => `Cette vidéo est lue par ${platform}, qui peut utiliser ses propres traceurs.`,
       play: "Lire la vidéo ici",
       refuse: "Non merci",
+      // Retours du build 2 : analyse allumée, « Non merci » mène à la recherche automatique.
+      refuseAuto: "Non merci, chercher automatiquement",
     },
     howItWorksSteps: (spot: string) => [
       `Partagez la vidéo TikTok ou Instagram vers ${BRAND}, ou collez son lien.`,
-      `Mettez-la en pause sur la pièce, touchez « ${spot} », puis entourez la pièce.`,
+      `Mettez-la en pause sur la pièce, touchez « ${spot} », puis entourez la pièce (si la vidéo ne peut pas être lue ici, ${BRAND} vous propose un autre moyen).`,
       `${BRAND} vous montre où l'acheter, en 10 à 20 secondes.`,
     ],
     linkNotice: {
-      title: `Cette vidéo peut s'ouvrir dans ${BRAND}`,
-      body: "Ouvrez-la ici même : vous la mettrez en pause sur la pièce.",
-      bodyWeb: "Ouvrez-la ici : vous verrez les pièces déjà repérées, et comment la spotter.",
+      title: `Ce lien peut s'ouvrir dans ${BRAND}`,
+      body: `Ouvrez-le ici : ${BRAND} vous aide à trouver la pièce de la vidéo.`,
+      bodyWeb: "Ouvrez-le ici : vous verrez les pièces déjà repérées dans la vidéo, et comment la spotter.",
     },
     settings: {
       title: `Vidéos lues dans ${BRAND}`,
@@ -463,6 +480,11 @@ export const fr = {
       waitingSteps: ["On récupère la vidéo…", "L'IA regarde les pièces…"],
       // Sous la capture proposée après un échec, quand rien n'a été écrit.
       keptLink: "Votre lien est gardé.",
+    },
+    // Retours du build 2 (« la vidéo d'abord ») : le lecteur n'a pas pu servir, l'IA prend le relais.
+    playerLead: {
+      notHere: "La vidéo n'a pas pu être lue ici : l'IA peut chercher la pièce pour vous.",
+      snapshot: `${BRAND} n'a pas pu prendre l'image de ce moment : l'IA peut chercher la pièce pour vous.`,
     },
   },
   // Recherche d'image d'iOS (iOS 26 et suivants) : carte montrée une fois.
@@ -816,15 +838,20 @@ export const fr = {
   // Lot « Retrouver ses pièces » : toutes les recherches récentes (« Tout
   // voir ») et « Je l'ai achetée » depuis la fiche d'une envie.
   retrouverPieces: {
-    seeAll: "Tout voir",
-    seeAllLabel: "Voir toutes vos pièces récemment spottées",
     recentLead: "Rouvrir un résultat ne compte pas dans vos recherches du jour.",
-    recentEmpty: "Aucune recherche réussie pour l'instant. Les pièces que vous retrouvez avec Spotter s'afficheront ici.",
     recentLoadError: "Impossible d'afficher vos recherches récentes. Vérifiez votre connexion, puis réessayez.",
-    recentLimitNote: (n: number) => `Seules vos ${n} dernières recherches réussies s'affichent ici. Pour retrouver une pièce plus tard, gardez-la dans vos Envies.`,
     today: "Aujourd'hui",
     yesterday: "Hier",
     alreadyInVault: "Déjà dans votre Vault",
+    historySearchPlaceholder: "Une pièce, une marque, une boutique",
+    historySearchLabel: "Rechercher dans vos recherches passées",
+    historySearchClear: "Effacer la recherche",
+    historyNoMatch: (q: string) => `Aucune recherche ne correspond à « ${q} ».`,
+    historyEnd: "Fin de votre historique.",
+    historyMoreFailed: "La suite de votre historique n'a pas pu être chargée.",
+    historyLoading: "Chargement de votre historique",
+    historyUnavailable: "La recherche dans votre historique n'est pas encore disponible. Réessayez un peu plus tard.",
+    historyResultsShown: "Résultats de votre recherche affichés.",
   },
   // Lot 5 : envoyer une envie à une personne sur Spotto.
   sendPiece: {
@@ -1114,6 +1141,9 @@ export const fr = {
     hiddenChipLabel: (name: string) => `${name}, masquée par la modération`,
     hiddenState: "Masquée par la modération : vos amis ne la voient plus.",
     hiddenCannotShare: "Cette collection a été masquée par la modération : vous ne pouvez pas la montrer à vos amis.",
+    // Retours du build 2 (Envies compactes) : le bouton « … » au bout des puces, pour la collection choisie.
+    ownOptionsLabel: (name: string) => `Options de la collection ${name}`,
+    ownOptionsPosts: "Publications rangées ici",
   },
   // Lot 5 : pièces reçues (onglet « Reçues » des Envies).
   received: {
@@ -1139,10 +1169,12 @@ export const fr = {
       "Il réunira vos publications et celles des personnes que vous suivez. Commencez par identifier une pièce, partager une photo, ou trouver des profils à suivre.",
     emptySpot: "Spotter une pièce",
     emptyPublish: "Publier une photo",
-    emptyFind: "Trouver des profils",
+    emptyFind: "Rechercher des profils",
     title: "Fil",
-    profiles: "Profils",
     loadError: "Impossible de charger le fil.",
+    // Retours du build 2 : la pastille en forme de champ de recherche, en haut du Fil (elle remplace « Profils »).
+    searchProfiles: "Rechercher un profil",
+    searchProfilesHint: "Ouvre la recherche de membres par nom ou @pseudo",
   },
   comments: {
     title: "Commentaires",
@@ -1221,6 +1253,13 @@ export const fr = {
     totalLoading: "Calcul du total…",
     // Au-delà de 500 envies, ou si une page n'a pas pu être lue.
     partialNote: (n: number) => `Calculé sur les ${n} envies chargées : faites défiler pour voir les suivantes.`,
+    // Retours du build 2 (Envies compactes) : la phrase de confidentialité derrière un cadenas, la recherche
+    // derrière une loupe, le tri dans un bouton. Titre neutre : il restera vrai le jour où vos amis pourront voir vos Envies.
+    privacyTitle: "Qui voit vos Envies",
+    privacyOk: "Compris",
+    searchClose: "Fermer la recherche",
+    sortShort: { recent: "Récentes", price_asc: "Prix ↑", price_desc: "Prix ↓" },
+    sortButtonLabel: (current: string) => `Trier, actuellement : ${current}`,
   },
   profile: {
     vault: "Vault",
@@ -1910,7 +1949,7 @@ export const fr = {
     followersEmptyOther: "Ce compte n'a pas encore d'abonnés.",
     followingEmpty: "Vous ne suivez encore personne.",
     followingEmptyOther: "Ce compte ne suit encore personne.",
-    findPeople: "Trouver des profils",
+    findPeople: "Rechercher des profils",
     loadError: "Impossible de charger cette liste.",
     remove: "Retirer",
     removeLabel: (name: string) => `Retirer ${name} de vos abonnés`,

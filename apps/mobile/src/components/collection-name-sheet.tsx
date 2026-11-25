@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Modal, Pressable, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, Text, TextInput, View } from "react-native";
 import { COLLECTION_NAME_MAX_LENGTH, type CollectionSummary } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
@@ -62,35 +62,39 @@ export function CollectionNameSheet({ visible, onClose, onCreated }: { visible: 
   const ready = canSaveName(name) && !saving;
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button" accessibilityLabel={t.collections.close} />
-      <View style={styles.sheet}>
-        <View style={styles.handle} />
-        <Text style={styles.title} accessibilityRole="header">
-          {t.collections.newCollection}
-        </Text>
-        <CollectionNameField value={name} onChange={setName} onSubmit={() => void handleCreate()} />
-        {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
-        <View style={styles.buttons}>
-          <Pressable style={styles.button} onPress={onClose} accessibilityRole="button">
-            <Text style={styles.buttonLabel}>{t.collections.cancel}</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.button, styles.primary, ready ? null : styles.disabled]}
-            onPress={() => void handleCreate()}
-            disabled={!ready}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !ready, busy: saving }}
-            testID="creer-collection"
-          >
-            <Text style={[styles.buttonLabel, styles.primaryLabel, ready ? null : styles.disabledLabel]}>{saving ? t.collections.creating : t.collections.create}</Text>
-          </Pressable>
+      {/* Retours du build 2 : au-dessus du clavier de l'iPhone (le champ s'ouvre avec lui), comme wish-alert-sheet.tsx. */}
+      <KeyboardAvoidingView style={styles.avoider} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button" accessibilityLabel={t.collections.close} />
+        <View style={styles.sheet}>
+          <View style={styles.handle} />
+          <Text style={styles.title} accessibilityRole="header">
+            {t.collections.newCollection}
+          </Text>
+          <CollectionNameField value={name} onChange={setName} onSubmit={() => void handleCreate()} />
+          {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
+          <View style={styles.buttons}>
+            <Pressable style={styles.button} onPress={onClose} accessibilityRole="button">
+              <Text style={styles.buttonLabel}>{t.collections.cancel}</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.button, styles.primary, ready ? null : styles.disabled]}
+              onPress={() => void handleCreate()}
+              disabled={!ready}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !ready, busy: saving }}
+              testID="creer-collection"
+            >
+              <Text style={[styles.buttonLabel, styles.primaryLabel, ready ? null : styles.disabledLabel]}>{saving ? t.collections.creating : t.collections.create}</Text>
+            </Pressable>
+          </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = themedStyles(() => ({
+  avoider: { flex: 1, justifyContent: "flex-end" },
   backdrop: { flex: 1, backgroundColor: color.voile },
   sheet: { backgroundColor: color.porcelaine, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, paddingHorizontal: space.lg, paddingBottom: space.xl, gap: space.sm },
   handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: color.filet, alignSelf: "center", marginTop: 9, marginBottom: space.xs },

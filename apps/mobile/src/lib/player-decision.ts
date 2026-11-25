@@ -80,6 +80,24 @@ export function playerOffered(input: Omit<PlayerDecisionInput, "consent">): bool
   return decision.kind === "player" || decision.kind === "consent";
 }
 
+/** Retours du build 2 (« la vidéo d'abord ») : premier écran d'un lien reconnu.
+ * App iPhone, lecteur possible (playerOffered) : l'accord, puis le lecteur
+ * (« decide »), même analyse allumée. Ailleurs (site, lecteur coupé par le
+ * build ou le serveur) : comme avant, l'analyse si elle est allumée. */
+export function openingPath(input: { os: string; offered: boolean; analysis: boolean }): "decide" | "auto" {
+  if (input.os !== "web" && input.offered) return "decide";
+  return input.analysis ? "auto" : "decide";
+}
+
+/** Après un lecteur qui n'a pas pu s'ouvrir, qui a échoué ou que la personne a
+ * refusé : la recherche automatique (app, analyse allumée), sinon l'écran de
+ * secours « Spottez cette vidéo » (capture d'écran), comme avant. `aiFailed` :
+ * l'analyse de ce lien a déjà échoué (limite du jour, vidéo privée…) ; l'écran
+ * de secours, jamais l'échec d'avant réaffiché. */
+export function afterPlayerFailure(input: { os: string; analysis: boolean; aiFailed?: boolean }): "ai" | "screenshot" {
+  return input.os !== "web" && input.analysis && !input.aiFailed ? "ai" : "screenshot";
+}
+
 /** Le lecteur de cette plateforme peut-il exister dans ce build, sur cet appareil (sans le serveur ni l'accord) ? */
 export function playerPossible(os: string, build: BuildFeatures, platform?: PlayerPlatform): boolean {
   if (os !== "ios") return false;

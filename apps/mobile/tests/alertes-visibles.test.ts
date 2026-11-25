@@ -210,7 +210,8 @@ describe("4. Bandeau et pastille", () => {
     expect(profile).toContain('{news.hasUnseen ? <View style={styles.segDot} testID="pastille-envies" /> : null}');
     expect(profile).toContain("accessibilityLabel={news.hasUnseen ? t.wishAlerts.newsTabLabel(t.wishlist.title) : t.wishlist.title}");
     expect(profile).toContain("refreshNews();");
-    expect(profile).toContain("<WishlistPanel news={news} />");
+    // Lot « navigation » : l'en-tête du profil défile avec les Envies.
+    expect(profile).toContain("<WishlistPanel news={news} header={profileHeader(false)} />");
   });
 
   it("refusé : rien du compte précédent après un changement de compte ; « vu » jamais envoyé au serveur", () => {

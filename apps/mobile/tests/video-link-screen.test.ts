@@ -137,7 +137,11 @@ describe("écran « vidéo partagée » : l'analyse d'abord, quand le serveur l'
     // Lot « propositions » : en cas d'erreur, tout coupé (l'analyse et ses propositions).
     expect(screen).toContain("fetchVideoLinkAnalysisStatus().catch(() => LINK_ANALYSIS_OFF)");
     expect(screen).toContain("setAnalysisEnabled(enabled);");
-    expect(screen.match(/if \(enabled\) return setStage\(\{ kind: "auto" \}\);/g)).toHaveLength(2);
+    // Retours du build 2 (« la vidéo d'abord ») : l'analyse directement seulement pour la branche sans vidéo
+    // (serveur momentanément muet) ; sinon openingPath décide (iPhone, lecteur possible : l'accord puis le lecteur).
+    expect(screen.match(/if \(enabled\) return setStage\(\{ kind: "auto" \}\);/g)).toHaveLength(1);
+    expect(screen).toContain('if (openingPath({ os: Platform.OS, offered, analysis: enabled }) === "auto") return setStage({ kind: "auto" });');
+    expect(screen).toContain('const next = afterPlayerFailure({ os: Platform.OS, analysis: analysisRef.current, aiFailed: phaseRef.current === "failed" });');
     // Sans l'analyse, la décision d'avant (lecteur, écran de secours, site).
     expect(screen).toContain("void decide(response);");
     expect(screen).toContain("const [analysisEnabled, setAnalysisEnabled] = useState(false);");
@@ -147,6 +151,8 @@ describe("écran « vidéo partagée » : l'analyse d'abord, quand le serveur l'
     // Seulement s'il peut s'ouvrir (vidéo reconnue, serveur, build, instantané) : jamais un bouton vers l'écran de secours.
     expect(screen).toContain("const withPlayer = platform !== null && link !== null && playerOffered({ platform, os: Platform.OS, build: features, server: lookup?.players ?? null, snapshotReady: snapshotAvailable });");
     expect(screen).toContain("{t.videoLinkAuto.player(name)}");
+    // Jamais un lecteur qui vient d'échouer, reproposé sur l'écran de l'analyse.
+    expect(screen).toContain("const playerButton = withPlayer && playerBroken === null ? (");
     expect(screen).toContain("<EmbeddedPlayer");
     expect(screen).toContain("onPress={() => void spotMoment()}");
     expect(screen).toContain("{t.videoLink.webInstruction}");

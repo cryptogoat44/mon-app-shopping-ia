@@ -148,6 +148,7 @@ describe("0049 : retour en arrière, vérification, registre", () => {
     expect(REGISTRY).toContain("`supabase/verifications/0049-verification.sql` (une ligne, six `true`");
     expect(REGISTRY).toContain("Sans 0049, personne ne peut épingler de publication ni afficher de lien sur son profil");
     expect(REGISTRY.indexOf("| 0048 | Publications enregistrées")).toBeLessThan(REGISTRY.indexOf("| 0049 | Épingles et lien en bio"));
-    expect(REGISTRY).toContain("État au 20 novembre 2026.");
+    // La date d'état du registre avance à chaque migration appliquée : elle doit exister, pas rester au 20 novembre.
+    expect(REGISTRY).toMatch(/État au \d{1,2}(?:er)? [a-zéû]+ 2026\./);
   });
 });

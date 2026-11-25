@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
 import type { CollectionSummary, CollectionVisibility } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
@@ -97,91 +97,95 @@ export function CollectionSettingsSheet({
 
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button" accessibilityLabel={t.collections.close} />
-      <View style={styles.sheet}>
-        <View style={styles.handle} />
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <Text style={styles.title} accessibilityRole="header" numberOfLines={2}>
-            {current.name}
-          </Text>
+      {/* Retours du build 2 : au-dessus du clavier de l'iPhone, comme wish-alert-sheet.tsx ; la feuille rétrécit et son contenu défile. */}
+      <KeyboardAvoidingView style={styles.avoider} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button" accessibilityLabel={t.collections.close} />
+        <View style={styles.sheet}>
+          <View style={styles.handle} />
+          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+            <Text style={styles.title} accessibilityRole="header" numberOfLines={2}>
+              {current.name}
+            </Text>
 
-          <Text style={styles.label}>{t.collections.nameLabel}</Text>
-          <CollectionNameField value={name} onChange={setName} onSubmit={handleRename} />
-          <Pressable
-            style={[styles.button, renamable ? null : styles.buttonDisabled]}
-            onPress={handleRename}
-            disabled={!renamable}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !renamable, busy }}
-          >
-            <Text style={[styles.buttonLabel, renamable ? null : styles.labelDisabled]}>{t.collections.save}</Text>
-          </Pressable>
-
-          <Text style={styles.label}>{t.collections.visibilityTitle}</Text>
-          <SegmentedChoice
-            label={t.collections.visibilityTitle}
-            options={visibilityOptions()}
-            value={confirmShare ? "friends" : current.visibility}
-            onChange={handleVisibility}
-            disabled={busy}
-          />
-          <Text style={[styles.hint, current.hidden ? styles.hidden : null]}>{collectionState(current)}</Text>
-          {confirmShare ? (
-            <View style={styles.confirm} testID="confirmer-amis">
-              <Text style={styles.confirmTitle} accessibilityRole="alert">
-                {t.collections.shareConfirmTitle}
-              </Text>
-              <Text style={styles.confirmText}>{t.collections.shareConfirm}</Text>
-              <View style={styles.confirmButtons}>
-                <Pressable style={styles.confirmButton} onPress={() => setConfirmShare(false)} disabled={busy} accessibilityRole="button">
-                  <Text style={styles.cancelLabel}>{t.collections.cancel}</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.confirmButton, styles.confirmPrimary]}
-                  onPress={() => applyVisibility("friends")}
-                  disabled={busy}
-                  accessibilityRole="button"
-                  accessibilityState={{ busy }}
-                >
-                  <Text style={styles.confirmPrimaryLabel}>{t.collections.shareConfirmCta}</Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : null}
-
-          {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
-
-          {confirmDelete ? (
-            <View style={styles.confirm}>
-              <Text style={styles.confirmText} accessibilityRole="alert">
-                {t.collections.deleteConfirm}
-              </Text>
-              <View style={styles.confirmButtons}>
-                <Pressable style={styles.confirmButton} onPress={() => setConfirmDelete(false)} disabled={busy} accessibilityRole="button">
-                  <Text style={styles.cancelLabel}>{t.collections.cancel}</Text>
-                </Pressable>
-                <Pressable style={styles.confirmButton} onPress={handleDelete} disabled={busy} accessibilityRole="button" accessibilityState={{ busy }}>
-                  <Text style={styles.dangerLabel}>{t.collections.deleteConfirmCta}</Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : (
-            <Pressable style={styles.deleteRow} onPress={() => setConfirmDelete(true)} disabled={busy} accessibilityRole="button">
-              <Text style={styles.dangerLabel}>{t.collections.delete}</Text>
+            <Text style={styles.label}>{t.collections.nameLabel}</Text>
+            <CollectionNameField value={name} onChange={setName} onSubmit={handleRename} />
+            <Pressable
+              style={[styles.button, renamable ? null : styles.buttonDisabled]}
+              onPress={handleRename}
+              disabled={!renamable}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !renamable, busy }}
+            >
+              <Text style={[styles.buttonLabel, renamable ? null : styles.labelDisabled]}>{t.collections.save}</Text>
             </Pressable>
-          )}
-        </ScrollView>
-        <Pressable style={styles.close} onPress={onClose} accessibilityRole="button">
-          <Text style={styles.closeLabel}>{t.collections.close}</Text>
-        </Pressable>
-      </View>
+
+            <Text style={styles.label}>{t.collections.visibilityTitle}</Text>
+            <SegmentedChoice
+              label={t.collections.visibilityTitle}
+              options={visibilityOptions()}
+              value={confirmShare ? "friends" : current.visibility}
+              onChange={handleVisibility}
+              disabled={busy}
+            />
+            <Text style={[styles.hint, current.hidden ? styles.hidden : null]}>{collectionState(current)}</Text>
+            {confirmShare ? (
+              <View style={styles.confirm} testID="confirmer-amis">
+                <Text style={styles.confirmTitle} accessibilityRole="alert">
+                  {t.collections.shareConfirmTitle}
+                </Text>
+                <Text style={styles.confirmText}>{t.collections.shareConfirm}</Text>
+                <View style={styles.confirmButtons}>
+                  <Pressable style={styles.confirmButton} onPress={() => setConfirmShare(false)} disabled={busy} accessibilityRole="button">
+                    <Text style={styles.cancelLabel}>{t.collections.cancel}</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.confirmButton, styles.confirmPrimary]}
+                    onPress={() => applyVisibility("friends")}
+                    disabled={busy}
+                    accessibilityRole="button"
+                    accessibilityState={{ busy }}
+                  >
+                    <Text style={styles.confirmPrimaryLabel}>{t.collections.shareConfirmCta}</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
+
+            {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
+
+            {confirmDelete ? (
+              <View style={styles.confirm}>
+                <Text style={styles.confirmText} accessibilityRole="alert">
+                  {t.collections.deleteConfirm}
+                </Text>
+                <View style={styles.confirmButtons}>
+                  <Pressable style={styles.confirmButton} onPress={() => setConfirmDelete(false)} disabled={busy} accessibilityRole="button">
+                    <Text style={styles.cancelLabel}>{t.collections.cancel}</Text>
+                  </Pressable>
+                  <Pressable style={styles.confirmButton} onPress={handleDelete} disabled={busy} accessibilityRole="button" accessibilityState={{ busy }}>
+                    <Text style={styles.dangerLabel}>{t.collections.deleteConfirmCta}</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : (
+              <Pressable style={styles.deleteRow} onPress={() => setConfirmDelete(true)} disabled={busy} accessibilityRole="button">
+                <Text style={styles.dangerLabel}>{t.collections.delete}</Text>
+              </Pressable>
+            )}
+          </ScrollView>
+          <Pressable style={styles.close} onPress={onClose} accessibilityRole="button">
+            <Text style={styles.closeLabel}>{t.collections.close}</Text>
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = themedStyles(() => ({
+  avoider: { flex: 1, justifyContent: "flex-end" },
   backdrop: { flex: 1, backgroundColor: color.voile },
-  sheet: { maxHeight: "85%", backgroundColor: color.porcelaine, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, paddingBottom: space.xl },
+  sheet: { maxHeight: "85%", flexShrink: 1, backgroundColor: color.porcelaine, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, paddingBottom: space.xl },
   handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: color.filet, alignSelf: "center", marginTop: 9, marginBottom: space.sm },
   content: { paddingHorizontal: space.lg, paddingBottom: space.md, gap: space.sm },
   title: { fontSize: font.body, fontWeight: "600", color: color.encre },

@@ -2,6 +2,7 @@ import type { WishlistItem as RemoteWishlistItem } from "@monapp/shared-types";
 import { addWishlistItem, fetchCollectionWishlist, fetchSearch, fetchWishlist, listRecentSearches } from "@/lib/api";
 import { matchToPiece, pieceTitle, toSpotResult } from "@/lib/spot-result";
 import { ownedMarks } from "@/lib/owned-marks";
+import { HISTORY_PAGE_SIZE, matchesHistoryQuery } from "@/lib/recent-searches";
 import * as mock from "./mock";
 import type { Piece, Profile, SpotResult, VaultItem, WishlistItem } from "./types";
 
@@ -60,6 +61,24 @@ export async function getRecentSearches(limit?: number): Promise<{ searchId: str
   return searches.flatMap((search) => {
     const best = search.matches[0];
     return best ? [{ searchId: search.id, createdAt: search.createdAt, piece: matchToPiece(best) }] : [];
+  });
+}
+
+/** Le serveur ne sait pas encore chercher dans l'historique (plus ancien que l'app). */
+export class HistorySearchUnavailableError extends Error {}
+
+/** Une page de l'historique (lot « historique ») : 20 recherches, plus
+ * anciennes que `before` ; avec `q`, seulement celles dont une pièce
+ * correspond, et c'est CETTE pièce qui est renvoyée (rouverte en grand). Un
+ * serveur qui renverrait une pièce qui ne correspond pas ignore `q` :
+ * HistorySearchUnavailableError, jamais un résultat faux à l'écran. */
+export async function getHistoryPage(options: { before?: string | null; q?: string | null }): Promise<{ searchId: string; createdAt: string; piece: Piece }[]> {
+  const searches = await listRecentSearches(HISTORY_PAGE_SIZE, options);
+  const q = options.q;
+  if (q && searches.some((search) => search.matches[0] !== undefined && !matchesHistoryQuery(search.matches[0], q))) throw new HistorySearchUnavailableError();
+  return searches.flatMap((search) => {
+    const shown = search.matches[0];
+    return shown ? [{ searchId: search.id, createdAt: search.createdAt, piece: matchToPiece(shown) }] : [];
   });
 }
 

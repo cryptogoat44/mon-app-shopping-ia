@@ -176,7 +176,7 @@ function SavedPostsList({ collectionId, onBack }: { collectionId: string | null;
                 {post.mediaUrl === null ? (
                   <ImageUnavailable variant="tile" />
                 ) : (
-                  <SpotImage hdUri={post.mediaThumbUrl ?? post.mediaHdUrl} fallbackUri={post.mediaUrl} style={styles.fill} fit="cover" recyclingKey={post.id} />
+                  <SpotImage size="small" hdUri={post.mediaUrl} fallbackUri={post.mediaThumbUrl ?? post.mediaHdUrl ?? post.mediaUrl} style={styles.fill} fit="cover" recyclingKey={post.id} />
                 )}
                 {hasSeveralPhotos(post) ? (
                   <View style={styles.photosMark} accessible accessibilityLabel={t.carousel.morePhotos}>

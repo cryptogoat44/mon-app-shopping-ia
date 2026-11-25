@@ -20,6 +20,14 @@ export const en: Catalog = {
     photoUnavailable: "This photo couldn't be retrieved. If it's stored in iCloud, check your connection, then try again.",
     offline: "You seem to be offline. Check your internet connection, then try again.",
     imageUnavailable: "Image unavailable",
+    imageViewer: {
+      openHint: "Opens the image full screen",
+      viewerLabel: "Large image of the piece. Swipe up or down to zoom.",
+      viewerLabelWeb: "Large image of the piece. Use the buttons to zoom.",
+      zoomValue: (percent: number) => `Zoom ${percent}%`,
+      zoomIn: "Zoom in",
+      zoomOut: "Zoom out",
+    },
   },
   tabs: {
     feed: "Feed",
@@ -70,11 +78,13 @@ export const en: Catalog = {
     whole: "The whole image",
   },
   peopleSearch: {
-    placeholder: "Search",
+    placeholder: "Name or @username",
     label: "Search for a profile",
     empty: "No profiles found.",
     error: "The search didn't go through.",
     following: "Following",
+    // Build 2 feedback: the screen's title, next to “‹”.
+    title: "Search for a profile",
   },
   completeProfile: {
     title: "One last step",
@@ -109,7 +119,6 @@ export const en: Catalog = {
       `Without full access to your photos, ${BRAND} can't find your latest video: choose it with “Add a video”. Access can be changed in the iPhone Settings.`,
     latestVideoEmpty: "No video in your gallery yet: the most recent one will appear here.",
     latestVideoChoiceFailed: "Your answer couldn't be saved. Please try again.",
-    linkQuestion: "Have a TikTok, Instagram or Pinterest link?",
     recentlySpotted: "Recently spotted",
     detected: {
       tiktok: "TikTok video recognized",
@@ -130,6 +139,12 @@ export const en: Catalog = {
     prepareError: "Preparation didn't go through. Check your connection, then try again.",
     networkError: "Unable to connect. Check your internet connection, then try again.",
     serverError: `${BRAND} isn't responding right now. Please try again in a minute.`,
+    // Build 2 feedback: the "Your latest video" card folded to one row, and its cross
+    // (it turns the suggestion off, exactly like the switch in Settings).
+    latestVideoExpand: "Search this video",
+    latestVideoDismiss: "Stop suggesting my latest video",
+    latestVideoDismissed: "Got it: your latest video won't be suggested anymore. You can turn this suggestion back on in Settings.",
+    latestVideoSettingsLink: "Open Settings",
   },
   video: {
     title: "Choose the frame",
@@ -294,9 +309,7 @@ export const en: Catalog = {
   // snapshot of what the view shows. On the website, or player off: the
   // "Spot this video" screen. Texts to be approved by the founder.
   player: {
-    linkQuestion: "Have a TikTok or Instagram link?",
     linkLabel: "TikTok or Instagram link",
-    linkHint: `The video opens here, in ${BRAND}: you'll pause it on the piece.`,
     linkHintWeb: "Pieces already spotted in this video appear here, with what to do next.",
     open: "Open the video",
     opening: "Opening the video…",
@@ -314,16 +327,18 @@ export const en: Catalog = {
       body: (platform: string) => `This video is played by ${platform}, which may use its own trackers.`,
       play: "Play the video here",
       refuse: "No thanks",
+      // Build 2 feedback: analysis on, "No thanks" leads to the automatic search.
+      refuseAuto: "No thanks, search automatically",
     },
     howItWorksSteps: (spot: string) => [
       `Share the TikTok or Instagram video to ${BRAND}, or paste its link.`,
-      `Pause it on the piece, tap “${spot}”, then circle the piece.`,
+      `Pause it on the piece, tap “${spot}”, then circle the piece (if the video can't be played here, ${BRAND} offers another way).`,
       `${BRAND} shows you where to buy it, in 10 to 20 seconds.`,
     ],
     linkNotice: {
-      title: `This video can open in ${BRAND}`,
-      body: "Open it right here: you'll pause it on the piece.",
-      bodyWeb: "Open it here: you'll see the pieces already spotted, and how to spot it.",
+      title: `This link can open in ${BRAND}`,
+      body: `Open it here: ${BRAND} helps you find the piece in the video.`,
+      bodyWeb: "Open it here: you'll see the pieces already spotted in the video, and how to spot it.",
     },
     settings: {
       title: `Videos played in ${BRAND}`,
@@ -436,6 +451,11 @@ export const en: Catalog = {
       waitingSteps: ["Fetching the video…", "The AI is looking at the pieces…"],
       // Under the screenshot offered after a failure, when nothing was written.
       keptLink: "Your link is kept.",
+    },
+    // Build 2 feedback ("video first"): the player couldn't be used, the AI takes over.
+    playerLead: {
+      notHere: "The video couldn't be played here: the AI can look for the piece for you.",
+      snapshot: `${BRAND} couldn't take the frame of this moment: the AI can look for the piece for you.`,
     },
   },
   visualSearchTip: {
@@ -724,15 +744,20 @@ export const en: Catalog = {
     affiliateMention: "(affiliate link)",
   },
   retrouverPieces: {
-    seeAll: "See all",
-    seeAllLabel: "See all your recently spotted pieces",
     recentLead: "Reopening a result doesn't count toward your daily searches.",
-    recentEmpty: "No successful searches yet. The pieces you find with Spotter will appear here.",
     recentLoadError: "Unable to show your recent searches. Check your connection, then try again.",
-    recentLimitNote: (n: number) => `Only your last ${n} successful searches appear here. To find a piece again later, keep it in your Wishlist.`,
     today: "Today",
     yesterday: "Yesterday",
     alreadyInVault: "Already in your Vault",
+    historySearchPlaceholder: "A piece, a brand, a shop",
+    historySearchLabel: "Search your past searches",
+    historySearchClear: "Clear search",
+    historyNoMatch: (q: string) => `No search matches “${q}”.`,
+    historyEnd: "End of your history.",
+    historyMoreFailed: "The rest of your history couldn't be loaded.",
+    historyLoading: "Loading your history",
+    historyUnavailable: "Searching your history isn't available yet. Please try again a little later.",
+    historyResultsShown: "Your search results are shown.",
   },
   sendPiece: {
     title: "Send to…",
@@ -1002,6 +1027,9 @@ export const en: Catalog = {
     hiddenChipLabel: (name: string) => `${name}, hidden by moderation`,
     hiddenState: "Hidden by moderation: your friends can no longer see it.",
     hiddenCannotShare: "This collection was hidden by moderation: you can't show it to your friends.",
+    // Build 2 feedback (compact Wishlist): the "…" button at the end of the chips, for the chosen collection.
+    ownOptionsLabel: (name: string) => `Options for the collection ${name}`,
+    ownOptionsPosts: "Posts filed here",
   },
   received: {
     title: "Received pieces",
@@ -1026,10 +1054,12 @@ export const en: Catalog = {
       "It will bring together your posts and those of the people you follow. Start by identifying a piece, sharing a photo, or finding profiles to follow.",
     emptySpot: "Spot a piece",
     emptyPublish: "Post a photo",
-    emptyFind: "Find profiles",
+    emptyFind: "Search for profiles",
     title: "Feed",
-    profiles: "Profiles",
     loadError: "Unable to load the feed.",
+    // Build 2 feedback: the search-field pill at the top of the Feed (it replaces “Profiles”).
+    searchProfiles: "Search for a profile",
+    searchProfilesHint: "Opens the member search by name or @username",
   },
   comments: {
     title: "Comments",
@@ -1107,6 +1137,13 @@ export const en: Catalog = {
     totalLoading: "Adding up the total…",
     // Beyond 500 wishes, or when a page could not be loaded.
     partialNote: (n: number) => `Based on the ${n} wishes loaded so far: scroll down to see more.`,
+    // Build 2 feedback (compact Wishlist): the privacy sentence behind a lock, search behind a magnifier,
+    // sort in a button. Neutral title: it stays true the day your friends can see your Wishlist.
+    privacyTitle: "Who can see your Wishlist",
+    privacyOk: "Got it",
+    searchClose: "Close search",
+    sortShort: { recent: "Recent", price_asc: "Price ↑", price_desc: "Price ↓" },
+    sortButtonLabel: (current: string) => `Sort, currently: ${current}`,
   },
   profile: {
     vault: "Vault",
@@ -1753,7 +1790,7 @@ export const en: Catalog = {
     followersEmptyOther: "This account has no followers yet.",
     followingEmpty: "You are not following anyone yet.",
     followingEmptyOther: "This account is not following anyone yet.",
-    findPeople: "Find people",
+    findPeople: "Search for profiles",
     loadError: "Couldn't load this list.",
     remove: "Remove",
     removeLabel: (name: string) => `Remove ${name} from your followers`,

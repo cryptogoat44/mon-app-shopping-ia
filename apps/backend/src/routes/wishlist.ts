@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
 import { fetchHdImageUrls } from "../lib/pieceImages.js";
+import { upgradeMerchantImageLater } from "../lib/merchantImage.js";
 import { z } from "zod";
 import { WISHLIST_ITEMS_MAX, type WishlistItem, type WishlistItemDetail } from "@monapp/shared-types";
 import { findOwnMatch } from "../lib/ownMatches.js";
@@ -218,7 +219,20 @@ export default async function wishlistRoutes(fastify: FastifyInstance) {
       { id: row.id, userId, merchantUrl: row.merchant_url, merchantName: row.merchant_name, productMatchId: row.product_match_id },
       searchLocaleFor(request).country
     );
-    return reply.send(toWishlistItem(row));
+    // Retours du build 2 : l'image HD du résultat d'origine dans la réponse
+    // (champ déjà dans le type, ajouté : rien ne change pour une app plus
+    // ancienne), relue comme pour la liste et la fiche (lib/pieceImages.ts).
+    // Jamais un échec de « Garder » : sans elle, null, comme avant.
+    let imageHdUrl: string | null = null;
+    try {
+      [imageHdUrl = null] = await fetchHdImageUrls(fastify, [row]);
+    } catch (error) {
+      request.log.error({ error }, "Échec de lecture de l'image HD d'une envie créée");
+    }
+    // Pas d'image HD : la grande image de la boutique, cherchée après la
+    // réponse (lib/merchantImage.ts, éteint par défaut ; jamais un échec).
+    upgradeMerchantImageLater(fastify, request.log, row, imageHdUrl);
+    return reply.send(toWishlistItem(row, undefined, imageHdUrl));
   });
 
   // Détail d'une Envie (Lot Q, bloc 3, UX-04) — seulement la sienne. Lot 5 :
@@ -253,6 +267,8 @@ export default async function wishlistRoutes(fastify: FastifyInstance) {
         wishPost && !wishPost.hidden_at ? { id: wishPost.id, privacy: wishPost.privacy, createdAt: wishPost.created_at } : null,
       inVault: inVault.length > 0,
     };
+    // Envie plus ancienne sans image HD : même recherche, après la réponse.
+    upgradeMerchantImageLater(fastify, request.log, row, hdUrls[0] ?? null);
     return reply.send(detail);
   });
 

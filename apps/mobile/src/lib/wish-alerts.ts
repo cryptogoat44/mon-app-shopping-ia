@@ -34,7 +34,6 @@ import {
   type WishAlertState,
   type WishAlertsStatus,
 } from "@monapp/shared-types";
-import type { Piece } from "../api/types";
 import { t } from "../i18n";
 import { isAnalyticsActive, track } from "./analytics";
 import { ApiError } from "./api-error";
@@ -291,9 +290,6 @@ export function watchErrorMessage(error: unknown): string {
 /** Ce que « Plus disponible » signale : une proposition d'une de vos
  * recherches, ou une de vos envies. */
 export type StockReportTarget = { kind: "match"; id: string; title: string } | { kind: "wish"; id: string; title: string };
-
-/** L'action « Plus disponible ? » d'une carte de l'écran Résultat, ou rien. */
-export type StockAction = (piece: Piece) => (() => void) | undefined;
 
 /** Le corps de POST /api/alerts/stock-reports (exactement un des deux identifiants). */
 export function stockReportRequest(target: StockReportTarget): StockReportRequest {

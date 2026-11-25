@@ -71,10 +71,12 @@ const envSchema = z.object({
     .optional()
     .transform((value) => value === "true"),
   // Lecteurs TikTok et Instagram de l'app (mission « liens vidéo ») : ils ne
-  // peuvent que COUPER un lecteur déjà compilé dans l'app (elle retombe alors
-  // sur l'écran de secours), jamais faire apparaître une fonction absente.
-  // Allumés par défaut ; seule la valeur exacte « false » coupe. Lus par
-  // lib/videoPlayers.ts. Voir docs/liens-video/interrupteurs.md.
+  // peuvent que COUPER un lecteur déjà compilé dans l'app (elle passe alors à
+  // la recherche automatique si VIDEO_LINK_ANALYSIS_ENABLED est allumée et
+  // prête, sinon à l'écran de secours « Spottez cette vidéo »), jamais faire
+  // apparaître une fonction absente. Allumés par défaut ; seule la valeur
+  // exacte « false » coupe. Lus par lib/videoPlayers.ts. Voir
+  // apps/mobile/BUILD-IPHONE.md (« La vidéo d'abord »).
   TIKTOK_PLAYER_ENABLED: z
     .string()
     .optional()
@@ -125,6 +127,18 @@ const envSchema = z.object({
   // la liste des variables modifiables par les outils (render-guard) : le
   // fondateur seul la règle, à la main, dans Render.
   LOOK_PAGES_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value === "true"),
+  // Grande image lue sur la page publique de la boutique (retours du build 2,
+  // lib/merchantImage.ts), ÉTEINTE par défaut. Même règle que la voie C :
+  // seule la valeur exacte "true" l'allume ; toute autre valeur la laisse
+  // éteinte, sans jamais arrêter le serveur. Allumée : pour une pièce gardée
+  // ou achetée qui n'a qu'une petite image, le serveur lit une fois la page
+  // publique de la boutique (rien du membre n'est envoyé) et range l'adresse
+  // de la grande image si elle manque. Lu seulement par lib/merchantImage.ts ;
+  // le fondateur seul le règle, à la main, dans Render.
+  MERCHANT_IMAGE_UPGRADE_ENABLED: z
     .string()
     .optional()
     .transform((value) => value === "true"),

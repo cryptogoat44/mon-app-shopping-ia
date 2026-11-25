@@ -137,15 +137,14 @@ export default function ProfileScreen() {
     router.push("/vault-item/new");
   }
 
-  return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.nav}>
-        <Text style={styles.navHandle}>@{profile?.username}</Text>
-        <Pressable onPress={() => router.push("/settings")} hitSlop={12} style={styles.navButton} accessibilityRole="button" accessibilityLabel={t.settings.title}>
-          <SettingsIcon tint={color.encre} />
-        </Pressable>
-      </View>
-
+  // Retours du build 2 (« ça prend beaucoup trop de place ») : la photo, les
+  // compteurs et la rangée Vault · Lifestyle · Envies défilent avec le contenu
+  // de chaque onglet, comme sur les réseaux sociaux ; seule la barre du haut
+  // (@pseudo, réglages) reste fixe. En tête de chaque liste (`inset` : la
+  // liste a ses propres marges, que l'en-tête annule pour garder toute la
+  // largeur). Aucun champ de saisie ici : recréé à chaque affichage, sans risque.
+  const profileHeader = (inset: boolean) => (
+    <View style={inset ? styles.headerInset : styles.headerFull}>
       <View style={styles.head}>
         <Pressable style={styles.avatar} onPress={() => setPhotoOpen(true)} accessibilityRole="button" accessibilityLabel={t.profile.changeAvatar}>
           <Avatar uri={profile?.avatarUrl} userId={profile?.id ?? ""} displayName={profile?.displayName} username={profile?.username} size={72} />
@@ -232,18 +231,32 @@ export default function ProfileScreen() {
           {news.hasUnseen ? <View style={styles.segDot} testID="pastille-envies" /> : null}
         </Pressable>
       </View>
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={styles.screen}>
+      <View style={styles.nav}>
+        <Text style={styles.navHandle}>@{profile?.username}</Text>
+        <Pressable onPress={() => router.push("/settings")} hitSlop={12} style={styles.navButton} accessibilityRole="button" accessibilityLabel={t.settings.title}>
+          <SettingsIcon tint={color.encre} />
+        </Pressable>
+      </View>
 
       {loading ? (
-        <View style={styles.grid}>
-          {[0, 1, 2].map((i) => (
-            <View key={i} style={styles.piece}>
-              <Skeleton style={styles.thumb} />
-              <Skeleton style={{ width: "80%", height: 11, marginTop: space.xs }} />
-            </View>
-          ))}
-        </View>
+        <ScrollView>
+          {profileHeader(false)}
+          <View style={styles.grid}>
+            {[0, 1, 2].map((i) => (
+              <View key={i} style={styles.piece}>
+                <Skeleton style={styles.thumb} />
+                <Skeleton style={{ width: "80%", height: 11, marginTop: space.xs }} />
+              </View>
+            ))}
+          </View>
+        </ScrollView>
       ) : segment === "wishlist" ? (
-        <WishlistPanel news={news} />
+        <WishlistPanel news={news} header={profileHeader(false)} />
       ) : segment === "vault" ? (
         <FlatList
           data={chunk(items, 3)}
@@ -260,7 +273,7 @@ export default function ProfileScreen() {
                 >
                   <View style={styles.thumb}>
                     {item.imageUrl ? (
-                      <SpotImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} style={styles.thumbImage} fit="cover" size="small" accessibilityLabel={item.title} />
+                      <SpotImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} style={styles.thumbImage} fit="cover" size="card" accessibilityLabel={item.title} />
                     ) : (
                       <ClockIcon size={30} tint={color.encre} />
                     )}
@@ -279,6 +292,7 @@ export default function ProfileScreen() {
           )}
           ListHeaderComponent={
             <>
+              {profileHeader(!(vaultError || isEmptyVault))}
               {vaultError ? <ErrorMessage style={styles.emptyText}>{vaultError}</ErrorMessage> : null}
               {items.length > 0 ? (
                 <Pressable
@@ -296,7 +310,7 @@ export default function ProfileScreen() {
           }
           ListEmptyComponent={
             !vaultError ? (
-              <View style={styles.empty}>
+              <View style={[styles.empty, styles.emptyBelowHeader]}>
                 <Text style={styles.emptyText}>{t.profile.emptyVault}</Text>
                 <Pressable accessibilityRole="button" onPress={openAddPiece} style={styles.emptyButton}>
                   <Text style={styles.emptyButtonLabel}>{t.profile.addPiece}</Text>
@@ -313,63 +327,67 @@ export default function ProfileScreen() {
         />
       ) : (
         <ScrollView
-          contentContainerStyle={isEmptyLifestyle || lifestyleError ? styles.emptyContent : styles.grid}
+          contentContainerStyle={isEmptyLifestyle || lifestyleError ? styles.emptyContent : null}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
         >
+          {profileHeader(false)}
           {lifestyleError ? (
-            <View style={styles.empty}>
+            <View style={[styles.empty, styles.emptyBelowHeader]}>
               <ErrorMessage style={styles.emptyText}>{lifestyleError}</ErrorMessage>
             </View>
           ) : isEmptyLifestyle ? (
-            <View style={styles.empty}>
+            <View style={[styles.empty, styles.emptyBelowHeader]}>
               <Text style={styles.emptyText}>{t.profile.emptyLifestyle}</Text>
               <Pressable accessibilityRole="button" onPress={() => router.push("/post-item/new")}>
                 <Text style={styles.emptyCta}>{t.profile.emptyLifestyleCta}</Text>
               </Pressable>
             </View>
           ) : (
-            lifestyleGrid.posts.map((post) => (
-              <Pressable
-                key={post.id}
-                style={styles.piece}
-                onPress={() => router.push({ pathname: "/publication", params: { id: post.id } })}
-                accessibilityRole="button"
-                accessibilityLabel={gridCellLabel(post.caption ?? t.profile.lifestylePhoto, lifestyleGrid.pinnedIds.has(post.id))}
-              >
-                <View style={styles.thumb}>
-                  {post.mediaUrl === null ? (
-                    <ImageUnavailable variant="tile" />
-                  ) : (
-                    <SpotImage
-                      hdUri={post.mediaThumbUrl}
-                      fallbackUri={post.mediaUrl}
-                      style={styles.thumbImage}
-                      fit="cover"
-                      recyclingKey={post.id}
-                      accessibilityLabel={post.caption ?? t.profile.lifestylePhoto}
-                    />
-                  )}
-                </View>
-                {post.taggedPieces.length > 0 ? (
-                  <View style={styles.tagBadge}>
-                    <TagIcon size={12} tint={color.surImage} />
+            <View style={styles.grid}>
+              {lifestyleGrid.posts.map((post) => (
+                <Pressable
+                  key={post.id}
+                  style={styles.piece}
+                  onPress={() => router.push({ pathname: "/publication", params: { id: post.id } })}
+                  accessibilityRole="button"
+                  accessibilityLabel={gridCellLabel(post.caption ?? t.profile.lifestylePhoto, lifestyleGrid.pinnedIds.has(post.id))}
+                >
+                  <View style={styles.thumb}>
+                    {post.mediaUrl === null ? (
+                      <ImageUnavailable variant="tile" />
+                    ) : (
+                      <SpotImage
+                        size="small"
+                        hdUri={post.mediaUrl}
+                        fallbackUri={post.mediaThumbUrl ?? post.mediaUrl}
+                        style={styles.thumbImage}
+                        fit="cover"
+                        recyclingKey={post.id}
+                        accessibilityLabel={post.caption ?? t.profile.lifestylePhoto}
+                      />
+                    )}
                   </View>
-                ) : null}
-                {/* Plusieurs photos (migration 0047) : une petite marque dans le coin. */}
-                {hasSeveralPhotos(post) ? (
-                  <View style={styles.photosMark} accessible accessibilityLabel={t.carousel.morePhotos}>
-                    <PhotosIcon size={12} />
-                  </View>
-                ) : null}
-                {/* Épinglée (migration 0049) : une punaise dans le coin opposé ;
-                    VoiceOver lit « Épinglée » dans le libellé de la case. */}
-                {lifestyleGrid.pinnedIds.has(post.id) ? (
-                  <View style={styles.pinMark} testID="marque-epinglee">
-                    <PinIcon size={12} />
-                  </View>
-                ) : null}
-              </Pressable>
-            ))
+                  {post.taggedPieces.length > 0 ? (
+                    <View style={styles.tagBadge}>
+                      <TagIcon size={12} tint={color.surImage} />
+                    </View>
+                  ) : null}
+                  {/* Plusieurs photos (migration 0047) : une petite marque dans le coin. */}
+                  {hasSeveralPhotos(post) ? (
+                    <View style={styles.photosMark} accessible accessibilityLabel={t.carousel.morePhotos}>
+                      <PhotosIcon size={12} />
+                    </View>
+                  ) : null}
+                  {/* Épinglée (migration 0049) : une punaise dans le coin opposé ;
+                      VoiceOver lit « Épinglée » dans le libellé de la case. */}
+                  {lifestyleGrid.pinnedIds.has(post.id) ? (
+                    <View style={styles.pinMark} testID="marque-epinglee">
+                      <PinIcon size={12} />
+                    </View>
+                  ) : null}
+                </Pressable>
+              ))}
+            </View>
           )}
         </ScrollView>
       )}
@@ -450,6 +468,13 @@ const styles = themedStyles(() => ({
   footerLoader: { paddingVertical: space.lg },
   emptyContent: { flexGrow: 1 },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl, marginTop: -60 },
+  // Sous l'en-tête du profil, dans la liste : plus de remontée de 60 points (elle
+  // chevaucherait les onglets en grand texte), un peu d'air à la place.
+  emptyBelowHeader: { marginTop: 0, paddingVertical: space.xl },
+  // L'en-tête du profil en tête d'une liste : même largeur que la grille sur le site.
+  headerFull: { width: "100%", maxWidth: 640, alignSelf: "center" },
+  // … dans une liste qui a ses marges (Vault) : il les annule, et garde l'écart d'avant sous les onglets.
+  headerInset: { marginHorizontal: -space.lg, marginTop: -space.md, marginBottom: space.md },
   emptyText: { fontSize: font.secondary, color: color.acier, textAlign: "center", lineHeight: 20, marginBottom: space.md },
   emptyCta: { fontSize: font.body, color: color.vert, fontWeight: "600" },
   // Vault vide : l'ajout à la main en bouton plein, Spotter en lien dessous.

@@ -67,11 +67,8 @@ describe("l'action n'apparaît qu'avec la messagerie", () => {
     expect(screen).toContain(
       "{canSendToFriend(piece, messages) ? <SendToFriendLink style={styles.sendToFriend} pieceName={piece.name} onPress={handleSendToFriend} /> : null}"
     );
-    // Sections et liste triée : aucune action (undefined) sans la messagerie, donc aucun lien.
-    expect(body(screen, "function sendFrom(", "async function handleShare")).toContain(
-      "return (target) => (canSendToFriend(target, messages) ? () => router.push(sendToFriend(target, from)) : undefined);"
-    );
-    expect(card).toContain("{onSend ? <SendToFriendLink pieceName={piece.name} onPress={onSend} /> : null}");
+    // Retours du build 2 : plus aucun lien sur les cartes ni sur les lignes (voir plus bas).
+    expect(card).not.toContain("SendToFriendLink");
   });
 });
 
@@ -108,32 +105,30 @@ describe("l'action envoie la bonne pièce", () => {
     expect(attachmentFor(null)).toEqual({});
   });
 
-  it("chaque carte des sections et chaque ligne de la liste triée vise sa propre pièce", () => {
-    // Grille « Autres propositions » : la pièce de la carte, avec « section ».
-    expect(screen).toContain(
-      '<ProposalCard key={p.id} piece={p} onSelect={() => selectPiece(index)} placement={placements.get(index)} cheapest={index === cheapest} onSend={sendFrom("section")(p)} onReportGone={stockFrom(p)} />'
-    );
-    expect(screen).toContain('sendAction={sendFrom("price_list")} stockAction={stockFrom} />');
-    expect(screen.match(/sendAction=\{sendFrom\("section"\)\}/g)?.length).toBe(3);
+  it("retours du build 2 : « Envoyer à un ami » n'est plus sur les cartes des grilles ni sur les lignes de la liste triée", () => {
+    // Refusé : plus aucune action d'envoi passée aux listes, ni affichée par la carte.
+    expect(card).not.toContain("onSend");
+    expect(card).not.toContain("SendToFriendLink");
+    expect(screen).not.toContain("sendFrom(");
+    expect(screen).not.toContain("sendAction=");
+    expect(screen).not.toContain("onSend=");
     for (const [name, source] of [
       ["liste triée", list],
       ["complément", complement],
       ["sans prix", noPrice],
     ] as const) {
+      expect(source, name).not.toContain("sendAction");
       const cards = source.split("\n").filter((line) => line.includes("<ProposalCard"));
       expect(cards.length, name).toBe(1);
       expect(cards[0], name).toContain("piece={piece}");
-      expect(cards[0], name).toContain("onSend={sendAction?.(piece)}");
+      expect(cards[0], name).not.toContain("onSend");
     }
+    // Permis : la grande carte garde son lien, un seul dans l'écran.
+    expect(screen.match(/<SendToFriendLink/g)?.length).toBe(1);
+    expect(screen).toContain("onPress={handleSendToFriend}");
   });
 
-  it("le lien est une zone à part, jamais dans la zone qui met la carte en grand", () => {
-    const row = card.slice(card.indexOf('if (variant === "row")'), card.indexOf("return (\n    <View style={styles.card}>"));
-    const grid = card.slice(card.indexOf("return (\n    <View style={styles.card}>"), card.indexOf("export function CheapestBadge"));
-    for (const variant of [row, grid]) {
-      const send = variant.indexOf("<SendToFriendLink");
-      expect(send).toBeGreaterThan(variant.indexOf("</Pressable>"));
-    }
+  it("le lien de la grande carte garde sa zone tactile et son libellé avec le nom de la pièce", () => {
     expect(link).toContain("accessibilityLabel={t.messages.sendToFriendLabel(pieceName)}");
     expect(link).toContain("minHeight: size.touchTarget");
   });
@@ -159,15 +154,8 @@ describe("l'action envoie la bonne pièce", () => {
 });
 
 describe("la grande carte et la liste ne changent pas", () => {
-  it("depuis une section ou la liste triée : aucun choix, aucun défilement — seulement l'écran du choix", () => {
-    const send = body(screen, "function sendFrom(", "async function handleShare");
-    for (const forbidden of ["updateChoice", "holdPiece", "selectPiece", "selectFromPriceList", "setPickedInPriceList", "scrollTo", "reveal", "setState"]) {
-      expect(send, forbidden).not.toContain(forbidden);
-    }
-  });
-
   it("depuis la grande carte : la même pièce, retenue comme pour ses autres boutons (jamais une autre)", () => {
-    const send = body(screen, "function handleSendToFriend(", "function sendFrom(");
+    const send = body(screen, "function handleSendToFriend(", "async function handleShare");
     expect(send).toContain('router.push(sendToFriend(piece, "big_card"));');
     expect(send).toContain("holdPiece();");
     for (const forbidden of ["updateChoice", "chooseCard", "selectPiece", "setPickedInPriceList", "scrollTo", "reveal"]) {

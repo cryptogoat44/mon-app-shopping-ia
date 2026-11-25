@@ -1,28 +1,25 @@
 import { useCallback, useRef, useState } from "react";
-import { AccessibilityInfo, Platform, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
+import { AccessibilityInfo, ActivityIndicator, FlatList, Platform, Pressable, RefreshControl, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
-import { color, font, radius, serifDisplayLetterSpacing, serifFont, serifLineHeight, space } from "@/theme/tokens";
+import { color, font, serifDisplayLetterSpacing, serifFont, serifLineHeight, size, space } from "@/theme/tokens";
 import { t } from "@/i18n";
-import { getRecentSearches } from "@/api/client";
 import { clearLastSpotResult } from "@/api/spotSession";
-import type { Piece } from "@/api/types";
-import { ClockIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
 import { FirstRunGuide } from "@/components/first-run-guide";
 import { HowItWorksCard } from "@/components/how-it-works";
 import { LinkEntry } from "@/components/link-entry";
-import { SeeAllRecentLink } from "@/components/recent-searches";
+import { HistorySearchField, RecentSearchRow } from "@/components/recent-searches";
 import { ScreenshotHelp } from "@/components/screenshot-help";
-import { EntryTiles, LatestVideoCard, LatestVideoNote, LatestVideoQuestion } from "@/components/spot-entry";
-import { SpotImage } from "@/components/spot-image";
+import { EntryTiles, LatestVideoCard, LatestVideoDismissedNote, LatestVideoNote, LatestVideoQuestion } from "@/components/spot-entry";
 import { SearchLimitsNotice } from "@/components/search-limits-notice";
 import { VisualSearchTip } from "@/components/visual-search-tip";
 import { useAuth } from "@/lib/auth-context";
 import { importPhotoForSpotter, prepareSharedPhoto, takePhotoForSpotter, type ImportResult } from "@/lib/image-import";
 import { latestVideoUri, loadLatestVideo, saveLatestVideoChoice } from "@/lib/latest-video";
 import type { LatestVideo, LatestVideoChoice, LatestVideoState } from "@/lib/latest-video-state";
-import { RECENT_SEARCHES_LIMIT, reopenParams } from "@/lib/recent-searches";
+import { reopenParams } from "@/lib/recent-searches";
+import { useSearchHistory, type HistoryEntry } from "@/lib/use-search-history";
 import { sharedRefusalMessage, type SharedItem } from "@/lib/shared-item";
 import { useImageDrop } from "@/lib/image-drop";
 import { beginPhotoSearch, type PhotoOrigin } from "@/lib/video-context";
@@ -44,6 +41,10 @@ function useLatestVideo() {
   const userId = session?.user.id ?? null;
   const [state, setState] = useState<LatestVideoState>({ kind: "off" });
   const [answer, setAnswer] = useState<"idle" | "saving" | "failed" | "answered">("idle");
+  // Retours du build 2 : la croix de la carte (« Ne plus proposer ma dernière vidéo »).
+  const [dismissal, setDismissal] = useState<"idle" | "saving" | "failed" | "done">("idle");
+  // Carte repliée sur une ligne par défaut, et de nouveau à chaque retour sur Spotter.
+  const [expanded, setExpanded] = useState(false);
   const load = useCallback(async () => {
     try {
       setState(await loadLatestVideo(userId));
@@ -55,6 +56,9 @@ function useLatestVideo() {
   // Retour sur Spotter : la note d'après la réponse a été lue.
   const refresh = useCallback(() => {
     setAnswer((current) => (current === "saving" ? current : "idle"));
+    // La note d'après la croix ne vaut que pour cette visite.
+    setDismissal((current) => (current === "saving" ? current : "idle"));
+    setExpanded(false);
     return load();
   }, [load]);
 
@@ -70,65 +74,36 @@ function useLatestVideo() {
     setAnswer("answered");
   }
 
+  /** La croix : exactement l'état « désactivé » de Réglages (« no », sur ce téléphone, pour ce compte).
+   * Échec de l'enregistrement : la carte reste, avec le message. */
+  async function dismiss() {
+    if (!userId) return;
+    setDismissal("saving");
+    try {
+      await saveLatestVideoChoice(userId, "no");
+    } catch {
+      return setDismissal("failed");
+    }
+    await load();
+    setDismissal("done");
+  }
+
   // Juste après un « oui » qui ne peut rien montrer : on dit pourquoi.
   const note = answer !== "answered" ? null : state.kind === "no_access" ? t.spotter.latestVideoNoAccess : state.kind === "none" ? t.spotter.latestVideoEmpty : null;
-  return { state, refresh, choose: (choice: LatestVideoChoice) => void choose(choice), saving: answer === "saving", failed: answer === "failed", note };
-}
-
-function RecentRow({ recent }: { recent: { searchId: string; piece: Piece }[] }) {
-  const router = useRouter();
-  if (recent.length === 0) return null;
-  return (
-    <View style={styles.recentSection}>
-      <View style={styles.recentHeader}>
-        <Text style={styles.recentTitle} accessibilityRole="header">
-          {t.spotter.recentlySpotted}
-        </Text>
-        <SeeAllRecentLink />
-      </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentRow}>
-        {recent.map(({ searchId, piece }) => (
-          <Pressable
-            key={searchId}
-            style={styles.recentItem}
-            onPress={() => {
-              // Rouverte depuis l'historique : toujours relue sur le serveur (gratuit), jamais
-              // la copie en mémoire du dernier lancement, qui peut être périmée (voie B lancée
-              // ou plus admissible, propositions de vos mots arrivées depuis). La proposition
-              // de la vignette s'y affiche en grand (lib/recent-searches.ts).
-              clearLastSpotResult();
-              router.push({ pathname: "/spot/result", params: reopenParams({ searchId, piece }) });
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={piece.name}
-          >
-            <View style={styles.recentThumb}>
-              {piece.imageUrl ? <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} fit="cover" size="small" /> : <ClockIcon size={26} tint={color.acier} />}
-            </View>
-            <Text style={styles.recentName} numberOfLines={1}>
-              {piece.name}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-    </View>
-  );
-}
-
-/** Lien TikTok ou Instagram (mission « liens vidéo ») : la question déplie le
- * champ de lien, qui ouvre l'écran « vidéo partagée » (lecteur officiel sur
- * l'app iPhone ; pièces déjà repérées et consigne sur le site). Un lien sans
- * vidéo lisible (Pinterest) montre l'aide « capture d'écran d'abord ». */
-function LinkHelp({ onHelp }: { onHelp: () => void }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <Pressable onPress={() => setOpen((value) => !value)} style={styles.linkQuestion} accessibilityRole="button" accessibilityState={{ expanded: open }}>
-        <Text style={styles.linkQuestionLabel}>{t.player.linkQuestion}</Text>
-      </Pressable>
-      {open ? <LinkEntry onHelp={onHelp} /> : null}
-    </>
-  );
+  return {
+    state,
+    refresh,
+    choose: (choice: LatestVideoChoice) => void choose(choice),
+    saving: answer === "saving",
+    failed: answer === "failed",
+    note,
+    expanded,
+    toggle: () => setExpanded((value) => !value),
+    dismiss: () => void dismiss(),
+    dismissing: dismissal === "saving",
+    dismissFailed: dismissal === "failed",
+    dismissed: dismissal === "done",
+  };
 }
 
 /** Entrées du Spotter : vidéo (sélecteur), photo, dernière vidéo de la galerie,
@@ -262,16 +237,68 @@ function useSpotterEntries(reveal: () => void) {
   };
 }
 
+/** « Récemment spottées » (lot « historique ») : le titre de la section, une
+ * phrase, et le champ de recherche — rien tant que l'historique est vide (ou
+ * pas encore lu), sauf l'échec de la première lecture, dit avec « Réessayer ». */
+function HistoryHeader({ history }: { history: ReturnType<typeof useSearchHistory> }) {
+  const failedFirst = history.status === "failed" && !history.loaded;
+  if (!failedFirst && (!history.loaded || history.empty)) return null;
+  return (
+    <View style={styles.recentSection}>
+      <Text style={styles.recentTitle} accessibilityRole="header">
+        {t.spotter.recentlySpotted}
+      </Text>
+      {failedFirst ? null : (
+        <>
+          <Text style={styles.recentLead}>{t.retrouverPieces.recentLead}</Text>
+          <HistorySearchField value={history.text} onChangeText={history.onChangeText} onClear={history.clear} />
+        </>
+      )}
+    </View>
+  );
+}
+
+/** Sous la liste : chargement, aucune correspondance, échec avec « Réessayer », ou fin de l'historique. */
+function HistoryFooter({ history }: { history: ReturnType<typeof useSearchHistory> }) {
+  const { status, query, entries } = history;
+  if (status === "loading" || status === "more") {
+    // Une relecture avec des lignes déjà là (retour sur Spotter) : pas de roue en plus.
+    if (status === "loading" && entries.length > 0) return null;
+    if (status === "loading" && query === null && !history.loaded) return null;
+    return <ActivityIndicator color={color.encre} style={styles.historyLoading} accessibilityLabel={t.retrouverPieces.historyLoading} />;
+  }
+  if (status === "failed" || status === "moreFailed") {
+    return (
+      <View style={styles.historyNote} accessibilityLiveRegion="polite">
+        <ErrorMessage style={styles.historyMessage}>{status === "failed" ? t.retrouverPieces.recentLoadError : t.retrouverPieces.historyMoreFailed}</ErrorMessage>
+        <Pressable onPress={history.retry} style={styles.retry} accessibilityRole="button">
+          <Text style={styles.retryLabel}>{t.common.retry}</Text>
+        </Pressable>
+      </View>
+    );
+  }
+  if (status === "unavailable") return <Text style={styles.historyEnd} accessibilityLiveRegion="polite">{t.retrouverPieces.historyUnavailable}</Text>;
+  if (query !== null && entries.length === 0) return <Text style={styles.historyEnd} accessibilityLiveRegion="polite">{t.retrouverPieces.historyNoMatch(query)}</Text>;
+  if (history.endConfirmed && entries.length > 0) return <Text style={styles.historyEnd}>{t.retrouverPieces.historyEnd}</Text>;
+  return null;
+}
+
 // Spotter (lot 4 ter) : un seul point d'entrée, « Ajouter une vidéo », et la
 // photo à égalité ; sur l'app iPhone, en option, la dernière vidéo de la
 // galerie — il ne reste qu'à taper quelques mots et « Lancer ».
+// Retours du build 2, lot « historique » : l'écran est une liste. Tout le haut
+// (messages, champ du lien, tuiles, dernière vidéo) en est l'en-tête, passé
+// comme un élément (jamais un composant recréé à chaque rendu : les champs
+// perdraient le clavier et le texte) ; puis « Récemment spottées », tout
+// l'historique, chargé par pages de 20 en descendant.
 export default function SpotterScreen() {
-  const [recent, setRecent] = useState<{ searchId: string; piece: Piece }[]>([]);
+  const router = useRouter();
+  const history = useSearchHistory();
   // Historique relu au moins une fois : « Comment ça marche » ne s'affiche pas avant.
-  const [recentLoaded, setRecentLoaded] = useState(false);
+  const recentLoaded = history.loaded;
   const [refreshing, setRefreshing] = useState(false);
-  const scroll = useRef<ScrollView>(null);
-  const entries = useSpotterEntries(() => scroll.current?.scrollTo({ y: 0, animated: true }));
+  const list = useRef<FlatList<HistoryEntry>>(null);
+  const entries = useSpotterEntries(() => list.current?.scrollToOffset({ offset: 0, animated: true }));
   const latestVideo = useLatestVideo();
   const latest = latestVideo.state.kind === "ready" ? latestVideo.state.video : null;
   // Lot limites annoncées : pause du service ou dernières recherches, dites avant de choisir une photo.
@@ -279,78 +306,105 @@ export default function SpotterScreen() {
   // Lot « partager vers Spotto » : l'élément partagé s'ouvre ici, Spotter affiché et libre.
   useSharedItemOpener(entries.openShared, entries.busy === null);
   // Lot « recherche confiance » : le guide de la première recherche, une seule fois par appareil, pour un historique vide.
-  const guide = useFirstRunGuide(recentLoaded ? recent.length === 0 : null);
+  const guide = useFirstRunGuide(recentLoaded ? history.empty : null);
 
-  const loadRecent = useCallback(() => getRecentSearches(RECENT_SEARCHES_LIMIT).then(setRecent).then(() => setRecentLoaded(true)).catch(() => {}), []);
+  const reloadHistory = history.reload;
   useFocusEffect(
     useCallback(() => {
-      loadRecent();
+      void reloadHistory();
       void latestVideo.refresh();
-    }, [loadRecent, latestVideo.refresh])
+    }, [reloadHistory, latestVideo.refresh])
   );
 
   async function handleRefresh() {
     setRefreshing(true);
-    await Promise.all([loadRecent(), latestVideo.refresh(), limits.refresh()]);
+    await Promise.all([history.reload(), latestVideo.refresh(), limits.refresh()]);
     setRefreshing(false);
   }
 
+  function openEntry(entry: HistoryEntry) {
+    // Rouverte depuis l'historique : toujours relue sur le serveur (gratuit), jamais
+    // la copie en mémoire du dernier lancement, qui peut être périmée (voie B lancée
+    // ou plus admissible, propositions de vos mots arrivées depuis). La pièce de la
+    // ligne (avec une recherche : celle qui correspond) s'y affiche en grand (lib/recent-searches.ts).
+    clearLastSpotResult();
+    router.push({ pathname: "/spot/result", params: reopenParams(entry) });
+  }
+
+  const header = (
+    <View>
+      <Text style={styles.title} accessibilityRole="header">
+        {t.spotter.title}
+      </Text>
+      <Text style={styles.lead}>{t.spotter.lead}</Text>
+      {guide.state === "shown" ? (
+        <FirstRunGuide
+          onClose={guide.close}
+          onStart={() => {
+            // La dernière étape lance une vraie recherche : le choix d'une capture ou d'une photo.
+            guide.close();
+            entries.addPhoto();
+          }}
+        />
+      ) : null}
+      <SearchLimitsNotice notice={limits.notice} />
+      {/* L'astuce (iPhone, iOS 26) attend la décision du guide : jamais les deux cartes à la fois. */}
+      {guide.state === "hidden" ? <VisualSearchTip /> : null}
+      {entries.linkHelp ? (
+        <View style={styles.sharedHelp}>
+          <ScreenshotHelp onAddScreenshot={entries.addPhoto} onAddVideo={entries.addVideo} busy={entries.importing} />
+        </View>
+      ) : null}
+      {/* Retours du build 2 : le champ du lien, toujours visible, avant les tuiles (plus de question à déplier). */}
+      <LinkEntry onHelp={entries.showLinkHelp} />
+      <EntryTiles
+        videoLabel={latest ? t.spotter.otherVideo : t.spotter.addVideo}
+        onVideo={entries.addVideo}
+        onPhoto={entries.addPhoto}
+        onCamera={entries.takePhoto}
+        busy={entries.busy}
+      />
+      {entries.message ? <ErrorMessage style={styles.feedback}>{entries.message}</ErrorMessage> : null}
+      {Platform.OS === "web" ? <Text style={styles.dropHint}>{t.videoLink.dropHint}</Text> : null}
+      {latest ? (
+        <LatestVideoCard
+          video={latest}
+          query={entries.query}
+          onQuery={entries.onQuery}
+          onLaunch={() => entries.launchLatest(latest)}
+          onAddVideo={entries.addVideo}
+          busy={entries.busy === "latest"}
+          expanded={latestVideo.expanded}
+          onToggle={latestVideo.toggle}
+          onDismiss={latestVideo.dismiss}
+          dismissing={latestVideo.dismissing}
+          dismissFailed={latestVideo.dismissFailed}
+        />
+      ) : null}
+      {latestVideo.state.kind === "ask" ? <LatestVideoQuestion onAnswer={latestVideo.choose} saving={latestVideo.saving} failed={latestVideo.failed} /> : null}
+      {latestVideo.note ? <LatestVideoNote message={latestVideo.note} /> : null}
+      {latestVideo.dismissed ? <LatestVideoDismissedNote onSettings={() => router.push("/settings")} /> : null}
+      {recentLoaded && history.empty && guide.state !== "shown" ? <HowItWorksCard /> : null}
+      <HistoryHeader history={history} />
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView
-        ref={scroll}
+      <FlatList
+        ref={list}
+        data={history.entries}
+        keyExtractor={(entry) => entry.searchId}
+        renderItem={({ item }) => <RecentSearchRow entry={item} onOpen={() => openEntry(item)} />}
+        ListHeaderComponent={header}
+        ListFooterComponent={<HistoryFooter history={history} />}
+        onEndReached={history.loadMore}
+        onEndReachedThreshold={0.5}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
-      >
-        <Text style={styles.title} accessibilityRole="header">
-          {t.spotter.title}
-        </Text>
-        <Text style={styles.lead}>{t.spotter.lead}</Text>
-        {guide.state === "shown" ? (
-          <FirstRunGuide
-            onClose={guide.close}
-            onStart={() => {
-              // La dernière étape lance une vraie recherche : le choix d'une capture ou d'une photo.
-              guide.close();
-              entries.addPhoto();
-            }}
-          />
-        ) : null}
-        <SearchLimitsNotice notice={limits.notice} />
-        {/* L'astuce (iPhone, iOS 26) attend la décision du guide : jamais les deux cartes à la fois. */}
-        {guide.state === "hidden" ? <VisualSearchTip /> : null}
-        {entries.linkHelp ? (
-          <View style={styles.sharedHelp}>
-            <ScreenshotHelp onAddScreenshot={entries.addPhoto} onAddVideo={entries.addVideo} busy={entries.importing} />
-          </View>
-        ) : null}
-        {latest ? (
-          <LatestVideoCard
-            video={latest}
-            query={entries.query}
-            onQuery={entries.onQuery}
-            onLaunch={() => entries.launchLatest(latest)}
-            onAddVideo={entries.addVideo}
-            busy={entries.busy === "latest"}
-          />
-        ) : null}
-        {entries.message ? <ErrorMessage style={styles.feedback}>{entries.message}</ErrorMessage> : null}
-        <EntryTiles
-          videoLabel={latest ? t.spotter.otherVideo : t.spotter.addVideo}
-          onVideo={entries.addVideo}
-          onPhoto={entries.addPhoto}
-          onCamera={entries.takePhoto}
-          busy={entries.busy}
-        />
-        {latestVideo.state.kind === "ask" ? <LatestVideoQuestion onAnswer={latestVideo.choose} saving={latestVideo.saving} failed={latestVideo.failed} /> : null}
-        {latestVideo.note ? <LatestVideoNote message={latestVideo.note} /> : null}
-        {Platform.OS === "web" ? <Text style={styles.dropHint}>{t.videoLink.dropHint}</Text> : null}
-        <LinkHelp onHelp={entries.showLinkHelp} />
-        <RecentRow recent={recent} />
-        {recentLoaded && recent.length === 0 && guide.state !== "shown" ? <HowItWorksCard /> : null}
-      </ScrollView>
+      />
     </SafeAreaView>
   );
 }
@@ -363,14 +417,13 @@ const styles = themedStyles(() => ({
   feedback: { fontSize: font.caption, marginTop: space.sm, lineHeight: 18 },
   sharedHelp: { marginTop: space.lg },
   dropHint: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginTop: space.md, textAlign: "center" },
-  linkQuestion: { minHeight: 44, alignItems: "center", justifyContent: "center", marginTop: space.sm },
-  linkQuestionLabel: { fontSize: font.secondary, color: color.acier, textDecorationLine: "underline", textAlign: "center" },
-  recentSection: { marginTop: space.xxl - space.xs },
-  recentHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.md, marginBottom: space.md },
+  recentSection: { marginTop: space.xxl - space.xs, marginBottom: space.sm, gap: space.sm },
   recentTitle: { fontSize: font.body, fontWeight: "600", color: color.encre },
-  recentRow: { gap: space.md },
-  recentItem: { width: 104 },
-  recentThumb: { width: 104, height: 104, backgroundColor: color.plinthe, borderRadius: radius.sm, alignItems: "center", justifyContent: "center", overflow: "hidden" },
-  fill: { width: "100%", height: "100%" },
-  recentName: { fontSize: font.caption, color: color.acier, marginTop: 7, lineHeight: 16 },
+  recentLead: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
+  historyLoading: { marginTop: space.lg, minHeight: size.touchTarget },
+  historyNote: { alignItems: "center", marginTop: space.lg },
+  historyMessage: { fontSize: font.secondary, textAlign: "center", lineHeight: 21 },
+  retry: { marginTop: space.sm, minHeight: size.touchTarget, minWidth: size.touchTarget, justifyContent: "center", alignItems: "center" },
+  retryLabel: { fontSize: font.body, color: color.vert, fontWeight: "600" },
+  historyEnd: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginTop: space.lg, textAlign: "center" },
 }));

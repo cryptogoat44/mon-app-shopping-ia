@@ -49,11 +49,12 @@ import { VAULT_CATEGORIES } from "@/lib/vault-labels";
 import { useToast } from "@/lib/toast-context";
 import { messagesStatus } from "@/lib/conversations";
 import { useMessagesStatus } from "@/lib/use-messages-status";
-import { canSendToFriend, sendToFriend, type SendAction, type SendToFriendFrom } from "@/lib/send-to-friend";
+import { canSendToFriend, sendToFriend } from "@/lib/send-to-friend";
 import { useWishAlertsStatus } from "@/lib/use-wish-alerts-status";
-import { canReportResult, wishAlertsStatus, type StockAction, type StockReportTarget } from "@/lib/wish-alerts";
+import { canReportResult, wishAlertsStatus, type StockReportTarget } from "@/lib/wish-alerts";
 import { Skeleton } from "@/components/skeleton";
 import { SpotImage } from "@/components/spot-image";
+import { EnlargeableImage } from "@/components/image-viewer";
 import { ErrorMessage } from "@/components/error-message";
 import { NoPriceNotice } from "@/components/no-price-notice";
 import { CorrectionButtons, CorrectionsLink, CorrectionsSheet, useCorrections } from "@/components/spot-corrections";
@@ -505,13 +506,6 @@ export default function ResultScreen() {
     router.push(sendToFriend(piece, "big_card"));
   }
 
-  /** « Envoyer à un ami » d'une carte des sections ou d'une ligne de la liste
-   * triée : seulement sa pièce. Rien ne change à l'écran (ni la grande carte,
-   * ni la liste) : aucun choix n'est noté. */
-  function sendFrom(from: Exclude<SendToFriendFrom, "big_card">): SendAction {
-    return (target) => (canSendToFriend(target, messages) ? () => router.push(sendToFriend(target, from)) : undefined);
-  }
-
   async function handleShare() {
     if (!piece) return;
     holdPiece();
@@ -572,11 +566,6 @@ export default function ResultScreen() {
     holdPiece();
     setStockReport({ kind: "match", id: piece.id, title: pieceTitle(piece.name) });
   }
-
-  /** « Plus disponible ? » d'une carte des sections ou d'une ligne de la liste
-   * triée : seulement sa pièce, rien ne change à l'écran. */
-  const stockFrom: StockAction = (target) =>
-    canReportResult(alerts, target) ? () => setStockReport({ kind: "match", id: target.id, title: pieceTitle(target.name) }) : undefined;
 
   /** Voie B (lot c) : le résultat est remplacé sur place, dans cet écran
    * seulement. Un retour sur l'écran relit la recherche sur le serveur, qui a
@@ -880,7 +869,9 @@ export default function ResultScreen() {
         {showBigCard ? (
           <>
             <View style={styles.hero} onLayout={heroReveal.onHeroLayout}>
-              <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} accessibilityLabel={piece.name} />
+              <EnlargeableImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} label={piece.name} style={styles.fill}>
+                <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} accessibilityLabel={piece.name} />
+              </EnlargeableImage>
             </View>
 
             <Text style={styles.rankLabel}>{bigCardLabelText(bigCardLabel(selectedIndex, bestIndex, firstAvailableIndex(result), allPieces(result)[selectedIndex]))}</Text>
@@ -959,7 +950,7 @@ export default function ResultScreen() {
           <>
             {/* Une seule liste triée par prix, sans titre de section ; boutiques en attente : la ligne d'attente, en haut. */}
             {result.complement?.pending ? <ShopsPending /> : null}
-            <PriceSortedList key={priceSort} items={layout.priceList ?? []} cheapestIndex={cheapest} onSelect={selectFromPriceList} placements={placements} sendAction={sendFrom("price_list")} stockAction={stockFrom} />
+            <PriceSortedList key={priceSort} items={layout.priceList ?? []} cheapestIndex={cheapest} onSelect={selectFromPriceList} placements={placements} />
           </>
         ) : (
           <>
@@ -971,7 +962,7 @@ export default function ResultScreen() {
                 <View style={styles.grid}>
                   {/* Cartes (image, nom, boutique, prix, « Voir chez … ») : components/proposal-card.tsx. */}
                   {visibleOthers.map(({ piece: p, index }) => (
-                    <ProposalCard key={p.id} piece={p} onSelect={() => selectPiece(index)} placement={placements.get(index)} cheapest={index === cheapest} onSend={sendFrom("section")(p)} onReportGone={stockFrom(p)} />
+                    <ProposalCard key={p.id} piece={p} onSelect={() => selectPiece(index)} placement={placements.get(index)} cheapest={index === cheapest} />
                   ))}
                 </View>
                 {hiddenCount > 0 ? (
@@ -994,7 +985,7 @@ export default function ResultScreen() {
                 grande carte n'en vient que si aucune proposition de la recherche visuelle n'a de prix, et jamais
                 quand les boutiques arrivent après l'affichage (boutiques ensuite : la ligne d'attente, à leur place). */}
             {result.complement?.pending ? <ShopsPending /> : null}
-            <ResultComplement source="ai" others={sections.shopping} query={result.complement?.query} onSelect={selectPiece} placements={placements} cheapestIndex={cheapest} sendAction={sendFrom("section")} stockAction={stockFrom} />
+            <ResultComplement source="ai" others={sections.shopping} query={result.complement?.query} onSelect={selectPiece} placements={placements} cheapestIndex={cheapest} />
             <View onLayout={onWordsLayout}>
               <ResultComplement
                 source="words"
@@ -1003,8 +994,6 @@ export default function ResultScreen() {
                 onSelect={selectPiece}
                 placements={placements}
                 cheapestIndex={cheapest}
-                sendAction={sendFrom("section")}
-                stockAction={stockFrom}
               />
             </View>
             {/* Prix d'abord : les propositions sans prix en dernier, repliées ; « Que cherchez-vous ? » reste tout en bas (clavier). */}
@@ -1021,8 +1010,6 @@ export default function ResultScreen() {
                 caption={!noticeShown}
                 onSelect={selectPiece}
                 placements={placements}
-                sendAction={sendFrom("section")}
-                stockAction={stockFrom}
               />
             </View>
           </>

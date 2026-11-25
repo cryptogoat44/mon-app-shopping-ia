@@ -8,12 +8,11 @@ import type { MessagesStatus } from "@monapp/shared-types";
 import type { Piece } from "../api/types";
 import { pieceTitle } from "./spot-result";
 
-/** D'où la proposition part (statistiques, liste fermée). */
+/** D'où la proposition part (statistiques, liste fermée). Depuis les retours
+ * du build 2, l'écran n'envoie plus que "big_card" ; "section" et
+ * "price_list" restent dans la liste pour les builds déjà installés. */
 export const SEND_TO_FRIEND_FROM = ["big_card", "section", "price_list"] as const;
 export type SendToFriendFrom = (typeof SEND_TO_FRIEND_FROM)[number];
-
-/** L'action « Envoyer à un ami » d'une carte, ou rien. */
-export type SendAction = (piece: Piece) => (() => void) | undefined;
 
 /** L'action n'apparaît qu'avec la messagerie disponible sur le serveur, et
  * pour une vraie proposition d'une recherche (jamais une pièce de démonstration). */

@@ -10,6 +10,7 @@ import { ApiError, changeVaultItemPhoto, deleteVaultItem, fetchVaultItem, shareP
 import { importPhotoForSpotter } from "@/lib/image-import";
 import { PrivateAccountNote } from "@/components/private-account-note";
 import { SpotImage } from "@/components/spot-image";
+import { EnlargeableImage } from "@/components/image-viewer";
 import { PRIVACY_LEVELS } from "@/lib/vault-labels";
 import { VerifiedIcon } from "@/components/icons";
 import { useToast } from "@/lib/toast-context";
@@ -233,7 +234,9 @@ export default function VaultItemDetailScreen() {
 
         {/* Image entière (jamais rognée), en haute définition quand elle existe. */}
         <View style={styles.image}>
-          <SpotImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} style={styles.fill} accessibilityLabel={item.title} />
+          <EnlargeableImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} label={item.title} style={styles.fill}>
+            <SpotImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} style={styles.fill} accessibilityLabel={item.title} />
+          </EnlargeableImage>
         </View>
         <Pressable
           onPress={handleChangePhoto}

@@ -6,6 +6,7 @@ import { PRIVACY_LEVELS, type CreateVaultItemResponse, type VaultCategory, type 
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { deleteOwnedStorageFile, extractOwnedStoragePath } from "../lib/storage.js";
 import { fetchHdImageUrls } from "../lib/pieceImages.js";
+import { upgradeMerchantImageLater } from "../lib/merchantImage.js";
 import { PHOTO_SIZES, optimizePhoto } from "../lib/photos.js";
 import { DatabaseReadError, INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseDbRows, parseInput } from "../lib/validation.js";
 import { findOwnMatch } from "../lib/ownMatches.js";
@@ -153,6 +154,9 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
     // jamais pour une pièce ajoutée à la main.
     const [imageHdUrl] = await fetchHdImageUrls(fastify, [data as VaultItemRow]);
     const item = toVaultItem(data as VaultItemRow, imageHdUrl ?? null);
+    // Pas d'image HD : la grande image de la boutique, cherchée après la
+    // réponse (lib/merchantImage.ts, éteint par défaut ; jamais un échec).
+    upgradeMerchantImageLater(fastify, request.log, data as VaultItemRow, imageHdUrl ?? null);
     let merchant: { merchantName: string | null; merchantUrl: string | null; affiliateUrl: string | null } = {
       merchantName: null,
       merchantUrl: null,
@@ -337,6 +341,7 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
     }
 
     const [imageHdUrl] = await fetchHdImageUrls(fastify, [inserted as VaultItemRow]);
+    upgradeMerchantImageLater(fastify, request.log, inserted as VaultItemRow, imageHdUrl ?? null);
     const created: CreateVaultItemResponse = { ...toVaultItem(inserted as VaultItemRow, imageHdUrl ?? null), alreadyInVault: false };
     // Alertes prix et stock (0040) : toutes les envies de l'acheteur de la
     // même pièce (même depuis un autre résultat) sont notées achetées AVANT la

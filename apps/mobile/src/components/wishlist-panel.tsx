@@ -1,8 +1,8 @@
 import { formatPrice } from "@/lib/format";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { ActivityIndicator, FlatList, Modal, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import { color, font, radius, space } from "@/theme/tokens";
+import { color, font, radius, size, space } from "@/theme/tokens";
 import { acceptLanguage, getActiveLocale, t } from "@/i18n";
 import type { CollectionSummary, WishAlertState } from "@monapp/shared-types";
 import { getCollectionWishlist, getWishlist } from "@/api/client";
@@ -10,10 +10,11 @@ import type { Piece, WishlistItem } from "@/api/types";
 import { ApiError, fetchCollections, fetchWishAlertStates, fetchWishAlertsStatus } from "@/lib/api";
 import { useWishAlertsStatus } from "@/lib/use-wish-alerts-status";
 import { bellVisible, priceDropPrices, trackPriceDropsShown } from "@/lib/wish-alerts";
-import { collectionChips, collectionState, selectedCollection } from "@/lib/collections";
+import { collectionChips, selectedCollection } from "@/lib/collections";
 import { useCollectionsStatus } from "@/lib/use-collections-status";
 import { useToast } from "@/lib/toast-context";
-import { BookmarkIcon, ClockIcon, PlusIcon } from "@/components/icons";
+import { BookmarkIcon, ClockIcon, LockIcon, MoreIcon, PlusIcon } from "@/components/icons";
+import { CollectionOptionsSheet } from "@/components/collection-options-sheet";
 import { savedListRoute } from "@/lib/saved-posts";
 import { CollectionNameSheet } from "@/components/collection-name-sheet";
 import { CollectionSettingsSheet } from "@/components/collection-settings-sheet";
@@ -61,33 +62,39 @@ function chunk<T>(items: T[], size: number): T[][] {
 // Lot « alertes visibles » : en tête de la grille, le bandeau des nouveautés
 // (`news`, lues par le Profil) ; affichées, elles deviennent « vues » sur
 // l'appareil et restent dans le bandeau tant que la grille reste ouverte.
-export function WishlistPanel({ news }: { news: WishAlertNewsState }) {
+// Retours du build 2 (« ça prend beaucoup trop de place ») : tout le haut des
+// Envies défile avec la grille (en tête de la liste : plus rien ne glisse
+// sous une ligne fixe), en trois lignes courtes : « Mes envies | Reçues »
+// avec le signet des publications enregistrées et le cadenas « Qui voit vos
+// Envies » ; les puces, avec « … » pour la collection choisie ; le total,
+// la loupe et le tri (wishlist-tools.tsx).
+// Lot « navigation » : `header`, l'en-tête du profil (photo, compteurs,
+// onglets), posé tout en haut de la liste : il défile lui aussi.
+export function WishlistPanel({ news, header }: { news: WishAlertNewsState; header?: ReactNode }) {
   const [view, setView] = useState<"mine" | "received">("mine");
-  return (
-    <>
-      <View style={styles.switcher}>
-        <SegmentedChoice
-          label={t.wishlist.tabsLabel}
-          options={[
-            { value: "mine", label: t.wishlist.mine },
-            { value: "received", label: t.wishlist.received },
-          ]}
-          value={view}
-          onChange={setView}
-        />
-      </View>
-      {view === "mine" ? (
-        <MyWishlist news={news} />
-      ) : (
-        <ScrollView>
-          <ReceivedPieces />
-        </ScrollView>
-      )}
-    </>
+  const switcher = (
+    <SegmentedChoice
+      label={t.wishlist.tabsLabel}
+      options={[
+        { value: "mine", label: t.wishlist.mine },
+        { value: "received", label: t.wishlist.received },
+      ]}
+      value={view}
+      onChange={setView}
+    />
+  );
+  return view === "mine" ? (
+    <MyWishlist news={news} switcher={switcher} profileHeader={header} />
+  ) : (
+    <ScrollView>
+      {header}
+      <View style={styles.switcher}>{switcher}</View>
+      <ReceivedPieces />
+    </ScrollView>
   );
 }
 
-function MyWishlist({ news }: { news: WishAlertNewsState }) {
+function MyWishlist({ news, switcher, profileHeader }: { news: WishAlertNewsState; switcher: ReactNode; profileHeader?: ReactNode }) {
   const router = useRouter();
   const { showToast } = useToast();
   // Envies lues pour la puce choisie, dans l'ordre récent, et le curseur de
@@ -107,6 +114,9 @@ function MyWishlist({ news }: { news: WishAlertNewsState }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [managing, setManaging] = useState<CollectionSummary | null>(null);
+  // Retours du build 2 : la feuille « Qui voit vos Envies » (cadenas) et celle de la collection choisie (« … »).
+  const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const selected = selectedCollection(collections, selectedId);
   const chips = collectionChips(collectionsAvailable, collections);
   // Identifiant seul (jamais l'objet, recréé à chaque relecture des puces) : pas de rechargement en boucle.
@@ -262,6 +272,7 @@ function MyWishlist({ news }: { news: WishAlertNewsState }) {
   function choose(collectionId: string | null) {
     if (collectionId === selectedId) return;
     loadRun.current += 1;
+    setOptionsOpen(false);
     setSelectedId(collectionId);
     setList(null);
     setError(null);
@@ -271,20 +282,48 @@ function MyWishlist({ news }: { news: WishAlertNewsState }) {
     chooseWishlistSort(next, { inCollection });
   }
 
-  return (
+  // Tout le haut des Envies, en tête de la liste (il défile avec la grille). JSX
+  // en ligne, jamais un composant créé ici : le champ de recherche garderait mal le clavier.
+  const header = (
     <>
-      <Text style={styles.privateNote}>{collectionsAvailable.enabled ? t.wishlist.privateNoteCollections : t.wishlist.privateNote}</Text>
-      {/* Publications enregistrées (migration 0048) : l'entrée de leur liste, cachée sans elles sur le serveur. */}
-      {collectionsAvailable.savedPosts ? (
-        <Pressable style={styles.savedEntry} onPress={() => router.push(savedListRoute())} accessibilityRole="link" testID="entree-enregistrees">
-          <BookmarkIcon size={17} tint={color.encre} />
-          <Text style={styles.savedEntryLabel}>{t.savedPosts.listTitle}</Text>
-          <Text style={styles.savedEntryChevron}>›</Text>
-        </Pressable>
-      ) : null}
+      {/* L'en-tête du profil : la liste a ses marges, il les annule pour garder toute la largeur. */}
+      {profileHeader ? <View style={styles.profileHeader}>{profileHeader}</View> : null}
+      <View style={styles.topRow}>
+        <View style={styles.topSwitcher}>{switcher}</View>
+        <View style={styles.topIcons}>
+          {/* Publications enregistrées (migration 0048) : un signet, caché sans elles sur le serveur. */}
+          {collectionsAvailable.savedPosts ? (
+            <Pressable
+              style={styles.iconButton}
+              onPress={() => router.push(savedListRoute())}
+              accessibilityRole="link"
+              accessibilityLabel={t.savedPosts.listTitle}
+              testID="entree-enregistrees"
+            >
+              <BookmarkIcon size={21} tint={color.encre} />
+            </Pressable>
+          ) : null}
+          <Pressable
+            style={styles.iconButton}
+            onPress={() => setPrivacyOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={t.wishlist.privacyTitle}
+            testID="qui-voit-vos-envies"
+          >
+            <LockIcon size={20} tint={color.encre} />
+          </Pressable>
+        </View>
+      </View>
       {chips ? (
         <View style={styles.chipsWrap}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} accessibilityRole="tablist" accessibilityLabel={t.collections.chipsLabel}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.chipsScroll}
+            contentContainerStyle={styles.chips}
+            accessibilityRole="tablist"
+            accessibilityLabel={t.collections.chipsLabel}
+          >
             {chips.map((chip) => {
               const active = selectedKey === chip.collectionId;
               return (
@@ -309,28 +348,62 @@ function MyWishlist({ news }: { news: WishAlertNewsState }) {
               <Text style={styles.chipNewLabel}>{t.collections.newCollection}</Text>
             </Pressable>
           </ScrollView>
+          {/* La collection choisie : « … », hors de la liste d'onglets (VoiceOver ne le compte pas comme un onglet). */}
           {selected ? (
-            <View style={styles.selectedRow}>
-              <Text style={styles.selectedState}>{collectionState(selected)}</Text>
-              {/* Les publications enregistrées rangées dans cette collection (vous seul les voyez). */}
-              {collectionsAvailable.savedPosts ? (
-                <Pressable
-                  onPress={() => router.push(savedListRoute(selected.id))}
-                  hitSlop={10}
-                  accessibilityRole="link"
-                  accessibilityLabel={t.savedPosts.collectionTabLabel(selected.name)}
-                  testID="publications-de-la-collection"
-                >
-                  <Text style={styles.manage}>{t.savedPosts.collectionTab}</Text>
-                </Pressable>
-              ) : null}
-              <Pressable onPress={() => setManaging(selected)} hitSlop={10} accessibilityRole="button" accessibilityLabel={t.collections.manageLabel(selected.name)} testID="gerer-collection">
-                <Text style={styles.manage}>{t.collections.manage}</Text>
-              </Pressable>
-            </View>
+            <Pressable
+              style={styles.iconButton}
+              onPress={() => setOptionsOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={t.collections.ownOptionsLabel(selected.name)}
+              testID="options-collection"
+            >
+              <MoreIcon size={20} tint={color.encre} />
+            </Pressable>
           ) : null}
         </View>
       ) : null}
+      <WishAlertNewsBanner
+        items={newsBanner}
+        onOpen={(item) => {
+          trackNewsOpened(item);
+          // Ouverte sans « from » : le clic vers la boutique reste compté « wishlist »,
+          // jamais « price_alert » (la confidentialité promet que les statistiques ne
+          // comptent, pour les nouveautés, que leur nombre et la sorte ouverte).
+          router.push({ pathname: "/envie", params: { id: item.wishlistItemId } });
+        }}
+        onHide={() => setNewsShown(new Set())}
+      />
+      {error ? <ErrorMessage style={styles.emptyText}>{error}</ErrorMessage> : null}
+      {/* Recherche, tri et total : seulement quand il y a des envies à chercher. */}
+      {hasItems ? <WishlistTools query={query} onQueryChange={setQuery} sort={sort} onSortChange={changeSort} total={totalLine} note={partialNote} /> : null}
+    </>
+  );
+
+  return (
+    <>
+      {/* « Qui voit vos Envies » : la phrase de confidentialité, mot pour mot, derrière le cadenas. */}
+      <Modal visible={privacyOpen} animationType="slide" transparent onRequestClose={() => setPrivacyOpen(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setPrivacyOpen(false)} accessibilityRole="button" accessibilityLabel={t.common.close} />
+        <View style={styles.sheet}>
+          <View style={styles.handle} />
+          <Text style={styles.sheetTitle} accessibilityRole="header">
+            {t.wishlist.privacyTitle}
+          </Text>
+          <Text style={styles.sheetBody}>{collectionsAvailable.enabled ? t.wishlist.privateNoteCollections : t.wishlist.privateNote}</Text>
+          <Pressable style={[styles.sheetButton, styles.sheetPrimary]} onPress={() => setPrivacyOpen(false)} accessibilityRole="button" testID="compris-confidentialite">
+            <Text style={[styles.sheetButtonLabel, styles.sheetPrimaryLabel]}>{t.wishlist.privacyOk}</Text>
+          </Pressable>
+        </View>
+      </Modal>
+      {/* « … » de la collection choisie : qui la voit, ses publications rangées (vous seul les voyez), « Gérer ». */}
+      <CollectionOptionsSheet
+        collection={selected}
+        visible={optionsOpen}
+        savedPosts={collectionsAvailable.savedPosts === true}
+        onClose={() => setOptionsOpen(false)}
+        onPosts={(collection) => router.push(savedListRoute(collection.id))}
+        onManage={setManaging}
+      />
       <CollectionNameSheet
         visible={creating}
         onClose={() => setCreating(false)}
@@ -363,20 +436,11 @@ function MyWishlist({ news }: { news: WishAlertNewsState }) {
           onSaved={(saved) => setAlertStates((current) => new Map(current).set(saved.wishlistItemId, saved))}
         />
       ) : null}
-      {loading ? (
-        <View style={styles.grid}>
-          {[0, 1, 2].map((i) => (
-            <View key={i} style={styles.card}>
-              <Skeleton style={styles.thumb} />
-              <Skeleton style={{ width: "80%", height: 11 }} />
-            </View>
-          ))}
-        </View>
-      ) : (
-        <FlatList
-          data={chunk(view.visible, 3)}
+      {/* Une seule liste, chargement compris : le haut (puces, recherche) n'est jamais recréé quand une puce est choisie. */}
+      <FlatList
+          data={loading ? [] : chunk(view.visible, 3)}
           keyExtractor={(row) => row.map((item) => item.id).join("-")}
-          contentContainerStyle={isEmpty || error ? styles.emptyContent : styles.gridContent}
+          contentContainerStyle={[styles.gridContent, isEmpty || error ? styles.emptyContent : null]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
@@ -391,7 +455,7 @@ function MyWishlist({ news }: { news: WishAlertNewsState }) {
                   >
                     <View style={styles.thumb}>
                       {item.imageUrl ? (
-                        <SpotImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} style={styles.thumbImage} fit="cover" size="small" accessibilityLabel={item.name} />
+                        <SpotImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} style={styles.thumbImage} fit="cover" size="card" accessibilityLabel={item.name} />
                       ) : (
                         <ClockIcon size={30} tint={color.encre} />
                       )}
@@ -422,26 +486,18 @@ function MyWishlist({ news }: { news: WishAlertNewsState }) {
               ))}
             </View>
           )}
-          ListHeaderComponent={
-            <>
-              <WishAlertNewsBanner
-                items={newsBanner}
-                onOpen={(item) => {
-                  trackNewsOpened(item);
-                  // Ouverte sans « from » : le clic vers la boutique reste compté « wishlist »,
-                  // jamais « price_alert » (la confidentialité promet que les statistiques ne
-                  // comptent, pour les nouveautés, que leur nombre et la sorte ouverte).
-                  router.push({ pathname: "/envie", params: { id: item.wishlistItemId } });
-                }}
-                onHide={() => setNewsShown(new Set())}
-              />
-              {error ? <ErrorMessage style={styles.emptyText}>{error}</ErrorMessage> : null}
-              {/* Recherche, tri et total : seulement quand il y a des envies à chercher. */}
-              {hasItems ? <WishlistTools query={query} onQueryChange={setQuery} sort={sort} onSortChange={changeSort} total={totalLine} note={partialNote} /> : null}
-            </>
-          }
+          ListHeaderComponent={header}
           ListEmptyComponent={
-            error ? null : hasItems ? (
+            loading ? (
+              <View style={styles.gridRow}>
+                {[0, 1, 2].map((i) => (
+                  <View key={i} style={styles.card}>
+                    <Skeleton style={styles.thumb} />
+                    <Skeleton style={{ width: "80%", height: 11 }} />
+                  </View>
+                ))}
+              </View>
+            ) : error ? null : hasItems ? (
               // Recherche sans résultat ; pages suivantes encore en lecture : le chargement en bas.
               readingNext ? null : (
                 <WishlistSearchEmpty message={t.wishlist.searchEmpty(query.trim(), inCollection)} onClear={() => setQuery("")} />
@@ -462,44 +518,43 @@ function MyWishlist({ news }: { news: WishAlertNewsState }) {
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.4}
           ListFooterComponent={loadingMore || readingNext ? <ActivityIndicator color={color.encre} style={styles.footerLoader} /> : null}
-        />
-      )}
+      />
     </>
   );
 }
 
 const styles = themedStyles(() => ({
   switcher: { paddingHorizontal: space.lg, paddingTop: space.sm, maxWidth: 640, alignSelf: "center", width: "100%" },
-  privateNote: { fontSize: font.caption, color: color.acier, paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.xs, maxWidth: 640, alignSelf: "center", width: "100%" },
-  chipsWrap: { maxWidth: 640, alignSelf: "center", width: "100%", paddingBottom: space.xs },
-  savedEntry: { flexDirection: "row", alignItems: "center", gap: space.sm, minHeight: 44, paddingHorizontal: space.lg, maxWidth: 640, alignSelf: "center", width: "100%" },
-  savedEntryLabel: { flex: 1, fontSize: font.secondary, fontWeight: "600", color: color.encre },
-  savedEntryChevron: { fontSize: 20, color: color.acier },
-  chips: { paddingHorizontal: space.lg, gap: space.xs, alignItems: "center" },
+  // En-tête du profil en haut de la liste (lot « navigation ») : sans les marges de la grille, avec l'écart d'avant dessous.
+  profileHeader: { marginHorizontal: -space.lg, marginTop: -space.sm, marginBottom: space.sm },
+  // Ligne 1 : « Mes envies | Reçues », puis le signet et le cadenas (passe à la ligne en grand texte).
+  topRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: space.xs, paddingBottom: space.xs },
+  topSwitcher: { flexShrink: 1 },
+  topIcons: { flexDirection: "row", alignItems: "center", marginLeft: "auto" },
+  iconButton: { minWidth: size.touchTarget, minHeight: size.touchTarget, alignItems: "center", justifyContent: "center" },
+  // Ligne 2 : les puces, d'un bord à l'autre de l'écran (la liste a ses marges), puis « … ».
+  chipsWrap: { flexDirection: "row", alignItems: "center", marginHorizontal: -space.lg, paddingRight: space.sm, paddingBottom: space.xs },
+  chipsScroll: { flex: 1 },
+  chips: { paddingHorizontal: space.lg, gap: space.xs, alignItems: "center", minHeight: size.touchTarget },
   chip: { minHeight: 36, maxWidth: 220, paddingHorizontal: space.md, borderRadius: radius.full, borderWidth: 1, borderColor: color.filet, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 4 },
   chipActive: { backgroundColor: color.vert, borderColor: color.vert },
   chipLabel: { fontSize: font.caption, color: color.encre },
   chipLabelActive: { color: color.blanc, fontWeight: "600" },
   chipNew: { borderStyle: "dashed", borderColor: color.vert },
   chipNewLabel: { fontSize: font.caption, color: color.vert, fontWeight: "600" },
-  selectedRow: { flexDirection: "row", alignItems: "center", gap: space.sm, paddingHorizontal: space.lg, paddingTop: space.xs },
-  selectedState: { flex: 1, fontSize: font.caption, color: color.acier, lineHeight: 18 },
-  manage: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  backdrop: { flex: 1, backgroundColor: color.voile },
+  sheet: { backgroundColor: color.porcelaine, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, paddingHorizontal: space.lg, paddingBottom: space.xl, gap: space.sm },
+  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: color.filet, alignSelf: "center", marginTop: 9, marginBottom: space.xs },
+  sheetTitle: { fontSize: font.body, fontWeight: "600", color: color.encre },
+  sheetBody: { fontSize: font.secondary, color: color.acier, lineHeight: 20 },
+  sheetButton: { minHeight: 48, borderRadius: radius.md, borderWidth: 1, borderColor: color.filet, alignItems: "center", justifyContent: "center", paddingHorizontal: space.md },
+  sheetPrimary: { backgroundColor: color.vert, borderColor: color.vert, marginTop: space.xs },
+  sheetButtonLabel: { fontSize: font.secondary, fontWeight: "600", color: color.encre, textAlign: "center" },
+  sheetPrimaryLabel: { color: color.blanc },
   emptyContent: { flexGrow: 1 },
-  empty: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl, marginTop: -60 },
+  empty: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl },
   emptyText: { fontSize: font.secondary, color: color.acier, textAlign: "center", lineHeight: 20, marginBottom: space.md },
   emptyCta: { fontSize: font.body, color: color.vert, fontWeight: "600" },
-  grid: {
-    paddingHorizontal: space.lg,
-    paddingTop: space.sm,
-    paddingBottom: space.xxl,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: space.md,
-    maxWidth: 640,
-    alignSelf: "center",
-    width: "100%",
-  },
   gridContent: {
     paddingHorizontal: space.lg,
     paddingTop: space.sm,

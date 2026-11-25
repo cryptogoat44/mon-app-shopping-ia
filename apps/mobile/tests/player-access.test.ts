@@ -98,6 +98,16 @@ describe("module natif de l'instantané : takeSnapshot, et rien d'autre", () => 
     expect(read(join(MOBILE, "src", "lib", "player-snapshot.ts"))).toContain("SI L'INSTANTANÉ SORT NOIR SUR UN VRAI IPHONE : S'ARRÊTER LÀ");
   });
 
+  it("retours du build 2 : l'image noire est refusée par un CONTRÔLE en JS (pont), le module natif reste l'instantané seul", () => {
+    const bridge = read(join(MOBILE, "src", "lib", "player-snapshot.ts"));
+    expect(bridge).toContain('if (await looksBlank(uri)) throw new Error("blank_frame");');
+    expect(bridge).toContain("isBlankFrame(decodePngSample(base64ToBytes(saved.base64)))");
+    // Le pont n'appelle toujours que `snapshot` ; aucun nouvel appel natif, aucun téléchargement.
+    expect([...bridge.matchAll(/native\.([a-zA-Z]+)\(/g)].map((match) => match[1])).toEqual(["snapshot"]);
+    // Le Swift ne change pas : toujours une seule fonction, sans lecture de pixels.
+    expect(swiftCode(SWIFT)).not.toMatch(/CGContext|cgImage|dataProvider|luminance/i);
+  });
+
   it("aucun autre code natif dans l'app : ce module, et la recherche d'image d'iOS (plugin)", () => {
     const native = files(MOBILE, /\.(swift|m|mm|h|podspec)$/).map((path) => relative(MOBILE, path).split("\\").join("/"));
     expect(native.sort()).toEqual(

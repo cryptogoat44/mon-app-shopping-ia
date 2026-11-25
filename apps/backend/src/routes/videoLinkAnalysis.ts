@@ -82,9 +82,10 @@ import { videoAiApiKey } from "./videoMoments.js";
 /** Grand côté de l'image d'un moment renvoyée à l'app (contrat partagé). */
 export const VIDEO_LINK_MOMENT_EDGE = 1280;
 /** Qualité de l'image d'un moment, réencodée par le serveur (métadonnées
- * retirées, taille garantie) : un peu au-dessus de celle du service vidéo,
- * pour perdre le moins possible avant la recherche par image. */
-const MOMENT_QUALITY = 85;
+ * retirées, taille garantie), pour perdre le moins possible avant la
+ * recherche par image. Retours du build 2 : 92 (85 avant), comme le service
+ * vidéo, moins compressé lui aussi. Les images pour l'IA ne changent pas. */
+export const MOMENT_QUALITY = 92;
 /** Images pour l'IA : mêmes réglages que POST /api/video-moments. */
 const AI_FRAME_QUALITY = 80;
 const MIN_FRAME_EDGE = 64;

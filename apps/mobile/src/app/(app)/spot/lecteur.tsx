@@ -20,6 +20,13 @@
 // (lib/use-video-link-analysis.ts). Le lecteur officiel (iPhone) et la
 // capture d'écran restent proposés, et la capture s'affiche à chaque échec.
 // Analyse coupée, ou serveur muet : l'écran reste exactement celui d'avant.
+// Retours du build 2 (« la vidéo d'abord », 24 novembre 2026) : sur l'app
+// iPhone, quand le lecteur peut vraiment s'ouvrir (lib/player-decision.ts
+// openingPath), l'accord puis le lecteur passent AVANT l'analyse ; « Trouver
+// la pièce automatiquement » reste un bouton sous « Spotter ce moment ».
+// Lecteur impossible, en échec ou refusé : l'analyse (si elle est allumée,
+// afterPlayerFailure), sinon l'écran de secours, comme avant. Le site ne
+// change pas.
 // Lot « propositions » (Parcours 2, 21 novembre 2026) : si le serveur dit
 // aussi `pieces` (valeur exacte `true`), la question propose d'abord « Voir
 // les propositions de l'IA » ; sinon elle reste celle d'avant.
@@ -50,11 +57,11 @@ import { useImageDrop } from "@/lib/image-drop";
 import { photoPickerEntry, type PhotoJourneyEntry } from "@/lib/journey-entries";
 import { detectLink } from "@/lib/link-detection";
 import { grantPlayerConsent, readPlayerConsent } from "@/lib/player-access";
-import { decidePlayer, playerOffered, type FallbackReason } from "@/lib/player-decision";
+import { afterPlayerFailure, decidePlayer, openingPath, playerOffered, type FallbackReason } from "@/lib/player-decision";
 import { instagramHostPage, tiktokHostPage } from "@/lib/player-host-page";
 import { isPlayerPlatform, playerBaseUrl, videoOpenUrl, type PlayerPlatform } from "@/lib/player-link";
 import { snapshotAvailable, snapshotPlayer } from "@/lib/player-snapshot";
-import { PLAYER_TIMINGS, embedHeight, isPlaybackSignal, momentSeconds, playerCommand, playerLayout, tiktokErrorAction, type HostMessage } from "@/lib/player-state";
+import { PLAYER_TIMINGS, embedHeight, isPlaybackSignal, isPlayerAnswer, momentSeconds, playerCommand, playerLayout, tiktokErrorAction, type HostMessage } from "@/lib/player-state";
 import { PLAYER_CONSENT_GATE } from "@/lib/spot-flags";
 import { beginFromPhoto } from "@/lib/spot-flow";
 import { closeSpotter } from "@/lib/spot-navigation";
@@ -136,12 +143,18 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
   const [analysisEnabled, setAnalysisEnabled] = useState(false);
   // Lot « propositions » : « Voir les propositions de l'IA » permis par le serveur (faux tant qu'il ne l'a pas dit).
   const [piecesEnabled, setPiecesEnabled] = useState(false);
+  // « La vidéo d'abord » : le lecteur qui vient d'échouer n'est plus reproposé sur l'écran de l'analyse.
+  const [playerBroken, setPlayerBroken] = useState<FallbackReason | null>(null);
   const { importing, importVideo } = useVideoImport(setMessage);
   const webRef = useRef<WebView>(null);
   const frameRef = useRef<View>(null);
   // Refs lues après un `await` ou dans un message du lecteur : jamais l'état d'un rendu précédent.
   const alive = useRef(true);
   const readyRef = useRef(false);
+  // Le lecteur a répondu (même s'il attend un toucher) : plus de remplacement au bout de 12 s.
+  const answered = useRef(false);
+  // L'analyse allumée, lue par fallback() depuis un minuteur ou un message de la vue web.
+  const analysisRef = useRef(false);
   const lastTime = useRef<number | null>(null);
   const crashed = useRef(false);
 
@@ -166,6 +179,9 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
   const queryRef = useRef("");
   queryRef.current = auto.query;
   const keptQuery = cleanQuery(auto.query);
+  // L'état de l'analyse, lu par fallback() depuis un minuteur ou un message de la vue web.
+  const phaseRef = useRef(auto.phase.kind);
+  phaseRef.current = auto.phase.kind;
 
   useEffect(
     () => () => {
@@ -176,13 +192,23 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
 
   function fallback(reason: FallbackReason) {
     if (!alive.current) return;
-    if (platform) track("player_unavailable", { platform, reason, link_platform: platform });
+    // App iPhone, analyse allumée : la recherche automatique ; sinon l'écran de secours, comme avant.
+    // Analyse déjà en échec (limite du jour, vidéo privée…) : l'écran de secours, qui dit pourquoi.
+    const next = afterPlayerFailure({ os: Platform.OS, analysis: analysisRef.current, aiFailed: phaseRef.current === "failed" });
+    if (platform) track("player_unavailable", { platform, reason, next, link_platform: platform });
+    // Le lecteur qui vient d'échouer n'est plus reproposé, même après un retour à l'analyse.
+    if (reason !== "consent_refused") setPlayerBroken(reason);
+    if (next === "ai") {
+      setMessage(null);
+      return setStage({ kind: "auto" });
+    }
     setStage({ kind: "fallback", reason });
   }
 
   /** Lecteur permis : la page hôte, écrite par l'app (TikTok : l'identifiant seul ; Instagram : le code du serveur). */
   async function startPlayer(video: VideoLink) {
     readyRef.current = false;
+    answered.current = false;
     setReady(false);
     setEmbedSize(null);
     const title = t.player.frameTitle(t.spotter.platformName[video.platform]);
@@ -236,6 +262,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
     if (!alive.current) return;
     const enabled = status.enabled;
     setLookup(response);
+    analysisRef.current = enabled;
     setAnalysisEnabled(enabled);
     setPiecesEnabled(status.pieces);
     if (response?.link) {
@@ -250,7 +277,9 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
       if (enabled) return setStage({ kind: "auto" });
       return void decide(null);
     }
-    if (enabled) return setStage({ kind: "auto" });
+    // « La vidéo d'abord » : sur l'app iPhone, le lecteur (accord, puis lecteur) quand il peut s'ouvrir.
+    const offered = response?.link ? playerOffered({ platform: response.link.platform, os: Platform.OS, build: features, server: response.players, snapshotReady: snapshotAvailable }) : false;
+    if (openingPath({ os: Platform.OS, offered, analysis: enabled }) === "auto") return setStage({ kind: "auto" });
     void decide(response);
   }
 
@@ -283,11 +312,12 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Lecteur muet 12 s : écran de secours.
+  // Lecteur muet 12 s : la recherche automatique ou l'écran de secours. Un lecteur qui a
+  // répondu mais attend un toucher (lecture automatique refusée) n'est pas remplacé.
   useEffect(() => {
     if (stage.kind !== "player" || ready) return;
     const timer = setTimeout(() => {
-      if (alive.current && !readyRef.current) fallback("no_answer");
+      if (alive.current && !answered.current) fallback("no_answer");
     }, PLAYER_TIMINGS.noAnswerMs);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -311,6 +341,12 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
   useEffect(() => {
     if (announced) AccessibilityInfo.announceForAccessibility(announced);
   }, [announced]);
+  // Lecteur en échec, l'analyse prend le relais : VoiceOver le dit, seulement quand la phrase
+  // s'affiche vraiment au-dessus de la question (jamais sur un ancien échec de l'analyse).
+  const playerLeadShown = playerBroken !== null && stage.kind === "auto" && auto.phase.kind === "ask";
+  useEffect(() => {
+    if (playerLeadShown && playerBroken) AccessibilityInfo.announceForAccessibility(playerBroken === "snapshot_failed" ? t.videoLinkAuto.playerLead.snapshot : t.videoLinkAuto.playerLead.notHere);
+  }, [playerLeadShown, playerBroken]);
 
   function markReady() {
     if (readyRef.current) return;
@@ -320,6 +356,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
   }
 
   function onHostMessage(hostMessage: HostMessage) {
+    if (isPlayerAnswer(hostMessage)) answered.current = true;
     if (hostMessage.kind === "other") {
       if (__DEV__) console.info("[player] message", hostMessage.type, hostMessage.origin);
       return;
@@ -338,6 +375,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
     if (crashed.current) return fallback("webview_error");
     crashed.current = true;
     readyRef.current = false;
+    answered.current = false;
     setReady(false);
     setNotice("reloaded");
     setGeneration((value) => value + 1);
@@ -437,6 +475,12 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
     void decide(lookup, "refused");
   }
 
+  /** « Trouver la pièce automatiquement », sous « Spotter ce moment » : l'analyse du lien. */
+  function playerToAuto() {
+    if (platform) track("player_to_ai", { platform, from: "player", link_platform: platform });
+    backToAuto();
+  }
+
   const back = () => router.back();
   const close = () => closeSpotter(router);
   const products = lookup?.products ?? [];
@@ -450,8 +494,8 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
       <Text style={styles.discreetLabel}>{t.videoLinkAuto.backToAuto}</Text>
     </Pressable>
   ) : null;
-  // App iPhone : le lecteur officiel reste proposé à côté de l'analyse.
-  const playerButton = withPlayer ? (
+  // App iPhone : le lecteur officiel reste proposé à côté de l'analyse, sauf s'il vient d'échouer.
+  const playerButton = withPlayer && playerBroken === null ? (
     <Pressable style={styles.secondary} onPress={openPlayerPath} accessibilityRole="button">
       <Text style={styles.secondaryLabel}>{t.videoLinkAuto.player(name)}</Text>
     </Pressable>
@@ -548,8 +592,11 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
       // Lot « propositions » : le geste « décrire » suit le mode de l'essai manqué (onDescribe) ; rien d'écrit, « Votre lien est gardé ».
       autoBody = <LinkFailureView info={phase.info} mode={phase.mode} keptDescription={keptQuery !== ""} onDescribe={auto.describeInstead} platformName={name || undefined} platform={platform} onRetry={auto.retry} onEditQuery={auto.editQuery} onCapture={showCapture} />;
     } else {
+      // Lecteur en échec juste avant : une phrase dit pourquoi l'analyse prend le relais.
+      const playerLead = playerBroken === null ? null : playerBroken === "snapshot_failed" ? t.videoLinkAuto.playerLead.snapshot : t.videoLinkAuto.playerLead.notHere;
       autoBody = (
         <>
+          {playerLead ? <Text style={styles.body}>{playerLead}</Text> : null}
           <LinkAskView
             query={auto.query}
             onQuery={auto.onQuery}
@@ -599,10 +646,12 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
         <Pressable style={styles.primary} onPress={() => void acceptConsent()} accessibilityRole="button">
           <Text style={styles.primaryLabel}>{t.player.gate.play}</Text>
         </Pressable>
+        {/* Le libellé suit la même règle que fallback() : « chercher automatiquement » seulement si « Non merci » y mène (analyse allumée, pas déjà en échec). */}
         <Pressable style={styles.secondary} onPress={refuseConsent} accessibilityRole="button">
-          <Text style={styles.secondaryLabel}>{t.player.gate.refuse}</Text>
+          <Text style={styles.secondaryLabel}>
+            {afterPlayerFailure({ os: Platform.OS, analysis: analysisEnabled, aiFailed: auto.phase.kind === "failed" }) === "ai" ? t.player.gate.refuseAuto : t.player.gate.refuse}
+          </Text>
         </Pressable>
-        {autoLink}
         {memory}
       </View>
     );
@@ -665,8 +714,12 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
           {busy === "spot" ? <ActivityIndicator color={color.blanc} /> : null}
           <Text style={styles.primaryLabel}>{busy === "spot" ? t.player.taking : t.player.spot}</Text>
         </Pressable>
+        {analysisEnabled ? (
+          <Pressable style={styles.secondary} onPress={playerToAuto} accessibilityRole="button">
+            <Text style={styles.secondaryLabel}>{t.videoLinkAuto.backToAuto}</Text>
+          </Pressable>
+        ) : null}
         <Text style={styles.privacy}>{t.player.privacy(name)}</Text>
-        {autoLink}
         {errorLine}
         {memory}
       </View>
@@ -710,8 +763,8 @@ const styles = themedStyles(() => ({
   primary: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 52, flexDirection: "row", gap: space.sm, alignItems: "center", justifyContent: "center", paddingHorizontal: space.md, alignSelf: "stretch" },
   primaryDisabled: { backgroundColor: color.inactif },
   primaryLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600", textAlign: "center", flexShrink: 1 },
-  secondary: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, minHeight: 48, alignItems: "center", justifyContent: "center", alignSelf: "stretch" },
-  secondaryLabel: { color: color.encre, fontSize: font.body, fontWeight: "500" },
+  secondary: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, minHeight: 48, alignItems: "center", justifyContent: "center", alignSelf: "stretch", paddingHorizontal: space.md },
+  secondaryLabel: { color: color.encre, fontSize: font.body, fontWeight: "500", textAlign: "center" },
   message: { fontSize: font.caption, lineHeight: 18, alignSelf: "stretch" },
   privacy: { fontSize: font.caption, color: color.acier, lineHeight: 18, textAlign: "center" },
   keptNote: { fontSize: font.caption, color: color.acier, lineHeight: 18, alignSelf: "stretch" },

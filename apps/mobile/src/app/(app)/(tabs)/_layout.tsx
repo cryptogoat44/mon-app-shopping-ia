@@ -11,6 +11,8 @@ import { useMessagesStatus } from "@/lib/use-messages-status";
 import { spotterTab } from "@/lib/shared-item";
 import { onUnreadChanged } from "@/lib/unread-notifications";
 import { usePendingSharedItem } from "@/lib/use-shared-item";
+import { TabBar } from "@/components/tab-bar";
+import { useReduceMotion } from "@/lib/use-reduce-motion";
 
 // Pastille ronde, sans chiffre (Activité, partage qui attend le Spotter) ;
 // couleur lue à l'affichage, selon le thème en cours.
@@ -30,6 +32,9 @@ export default function TabsLayout() {
   // Lot « partager vers Spotto » : un partage reçu pendant une recherche ou une
   // saisie attend le Spotter ; une pastille le rappelle jusqu'à son ouverture.
   const spotter = spotterTab(usePendingSharedItem());
+  // Retours du build 2 (point 8) : léger glissement entre les écrans, coupé
+  // avec « Réduire les animations ».
+  const reduceMotion = useReduceMotion();
 
   // Relu à chaque changement d'écran : l'écran Activité marque tout comme
   // lu, la pastille disparaît au changement suivant.
@@ -59,9 +64,13 @@ export default function TabsLayout() {
     // ajoute « tab, 1 of 5 » en anglais pour VoiceOver, même en français
     // (constaté sur simulateur, lot 3bis) ; le rôle « onglet » est déjà
     // annoncé par iOS dans la langue de l'appareil.
+    // Retours du build 2 (point 8) : barre maison où l'on glisse le doigt
+    // d'un onglet à l'autre (components/tab-bar.tsx) ; le « + » ne s'ouvre qu'au toucher.
     <Tabs
+      tabBar={(props) => <TabBar {...props} tapOnlyRoutes={["publish"]} />}
       screenOptions={{
         headerShown: false,
+        animation: reduceMotion ? "none" : "shift",
         tabBarActiveTintColor: color.encre,
         tabBarInactiveTintColor: color.acier,
         tabBarStyle: {

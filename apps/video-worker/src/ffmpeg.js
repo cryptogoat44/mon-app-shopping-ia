@@ -3,7 +3,7 @@
 // partielles, rien n'est écrit sur le disque), et images candidates écrites
 // dans deux tuyaux :
 // - sortie standard (pipe:1) : les images JPEG, 1 280 px au plus sur le
-//   grand côté (image2pipe, mjpeg, -q:v 4 ≈ qualité 82) ;
+//   grand côté (image2pipe, mjpeg, -q:v 2, peu compressé : LIMITS.jpegQscale) ;
 // - descripteur 3 (pipe:3) : les mêmes images en 96 × 96 px, rouge-vert-bleu
 //   brut, pour juger netteté et doublons sans décoder un JPEG en JavaScript.
 // Le filtre showinfo écrit l'instant de chaque image sur la sortie d'erreur.
