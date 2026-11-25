@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Switch, Text, View } from "react-native";
 import { color, font, space } from "@/theme/tokens";
+import { couleursInterrupteur } from "@/theme/accent";
 import { t } from "@/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { updateReadReceipts } from "@/lib/api";
@@ -44,7 +45,7 @@ export function ReadReceiptsSetting() {
           value={value}
           disabled={saving}
           onValueChange={(next) => void choose(next)}
-          trackColor={{ true: color.vert, false: color.filet }}
+          {...couleursInterrupteur(value)}
         />
       </View>
       <Text style={styles.body}>{t.settings.readReceiptsHint}</Text>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Switch, Text, View } from "react-native";
 import type { ConsentStatus } from "@monapp/shared-types";
 import { color, font, space } from "@/theme/tokens";
+import { couleursInterrupteur } from "@/theme/accent";
 import { t } from "@/i18n";
 import { fetchConsentStatus, recordVideoAiChoice } from "@/lib/api";
 import { track } from "@/lib/analytics";
@@ -48,7 +49,7 @@ export function VideoAiSetting({
           value={enabled}
           disabled={!consents || saving}
           onValueChange={(granted) => void toggle(granted)}
-          trackColor={{ true: color.vert, false: color.filet }}
+          {...couleursInterrupteur(enabled)}
         />
       </View>
       <Text style={styles.body}>

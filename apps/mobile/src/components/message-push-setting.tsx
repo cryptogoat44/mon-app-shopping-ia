@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { Linking, Platform, Pressable, Switch, Text, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { color, font, space } from "@/theme/tokens";
+import { couleursInterrupteur } from "@/theme/accent";
 import { t } from "@/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { disablePush, enablePush, loadPushDecision, pushPermission, pushSupported } from "@/lib/push";
@@ -74,7 +75,7 @@ export function MessagePushSetting() {
           value={value}
           disabled={!settings || saving}
           onValueChange={(on) => void toggle(on)}
-          trackColor={{ true: color.vert, false: color.filet }}
+          {...couleursInterrupteur(value)}
         />
       </View>
       <Text style={styles.body}>{!settings ? t.push.settingLoading : value ? t.push.settingOn : t.push.settingOff}</Text>

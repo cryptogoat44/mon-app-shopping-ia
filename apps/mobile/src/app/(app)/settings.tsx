@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { LEGAL_DOCUMENT_VERSIONS, type ConsentStatus } from "@monapp/shared-types";
 import { color, font, serifFont, serifLineHeight, space } from "@/theme/tokens";
+import { couleursInterrupteur } from "@/theme/accent";
 import { getActiveLocale, t } from "@/i18n";
 import { SegmentedChoice } from "@/components/segmented-choice";
 import { usePreferences } from "@/lib/preferences-context";
@@ -231,7 +232,7 @@ export default function SettingsScreen() {
               value={consents ? hasAnalyticsConsent(consents) : false}
               disabled={!consents || analyticsSaving}
               onValueChange={toggleAnalytics}
-              trackColor={{ true: color.vert, false: color.filet }}
+              {...couleursInterrupteur(consents ? hasAnalyticsConsent(consents) : false)}
             />
           </View>
           <Text style={styles.sectionBody}>

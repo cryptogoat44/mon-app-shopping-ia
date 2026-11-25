@@ -92,6 +92,15 @@ describe("contraste des initiales (WCAG), thèmes clair et sombre", () => {
     }
   });
 
+  it("lot « couleurs et logo » : la première teinte est le vert anglais en clair, une lavande sourde en sombre, initiales à 6:1 au moins", () => {
+    expect(avatarBackgrounds.light[0]).toBe("#004225");
+    expect(avatarBackgrounds.dark[0]).toBe("#B1A8D0");
+    expect(contrast(avatarBackgrounds.light[0]!, lightPalette.blanc)).toBeGreaterThanOrEqual(6);
+    expect(contrast(avatarBackgrounds.dark[0]!, darkPalette.blanc)).toBeGreaterThanOrEqual(6);
+    // Refusé : l'ancienne sauge claire du thème sombre a disparu.
+    expect(avatarBackgrounds.dark).not.toContain("#9CC3AE");
+  });
+
   it("la pastille se détache du fond de l'écran (au moins 3:1, comme un élément graphique)", () => {
     for (const [scheme, palette] of [["light", lightPalette], ["dark", darkPalette]] as const) {
       for (const background of avatarBackgrounds[scheme]) expect(contrast(background, palette.porcelaine)).toBeGreaterThanOrEqual(3);

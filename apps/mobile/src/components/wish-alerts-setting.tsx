@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { Linking, Platform, Pressable, Switch, Text, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { color, font, space } from "@/theme/tokens";
+import { couleursInterrupteur } from "@/theme/accent";
 import { t } from "@/i18n";
 import { fetchWishAlertsStatus, updateWishAlertsSettings } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -112,7 +113,7 @@ export function WishAlertsSetting() {
           value={status.enabled}
           disabled={saving}
           onValueChange={(on) => void toggle(on)}
-          trackColor={{ true: color.vert, false: color.filet }}
+          {...couleursInterrupteur(status.enabled)}
           testID="interrupteur-alertes-prix"
         />
       </View>
@@ -143,7 +144,7 @@ export function WishAlertsSetting() {
           value={status.helpOthers}
           disabled={savingHelp}
           onValueChange={(on) => void toggleHelp(on)}
-          trackColor={{ true: color.vert, false: color.filet }}
+          {...couleursInterrupteur(status.helpOthers)}
           testID="interrupteur-aider-membres"
         />
       </View>

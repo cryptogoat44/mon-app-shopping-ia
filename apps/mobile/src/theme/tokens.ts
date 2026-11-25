@@ -4,6 +4,13 @@
 // Lot S (docs/lot-s-design/) — brun très profond et chaud, jamais de noir
 // pur. Contrastes WCAG AA vérifiés pour chaque texte dans les deux thèmes
 // (voir docs/journal-decisions.md, lot 3).
+//
+// Lot « couleurs et logo » (validé par le fondateur, 25 novembre 2026) :
+// « Noir et ivoire ». Plus aucune couleur d'accent dans l'app : l'accent
+// (jeton `vert`, nom gardé) est l'encre en clair et l'ivoire en sombre. Un
+// lien ne se distingue donc plus par sa couleur : il est souligné
+// (theme/lien.ts). Seule exception, le « + » de la barre du bas, aux couleurs
+// du logo (`vertAnglais` et `dorure`, identiques dans les deux thèmes).
 
 export interface Palette {
   porcelaine: string; // fond de toute l'app
@@ -13,8 +20,8 @@ export interface Palette {
   acier: string; // texte secondaire (AA sur fond et surface)
   acierSurPlinthe: string; // texte exceptionnel sur plinthe (AA)
   filet: string; // séparateurs, bordures fines
-  vert: string; // seul accent : action principale, liens, marque « vérifié »
-  blanc: string; // texte ou icône posé sur un élément plein (vert ou encre)
+  vert: string; // l'accent (il n'est plus vert, le nom est resté) : action principale, liens (soulignés), marque « vérifié » ; même teinte que le texte
+  blanc: string; // texte ou icône posé sur un élément plein (accent ou encre)
   surImage: string; // texte ou icône posé sur une PHOTO : toujours clair
   danger: string; // actions destructrices uniquement
   erreur: string; // messages d'erreur uniquement (même teinte que danger, rôle distinct)
@@ -28,6 +35,8 @@ export interface Palette {
   voileImage: string; // voile posé sur une photo (hors de la zone entourée, badges)
   inactif: string; // fond d'un bouton plein désactivé
   surInactif: string; // texte d'un bouton désactivé (AA sur inactif)
+  vertAnglais: string; // marque : disque du « + » de la barre du bas (vert british racing du logo), identique dans les deux thèmes
+  dorure: string; // marque : cercle fin et signe du « + » de la barre du bas (or du logo), identique dans les deux thèmes
 }
 
 export const lightPalette: Palette = {
@@ -38,8 +47,8 @@ export const lightPalette: Palette = {
   acier: "#6E6E73", // 4,9:1
   acierSurPlinthe: "#57575C", // 6,4:1 sur plinthe
   filet: "#E4E4E0",
-  vert: "#1E3D32", // 11,5:1
-  blanc: "#FFFFFF", // 11,9:1 sur vert
+  vert: "#1D1D1F", // l'encre : 16,3:1 sur porcelaine
+  blanc: "#FFFFFF", // 16,8:1 sur l'accent
   surImage: "#FFFFFF",
   danger: "#B3432B", // 5,4:1
   erreur: "#B3432B",
@@ -53,6 +62,8 @@ export const lightPalette: Palette = {
   voileImage: "rgba(20,19,18,0.55)",
   inactif: "#E4E4E0",
   surInactif: "#57575C", // 5,5:1 sur inactif
+  vertAnglais: "#004225", // 11,2:1 sur porcelaine
+  dorure: "#D4AF37", // 5,5:1 sur vertAnglais
 };
 
 export const darkPalette: Palette = {
@@ -63,8 +74,8 @@ export const darkPalette: Palette = {
   acier: "#A9A6A0", // 7,6:1
   acierSurPlinthe: "#B3AFA8", // 7,3:1 sur plinthe
   filet: "#35322F",
-  vert: "#9CC3AE", // sauge claire : 9,6:1 sur porcelaine
-  blanc: "#141312", // 9,6:1 sur vert, 16,6:1 sur encre
+  vert: "#F4F2EE", // l'ivoire (comme encre) : 16,6:1 sur porcelaine, 15,2:1 sur surface
+  blanc: "#141312", // 16,6:1 sur l'accent et sur encre
   surImage: "#FFFFFF",
   danger: "#E8917B", // 7,8:1
   erreur: "#E8917B",
@@ -78,6 +89,8 @@ export const darkPalette: Palette = {
   voileImage: "rgba(20,19,18,0.6)",
   inactif: "#35322F",
   surInactif: "#B3AFA8", // 5,9:1 sur inactif
+  vertAnglais: "#004225", // le cercle doré le détache du fond (8,8:1 sur porcelaine)
+  dorure: "#D4AF37", // 5,5:1 sur vertAnglais
 };
 
 export type ColorScheme = "light" | "dark";
@@ -85,13 +98,14 @@ export type ColorScheme = "light" | "dark";
 // Photo de profil par défaut (lot « profil et icône des réglages ») : les
 // initiales sur une couleur stable, tirée de l'identifiant du compte
 // (lib/avatar-look.ts). Huit teintes sourdes de la famille de la palette —
-// vert (le `vert` du thème clair), brique (proche de `danger`), acier, olive,
-// ardoise, prune, camel, pétrole —, déclinées pour chaque thème au même
-// rang. Initiales écrites en `blanc` du thème (blanc en clair, brun très
+// vert british racing en clair et lavande sourde en sombre (lot « couleurs
+// et logo » : plus de vert clair à l'écran), brique (proche de `danger`),
+// acier, olive, ardoise, prune, camel, pétrole —, déclinées pour chaque
+// thème au même rang. Initiales écrites en `blanc` du thème (blanc en clair, brun très
 // profond en sombre) : au moins 6:1 partout (tests/avatar-look.test.ts).
 export const avatarBackgrounds: Readonly<Record<ColorScheme, readonly string[]>> = {
-  light: ["#1E3D32", "#A1412C", "#57575C", "#5B5A2C", "#3E5266", "#6A3F57", "#855A2E", "#2F5D62"],
-  dark: ["#9CC3AE", "#E8917B", "#B3AFA8", "#C8C38A", "#A7BBCF", "#D4A7BE", "#D8B48A", "#9CC8CC"],
+  light: ["#004225", "#A1412C", "#57575C", "#5B5A2C", "#3E5266", "#6A3F57", "#855A2E", "#2F5D62"],
+  dark: ["#B1A8D0", "#E8917B", "#B3AFA8", "#C8C38A", "#A7BBCF", "#D4A7BE", "#D8B48A", "#9CC8CC"],
 };
 
 let activePalette: Palette = lightPalette;

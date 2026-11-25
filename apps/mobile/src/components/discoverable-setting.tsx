@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Switch, Text, View } from "react-native";
 import { color, font, space } from "@/theme/tokens";
+import { couleursInterrupteur } from "@/theme/accent";
 import { t } from "@/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { updateDiscoverable } from "@/lib/api";
@@ -53,7 +54,7 @@ export function DiscoverableSetting() {
           value={value}
           disabled={saving}
           onValueChange={(next) => void toggle(next)}
-          trackColor={{ true: color.vert, false: color.filet }}
+          {...couleursInterrupteur(value)}
           testID="interrupteur-proposer-compte"
         />
       </View>

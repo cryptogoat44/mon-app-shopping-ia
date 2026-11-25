@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Pressable, Switch, Text, View } from "react-native";
 import { color, font, radius, space } from "@/theme/tokens";
+import { couleursInterrupteur } from "@/theme/accent";
 import { t } from "@/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { updatePrivateAccount } from "@/lib/api";
@@ -60,7 +61,7 @@ export function PrivateAccountSetting() {
           value={value}
           disabled={saving}
           onValueChange={toggle}
-          trackColor={{ true: color.vert, false: color.filet }}
+          {...couleursInterrupteur(value)}
           testID="interrupteur-compte-prive"
         />
       </View>

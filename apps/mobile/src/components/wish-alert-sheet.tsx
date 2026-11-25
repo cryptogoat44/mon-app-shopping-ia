@@ -3,6 +3,7 @@ import { Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, Switch, Tex
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { WishAlertState } from "@monapp/shared-types";
 import { color, font, radius, serifFont, serifLineHeight, size, space } from "@/theme/tokens";
+import { couleursInterrupteur } from "@/theme/accent";
 import { getActiveLocale, t } from "@/i18n";
 import { updateWishAlert } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -254,7 +255,7 @@ export function WishAlertSheet({
                     disabled={saving}
                     accessibilityLabel={alertKindLabel(kind)}
                     accessibilityHint={t.wishAlerts.kindHints[kind]}
-                    trackColor={{ true: color.vert, false: color.filet }}
+                    {...couleursInterrupteur(choice[kind])}
                     testID={`alerte-${kind}`}
                   />
                 </View>

@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { Linking, Platform, Pressable, Switch, Text, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { color, font, space } from "@/theme/tokens";
+import { couleursInterrupteur } from "@/theme/accent";
 import { t } from "@/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { latestVideoSettings, loadLatestVideo, saveLatestVideoChoice } from "@/lib/latest-video";
@@ -69,7 +70,7 @@ export function LatestVideoSetting() {
           value={settings?.choice === "yes"}
           disabled={!settings || saving}
           onValueChange={(enabled) => void toggle(enabled)}
-          trackColor={{ true: color.vert, false: color.filet }}
+          {...couleursInterrupteur(settings?.choice === "yes")}
         />
       </View>
       <Text style={styles.body}>{described ? described.body : error === "read" ? t.settings.latestVideoUnavailable : t.settings.analyticsLoading}</Text>

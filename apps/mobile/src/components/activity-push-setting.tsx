@@ -3,6 +3,7 @@ import { Linking, Platform, Pressable, Switch, Text, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { ACTIVITY_PUSH_KINDS, type ActivityPushKind } from "@monapp/shared-types";
 import { color, font, space } from "@/theme/tokens";
+import { couleursInterrupteur } from "@/theme/accent";
 import { t } from "@/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { disablePush, enablePush, loadActivityDecisions, pushPermission, pushSupported } from "@/lib/push";
@@ -88,7 +89,7 @@ export function ActivityPushSetting() {
               value={value}
               disabled={!device || pending !== null || denied}
               onValueChange={(next) => void toggle(kind, next)}
-              trackColor={{ true: color.vert, false: color.filet }}
+              {...couleursInterrupteur(value)}
               testID={`interrupteur-activite-${kind}`}
             />
           </View>
