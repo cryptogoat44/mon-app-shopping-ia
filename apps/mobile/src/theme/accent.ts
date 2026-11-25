@@ -8,7 +8,10 @@ import { color } from "./tokens";
 /** Un texte qui est un lien (texte seul, cliquable, sans fond ni bordure de
  * bouton) ne se distingue plus par sa couleur : il est souligné, d'un trait
  * fin. À ajouter (`...lienSouligne`) au style de chaque lien ; jamais au
- * libellé d'un bouton plein ou encadré. Sur iPhone, le trait est celui
+ * libellé d'un bouton plein ou encadré, ni à une action posée dans la barre
+ * de titre d'un écran ou l'en-tête d'une feuille (« Publier », « Fermer ») :
+ * reconnue à sa place, comme partout sur iPhone, elle reste en demi-gras,
+ * sans trait (tests/couleurs-et-logo.test.ts, ACTIONS_DE_BARRE). Sur iPhone, le trait est celui
  * d'iOS (fin, sous les lettres : son épaisseur et son écart ne se règlent
  * pas) ; sur le site, un trait d'un pixel, décalé de 3 pixels sous le texte. */
 export const lienSouligne: TextStyle = {

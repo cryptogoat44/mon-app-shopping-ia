@@ -88,21 +88,54 @@ const PAS_DES_LIENS: Record<string, string> = {
   "components/stock-note.tsx:inStock": "mention ⓘ",
 };
 
+// Actions d'une barre de titre ou de l'en-tête d'une feuille (décision du
+// 25 novembre 2026) : reconnues à leur place, comme partout sur iPhone, elles
+// ne sont PAS soulignées ; elles restent en demi-gras (600). Les liens dans le
+// corps d'un écran, eux, restent soulignés.
+const ACTIONS_DE_BARRE: Record<string, string> = {
+  "app/(app)/post-item/new.tsx:publishLabel": "« Publier », en haut à droite de l'écran de publication",
+  "components/tryon-sheet.web.tsx:closeLabel": "« Fermer », dans l'en-tête de la feuille d'essayage du site",
+};
+
 const souligne = (definition: string) => definition.includes("...lienSouligne");
+/** Une action de barre : jamais soulignée, toujours en demi-gras. */
+const actionDeBarreConforme = (definition: string) => !souligne(definition) && !definition.includes("textDecorationLine") && definition.includes('fontWeight: "600"');
 
 describe("liens : soulignés, puisque l'accent a la couleur du texte", () => {
   const tous = sources.flatMap(({ fichier, code }) => textesEnAccent(code).map(({ cle, definition }) => ({ id: `${fichier}:${cle}`, definition })));
 
-  it("chaque texte en accent est soit souligné (lien), soit un libellé de bouton ou un texte d'état listé ici", () => {
+  it("chaque texte en accent est soit souligné (lien), soit une action de barre, soit un libellé de bouton ou un texte d'état listé ici", () => {
     expect(tous.length).toBeGreaterThanOrEqual(80);
-    const nonClasses = tous.filter(({ id, definition }) => !souligne(definition) && !(id in PAS_DES_LIENS)).map(({ id }) => id);
+    const nonClasses = tous.filter(({ id, definition }) => !souligne(definition) && !(id in PAS_DES_LIENS) && !(id in ACTIONS_DE_BARRE)).map(({ id }) => id);
     expect(nonClasses).toEqual([]);
     // Un texte listé comme « pas un lien » n'est pas souligné, et la liste ne garde rien de périmé.
     const ids = new Set(tous.map(({ id }) => id));
     expect(Object.keys(PAS_DES_LIENS).filter((id) => !ids.has(id))).toEqual([]);
     expect(tous.filter(({ id, definition }) => id in PAS_DES_LIENS && souligne(definition)).map(({ id }) => id)).toEqual([]);
+    // Les quatre groupes ne se recoupent pas.
+    expect(Object.keys(ACTIONS_DE_BARRE).filter((id) => id in PAS_DES_LIENS)).toEqual([]);
     // Au moins les liens des réglages, des documents et de l'inscription.
     expect(tous.filter(({ definition }) => souligne(definition)).length).toBeGreaterThanOrEqual(50);
+  });
+
+  it("actions de barre (« Publier », « Fermer » de la feuille d'essayage) : à leur place, sans soulignement, en demi-gras", () => {
+    const parId = new Map(tous.map(({ id, definition }) => [id, definition]));
+    for (const id of Object.keys(ACTIONS_DE_BARRE)) {
+      const definition = parId.get(id);
+      expect(definition, id).toBeDefined();
+      expect(actionDeBarreConforme(definition!), id).toBe(true);
+    }
+    // Elles sont bien dans une barre : à côté du titre de l'écran ou de la feuille.
+    const publication = readFileSync(join(SRC, "app/(app)/post-item/new.tsx"), "utf8");
+    expect(publication.slice(publication.indexOf("<View style={styles.nav}>"), publication.indexOf("{/* Envoi des photos"))).toContain("styles.publishLabel");
+    const essayage = readFileSync(join(SRC, "components/tryon-sheet.web.tsx"), "utf8");
+    expect(essayage.slice(essayage.indexOf("<View style={styles.header}>"), essayage.indexOf("<ScrollView"))).toContain("styles.closeLabel");
+  });
+
+  it("le garde-fou refuse une action de barre soulignée ou sans demi-gras, et accepte le demi-gras seul", () => {
+    expect(actionDeBarreConforme(`...lienSouligne, fontSize: font.secondary, fontWeight: "600", color: color.vert `)).toBe(false);
+    expect(actionDeBarreConforme(` fontSize: font.secondary, color: color.vert `)).toBe(false);
+    expect(actionDeBarreConforme(` fontSize: font.secondary, fontWeight: "600", color: color.vert `)).toBe(true);
   });
 
   it("un seul style commun : plus de soulignement écrit à la main sur un texte en accent", () => {

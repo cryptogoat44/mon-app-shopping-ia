@@ -28,7 +28,6 @@ import { PrivateAccountNote } from "@/components/private-account-note";
 import { SpotImage } from "@/components/spot-image";
 import { PRIVACY_LEVELS } from "@/lib/vault-labels";
 import { color, font, radius, space } from "@/theme/tokens";
-import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { getRecentlySpotted } from "@/api/client";
 import type { Piece } from "@/api/types";
@@ -573,7 +572,7 @@ const styles = themedStyles(() => ({
   navSideRight: { alignItems: "flex-end" },
   cancel: { fontSize: font.secondary, color: color.acier },
   navTitle: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
-  publishLabel: { ...lienSouligne, fontSize: font.secondary, fontWeight: "600", color: color.vert },
+  publishLabel: { fontSize: font.secondary, fontWeight: "600", color: color.vert },
   publishLabelDisabled: { color: color.acier },
   body: { paddingHorizontal: space.md, paddingTop: 18, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   error: { fontSize: font.caption, color: color.acier, marginBottom: space.md },
