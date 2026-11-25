@@ -35,7 +35,7 @@ La **première** capture compte le plus : c'est elle qu'on voit dans les résult
 | 1 | **Spotter** (accueil) | les boutons « Ajouter une vidéo », « Ajouter une photo », « Prendre une photo », et des pièces dans « Récemment spottées » | Vue dans une vidéo ? Retrouvez-la. | Saw it in a video? Find it. |
 | 2 | **Entourez la pièce** | une capture d'écran de vidéo, la pièce entourée au doigt | Entourez la pièce, c'est tout. | Just circle the piece. |
 | 3 | **Résultats** | « Meilleure proposition avec prix », avec le prix et « Voir chez … » | Où l'acheter, prix en tête. | Where to buy it, prices first. |
-| 4 | **Partager vers Spotto** | la feuille de partage d'iOS ouverte sur une photo, avec l'icône de Spotto (le « S » or pâle sur fond vert) | Partagez vers Spotto depuis Photos. | Share to Spotto from Photos. |
+| 4 | **Partager vers Spotto** | la feuille de partage d'iOS ouverte sur une photo, avec l'icône de Spotto (le « S » en or poli sur fond vert anglais) | Partagez vers Spotto depuis Photos. | Share to Spotto from Photos. |
 | 5 | **Vidéo** | « Votre dernière vidéo » ou le choix du moment dans une vidéo | Vos vidéos, au bon moment. | Your videos, at the right moment. |
 | 6 | **Envies** | quelques pièces gardées | Gardez vos coups de cœur. | Save the pieces you love. |
 | 7 | **Vault** (Profil) | des pièces possédées, avec leur photo | Votre dressing, dans le Vault. | Your wardrobe, in the Vault. |

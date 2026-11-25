@@ -314,3 +314,30 @@ envoyer un build sans eux : les deux variables à `false` chez Expo, puis un
 nouveau build (le module est natif : une mise à jour à distance ne suffit
 pas). Revoir alors les notes pour Apple et les réponses « App Privacy »
 (`app-store/`).
+
+## 10. L'icône de l'iPhone : à regarder sur le Mac avant un build
+
+Depuis le lot « couleurs et logo » (25 novembre 2026), l'icône est le logo
+validé « Émail de chevalière » : un « S » en or poli sur un fond vert
+anglais en dégradé, avec une lueur douce en haut. L'iPhone la lit dans
+`apps/mobile/assets/marque/Spotto.icon`, un dossier au format d'Apple
+(« Icon Composer ») : `icon.json` et deux dessins, `Assets/S.svg` (le « S »)
+et `Assets/Email.svg` (le fond, plein cadre). Ce format ne peut pas être
+essayé sans Xcode : regardez-le une fois sur le Mac avant le prochain build.
+
+1. Dans le Finder, double-cliquez sur `Spotto.icon` : l'app Icon Composer
+   s'ouvre (elle vient avec Xcode 26).
+2. À gauche, deux calques : « S » au-dessus, « Email » en dessous.
+3. L'aperçu doit ressembler à `apps/mobile/assets/images/icon.png` : le
+   « S » doré, plus clair en haut à gauche, sur un vert qui fonce vers le bas,
+   sans reflet ni effet de verre (désactivés exprès).
+4. Fermez sans enregistrer.
+
+Si l'aperçu montre seulement le fond vert (le « S » caché dessous), ou un
+« S » d'une seule couleur, ou un fond sans dégradé : Icon Composer n'a pas lu
+les dessins comme prévu. Dites-le à Claude, qui fera fabriquer par le script
+les mêmes deux calques en images PNG (1024 × 1024, rendues par sharp) au
+lieu des SVG, ou corrigera l'ordre des calques ; rien d'autre ne change.
+
+Après le build, regardez aussi l'icône sur l'écran d'accueil de l'iPhone,
+en apparence claire puis sombre.
