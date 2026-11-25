@@ -11,11 +11,11 @@ import {
   currentTab,
   friendShelfDetails,
   friendShelvesNoticeLines,
-  friendShelvesNoticeVisible,
   friendShelvesSettingShown,
   needsFriendShelvesNotice,
   noticeAnnouncement,
   noticeAnswer,
+  noticeAnswerProfilePatch,
   profileTabs,
   shelfToast,
   shelfCellImageSize,
@@ -128,32 +128,52 @@ describe("l'information « Ce que vos amis peuvent voir » : prévenu avant d'ê
     expect(friendShelvesNoticeLines({ ...base, showWishesToFriends: false })).toEqual([fr.friendShelves.noticeIntro, fr.friendShelves.noticeVault, fr.friendShelves.noticeOutro]);
   });
 
-  it("réponse enregistrée : la carte se cache aussitôt, même si le rechargement du profil échoue ; jamais pour un autre membre", () => {
+  it("réponse enregistrée : appliquée aussitôt au profil affiché (carte cachée, phrases « privé » vraies), même si le rechargement échoue ; jamais à un autre membre", () => {
     const me = { ...base, id: "u1" };
-    // Permis : pas encore répondu sur cet appareil, la carte est là.
-    expect(friendShelvesNoticeVisible(me, null)).toBe(true);
-    expect(friendShelvesNoticeVisible(me, "u2")).toBe(true);
-    // Refusé : ce membre vient de répondre (profil pas encore rechargé), ou le serveur le dit déjà.
-    expect(friendShelvesNoticeVisible(me, "u1")).toBe(false);
-    expect(friendShelvesNoticeVisible({ ...me, friendShelvesInformed: true }, null)).toBe(false);
-    expect(friendShelvesNoticeVisible(null, null)).toBe(false);
+    // Permis : pas encore répondu, la carte est là et les phrases disent « privé » (rien n'est montré).
+    expect(needsFriendShelvesNotice(me)).toBe(true);
+    expect(vaultItemNote(me)).toBe(fr.vaultItem.privateNote);
+    // « Compris » appliqué : la carte se cache et plus aucune phrase ne promet « personne d'autre que vous ».
+    const ok = { ...me, ...noticeAnswerProfilePatch("ok") };
+    expect(needsFriendShelvesNotice(ok)).toBe(false);
+    expect(vaultShownNow(ok)).toBe(true);
+    expect(wishesShownNow(ok)).toBe(true);
+    expect(vaultItemNote(ok)).toBe(fr.friendShelves.vaultItemNote);
+    expect(vaultFormNote(ok)).toBe(fr.friendShelves.vaultFormNote);
+    expect(wishShareHint(ok)).toBe(fr.friendShelves.wishShareHint);
+    expect(wishlistPrivacyNote(ok, true)).toBe(fr.wishlist.privateNoteFriends);
+    expect(shelfToast("vault", true, ok.friendShelvesInformed, true)).toBe(fr.friendShelves.vaultShown);
+    // « Éteindre » appliqué : la carte se cache, les deux réglages sont éteints, rien n'est montré.
+    const off = { ...me, ...noticeAnswerProfilePatch("off") };
+    expect(noticeAnswerProfilePatch("off")).toEqual({ friendShelvesInformed: true, showWishesToFriends: false, showVaultToFriends: false });
+    expect(needsFriendShelvesNotice(off)).toBe(false);
+    expect(vaultShownNow(off)).toBe(false);
+    expect(wishesShownNow(off)).toBe(false);
     const notice = source("components/friend-shelves-notice.tsx");
-    expect(notice).toContain("const shown = friendShelvesNoticeVisible(profile, answeredId);");
-    expect(notice.indexOf("markAnswered(profile?.id ?? null);")).toBeGreaterThan(notice.indexOf("await updateFriendShelves(noticeAnswer(choice));"));
-    expect(notice.indexOf("markAnswered(profile?.id ?? null);")).toBeLessThan(notice.indexOf("await refreshProfile();"));
+    expect(notice).toContain("const shown = needsFriendShelvesNotice(profile);");
+    const patch = "if (memberId) patchProfile(memberId, noticeAnswerProfilePatch(choice));";
+    expect(notice.indexOf(patch)).toBeGreaterThan(notice.indexOf("await updateFriendShelves(noticeAnswer(choice));"));
+    expect(notice.indexOf(patch)).toBeLessThan(notice.indexOf("await refreshProfile();"));
+    // Refusé : le changement n'est jamais appliqué au profil d'un autre membre (connecté entre-temps).
+    const auth = source("lib/auth-context.tsx");
+    expect(auth).toContain("setProfile((current) => (current && current.id === memberId ? { ...current, ...patch } : current));");
   });
 
-  it("VoiceOver : une seule annonce par apparition, pas à chaque montage (onglets du profil, fin du chargement, Réglages par-dessus)", () => {
+  it("VoiceOver : une seule annonce par apparition et par membre, pas à chaque montage (onglets du profil, fin du chargement, Réglages par-dessus)", () => {
     // Permis : première apparition annoncée.
-    expect(noticeAnnouncement(false, true)).toEqual({ announce: true, announced: true });
-    // Refusé : remontée (autre onglet, autre carte montée) déjà annoncée.
-    expect(noticeAnnouncement(true, true)).toEqual({ announce: false, announced: true });
+    expect(noticeAnnouncement(null, true, "u1")).toEqual({ announce: true, announcedFor: "u1" });
+    // Refusé : remontée (autre onglet, autre carte montée) déjà annoncée à ce membre.
+    expect(noticeAnnouncement("u1", true, "u1")).toEqual({ announce: false, announcedFor: "u1" });
+    // Permis : un autre membre connecté ensuite sur le même téléphone (sans passer par « cachée ») l'entend.
+    expect(noticeAnnouncement("u1", true, "u2")).toEqual({ announce: true, announcedFor: "u2" });
     // Cachée : rien, et elle pourra être annoncée si elle réapparaît.
-    expect(noticeAnnouncement(true, false)).toEqual({ announce: false, announced: false });
+    expect(noticeAnnouncement("u1", false, "u1")).toEqual({ announce: false, announcedFor: null });
+    expect(noticeAnnouncement("u1", true, null)).toEqual({ announce: false, announcedFor: null });
     const notice = source("components/friend-shelves-notice.tsx");
     // Le drapeau est au niveau du module (partagé par toutes les cartes), pas dans l'état de la carte.
-    expect(notice).toMatch(/^let announced = false;$/m);
-    expect(notice).toContain("const next = noticeAnnouncement(announced, shown);");
+    expect(notice).toMatch(/^let announcedFor: string \| null = null;$/m);
+    expect(notice).toContain("const next = noticeAnnouncement(announcedFor, shown, memberId);");
+    expect(notice).toContain("}, [shown, memberId]);");
   });
 
   it("« Compris » note seulement la date ; « Éteindre » éteint les deux réglages et note la date", () => {

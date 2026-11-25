@@ -1,10 +1,10 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 import { AccessibilityInfo, Platform, Pressable, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { color, font, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { updateFriendShelves } from "@/lib/api";
-import { friendShelvesNoticeLines, friendShelvesNoticeVisible, noticeAnnouncement, noticeAnswer } from "@/lib/friend-shelves";
+import { friendShelvesNoticeLines, needsFriendShelvesNotice, noticeAnnouncement, noticeAnswer, noticeAnswerProfilePatch } from "@/lib/friend-shelves";
 import { useToast } from "@/lib/toast-context";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
@@ -21,45 +21,28 @@ import { themedStyles } from "@/theme/themed-styles";
 // Elle ne bloque rien : sans réponse, l'app marche et les étagères restent
 // fermées. VoiceOver l'annonce une fois à son apparition (pas à chaque
 // montage : le profil la remonte à chaque onglet, Réglages en ajoute une).
-// Partagés par toutes les cartes montées (profil, Réglages par-dessus) :
-// - `announced` : l'information a déjà été lue à VoiceOver ;
-// - `answeredFor` : l'id du membre dont la réponse vient d'être enregistrée
-//   (la carte se cache aussitôt, même si le rechargement du profil échoue).
-let announced = false;
-let answeredFor: string | null = null;
-const answeredListeners = new Set<() => void>();
-function subscribeAnswered(listener: () => void) {
-  answeredListeners.add(listener);
-  return () => {
-    answeredListeners.delete(listener);
-  };
-}
-function readAnswered() {
-  return answeredFor;
-}
-function markAnswered(id: string | null) {
-  answeredFor = id;
-  for (const listener of answeredListeners) listener();
-}
+// `announcedFor` (partagé par toutes les cartes montées : profil, Réglages
+// par-dessus) : l'id du membre à qui l'information a déjà été lue à VoiceOver.
+let announcedFor: string | null = null;
 
 /** `style` : la marge autour de la carte, seulement quand elle est montrée
  * (cachée, elle ne prend aucune place). */
 export function FriendShelvesNotice({ style }: { style?: StyleProp<ViewStyle> } = {}) {
-  const { profile, refreshProfile } = useAuth();
+  const { profile, refreshProfile, patchProfile } = useAuth();
   const { showToast } = useToast();
   const [saving, setSaving] = useState<"ok" | "off" | null>(null);
   const [error, setError] = useState(false);
-  const answeredId = useSyncExternalStore(subscribeAnswered, readAnswered, readAnswered);
-  const shown = friendShelvesNoticeVisible(profile, answeredId);
+  const shown = needsFriendShelvesNotice(profile);
+  const memberId = profile?.id ?? null;
   const lines = friendShelvesNoticeLines(profile);
 
   useEffect(() => {
-    const next = noticeAnnouncement(announced, shown);
-    announced = next.announced;
+    const next = noticeAnnouncement(announcedFor, shown, memberId);
+    announcedFor = next.announcedFor;
     // iOS n'annonce pas le rôle « alert » : on lit l'information à VoiceOver.
     if (next.announce && Platform.OS === "ios") AccessibilityInfo.announceForAccessibility([t.friendShelves.noticeTitle, ...lines].join(" "));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shown]);
+  }, [shown, memberId]);
 
   if (!shown) return null;
 
@@ -69,8 +52,10 @@ export function FriendShelvesNotice({ style }: { style?: StyleProp<ViewStyle> } 
     setError(false);
     try {
       await updateFriendShelves(noticeAnswer(choice));
-      // Réponse enregistrée : la carte se cache, même si le rechargement échoue.
-      markAnswered(profile?.id ?? null);
+      // Réponse enregistrée : appliquée tout de suite au profil affiché (la
+      // carte se cache, les phrases « privé » restent vraies), même si le
+      // rechargement qui suit échoue.
+      if (memberId) patchProfile(memberId, noticeAnswerProfilePatch(choice));
       await refreshProfile();
       showToast(choice === "ok" ? t.friendShelves.noticeOkDone : t.friendShelves.noticeOffDone);
     } catch {
