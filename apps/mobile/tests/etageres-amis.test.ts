@@ -11,8 +11,10 @@ import {
   currentTab,
   friendShelfDetails,
   friendShelvesNoticeLines,
+  friendShelvesNoticeVisible,
   friendShelvesSettingShown,
   needsFriendShelvesNotice,
+  noticeAnnouncement,
   noticeAnswer,
   profileTabs,
   shelfToast,
@@ -126,6 +128,34 @@ describe("l'information « Ce que vos amis peuvent voir » : prévenu avant d'ê
     expect(friendShelvesNoticeLines({ ...base, showWishesToFriends: false })).toEqual([fr.friendShelves.noticeIntro, fr.friendShelves.noticeVault, fr.friendShelves.noticeOutro]);
   });
 
+  it("réponse enregistrée : la carte se cache aussitôt, même si le rechargement du profil échoue ; jamais pour un autre membre", () => {
+    const me = { ...base, id: "u1" };
+    // Permis : pas encore répondu sur cet appareil, la carte est là.
+    expect(friendShelvesNoticeVisible(me, null)).toBe(true);
+    expect(friendShelvesNoticeVisible(me, "u2")).toBe(true);
+    // Refusé : ce membre vient de répondre (profil pas encore rechargé), ou le serveur le dit déjà.
+    expect(friendShelvesNoticeVisible(me, "u1")).toBe(false);
+    expect(friendShelvesNoticeVisible({ ...me, friendShelvesInformed: true }, null)).toBe(false);
+    expect(friendShelvesNoticeVisible(null, null)).toBe(false);
+    const notice = source("components/friend-shelves-notice.tsx");
+    expect(notice).toContain("const shown = friendShelvesNoticeVisible(profile, answeredId);");
+    expect(notice.indexOf("markAnswered(profile?.id ?? null);")).toBeGreaterThan(notice.indexOf("await updateFriendShelves(noticeAnswer(choice));"));
+    expect(notice.indexOf("markAnswered(profile?.id ?? null);")).toBeLessThan(notice.indexOf("await refreshProfile();"));
+  });
+
+  it("VoiceOver : une seule annonce par apparition, pas à chaque montage (onglets du profil, fin du chargement, Réglages par-dessus)", () => {
+    // Permis : première apparition annoncée.
+    expect(noticeAnnouncement(false, true)).toEqual({ announce: true, announced: true });
+    // Refusé : remontée (autre onglet, autre carte montée) déjà annoncée.
+    expect(noticeAnnouncement(true, true)).toEqual({ announce: false, announced: true });
+    // Cachée : rien, et elle pourra être annoncée si elle réapparaît.
+    expect(noticeAnnouncement(true, false)).toEqual({ announce: false, announced: false });
+    const notice = source("components/friend-shelves-notice.tsx");
+    // Le drapeau est au niveau du module (partagé par toutes les cartes), pas dans l'état de la carte.
+    expect(notice).toMatch(/^let announced = false;$/m);
+    expect(notice).toContain("const next = noticeAnnouncement(announced, shown);");
+  });
+
   it("« Compris » note seulement la date ; « Éteindre » éteint les deux réglages et note la date", () => {
     expect(noticeAnswer("ok")).toEqual({ informed: true });
     expect(noticeAnswer("off")).toEqual({ wishes: false, vault: false, informed: true });
@@ -136,7 +166,7 @@ describe("l'information « Ce que vos amis peuvent voir » : prévenu avant d'ê
     expect(notice).toContain("if (!shown) return null;");
     expect(notice).toContain("await updateFriendShelves(noticeAnswer(choice));");
     expect(notice).toContain('accessibilityRole="alert"');
-    expect(notice).toContain('if (shown && Platform.OS === "ios") AccessibilityInfo.announceForAccessibility(');
+    expect(notice).toContain('if (next.announce && Platform.OS === "ios") AccessibilityInfo.announceForAccessibility(');
     expect(notice).toContain("button: { minHeight: 44, minWidth: 44");
     expect(notice).toContain("{t.friendShelves.noticeOk}");
     expect(notice).toContain("{t.friendShelves.noticeOff}");
@@ -145,9 +175,14 @@ describe("l'information « Ce que vos amis peuvent voir » : prévenu avant d'ê
     // Échec : un message, et la carte reste.
     expect(notice).toContain("setError(true);");
     const own = source("app/(app)/(tabs)/profile/index.tsx");
-    expect(own).toContain("<FriendShelvesNotice />");
-    expect(own.indexOf("<FriendShelvesNotice />")).toBeGreaterThan(own.indexOf("const profileHeader = (inset: boolean) => ("));
-    expect(own.indexOf("<FriendShelvesNotice />")).toBeLessThan(own.indexOf("<View style={styles.seg}>"));
+    const tag = "<FriendShelvesNotice style={styles.noticeWrap} />";
+    expect(own).toContain(tag);
+    expect(own.indexOf(tag)).toBeGreaterThan(own.indexOf("const profileHeader = (inset: boolean) => ("));
+    expect(own.indexOf(tag)).toBeLessThan(own.indexOf("<View style={styles.seg}>"));
+    // Refusé : une marge toujours là autour de la carte (16 points de plus dans l'en-tête, même sans carte).
+    expect(own).not.toContain("<View style={styles.noticeWrap}>");
+    // Permis : la marge n'est posée que si la carte est montrée.
+    expect(notice.indexOf("if (!shown) return null;")).toBeLessThan(notice.indexOf("<View style={style}>"));
     // Jamais écrite par l'app sans ce geste : seule l'information envoie « informed ».
     expect(source("components/friend-shelves-setting.tsx")).not.toContain("informed");
   });
@@ -156,16 +191,23 @@ describe("l'information « Ce que vos amis peuvent voir » : prévenu avant d'ê
     expect(fr.friendShelves.noticeTitle).toBe("Ce que vos amis peuvent voir");
     expect(fr.friendShelves.noticeIntro).toBe("Vos amis (les membres que vous suivez et qui vous suivent) pourront voir sur votre profil, sans rien pouvoir modifier :");
     expect(fr.friendShelves.noticeWishes).toBe(
-      "Vos Envies, avec leur prix, votre alerte de prix et le nom de vos collections « Mes amis ». Une Envie rangée dans une collection « Privée » n'y apparaît pas."
+      "Vos Envies, avec leur prix, votre alerte de prix et le nom de vos collections « Mes amis ». Une Envie rangée dans une collection « Privée » n'y apparaît pas, sauf si elle est aussi dans une collection « Mes amis »."
+    );
+    expect(en.friendShelves.noticeWishes).toBe(
+      "Your wishes, with their price, your price alert and the names of your “My friends” collections. A wish in a “Private” collection does not appear there, unless it is also in a “My friends” collection."
     );
     expect(fr.friendShelves.noticeVault).toBe(
       "Les pièces de votre Vault, avec leur photo (y compris celles que vous avez prises vous-même), leur date d'ajout et la mention « Achat vérifié »."
     );
-    expect(fr.friendShelves.noticeOutro).toBe("Rien n'est montré avant votre réponse. Personne n'est prévenu quand vos amis regardent. Vous pourrez changer d'avis à tout moment dans Réglages.");
+    expect(fr.friendShelves.noticeOutro).toBe(
+      "Vos Envies et votre Vault ne s'ouvrent à vos amis qu'après votre réponse (vos collections « Mes amis » restent montrées comme avant). Personne n'est prévenu quand vos amis regardent. Vous pourrez changer d'avis à tout moment dans Réglages."
+    );
     expect([fr.friendShelves.noticeOk, fr.friendShelves.noticeOff]).toEqual(["Compris", "Éteindre"]);
     expect(en.friendShelves.noticeTitle).toBe("What your friends can see");
     expect([en.friendShelves.noticeOk, en.friendShelves.noticeOff]).toEqual(["Got it", "Turn off"]);
-    expect(en.friendShelves.noticeOutro).toBe("Nothing is shown before you answer. No one is told when your friends look. You can change your mind at any time in Settings.");
+    expect(en.friendShelves.noticeOutro).toBe(
+      "Your wishes and your Vault only open to your friends after you answer (your “My friends” collections stay shown as before). No one is told when your friends look. You can change your mind at any time in Settings."
+    );
   });
 });
 
@@ -276,7 +318,7 @@ describe("les phrases « privé » : exactes dans chaque état", () => {
 
   it("la feuille « Qui voit vos Envies », trois états : montrées à vos amis ; éteint ; fonction absente (ou information pas vue)", () => {
     const shown = { showWishesToFriends: true, showVaultToFriends: false, friendShelvesInformed: true };
-    expect(wishlistPrivacyNote(shown, true)).toBe("Vos amis voient vos Envies, sauf celles rangées dans une collection « Privée ». Vous pouvez l'éteindre dans Réglages.");
+    expect(wishlistPrivacyNote(shown, true)).toBe("Vos amis voient vos Envies, sauf celles rangées seulement dans des collections « Privée ». Vous pouvez l'éteindre dans Réglages.");
     expect(wishlistPrivacyNote({ ...shown, showWishesToFriends: false }, true)).toBe(
       "Vous avez éteint « Montrer mes Envies à mes amis » : vos Envies sont privées, sauf celles que vous rangez dans une collection « Mes amis »."
     );
@@ -286,7 +328,7 @@ describe("les phrases « privé » : exactes dans chaque état", () => {
       expect(wishlistPrivacyNote(profile, false)).toBe(fr.wishlist.privateNote);
     }
     setActiveLocale("en");
-    expect(wishlistPrivacyNote(shown, true)).toBe("Your friends see your wishes, except those in a “Private” collection. You can turn it off in Settings.");
+    expect(wishlistPrivacyNote(shown, true)).toBe("Your friends see your wishes, except those only in “Private” collections. You can turn it off in Settings.");
     expect(wishlistPrivacyNote({ ...shown, showWishesToFriends: false }, false)).toBe(en.wishlist.privateNoteOff);
   });
 
@@ -306,8 +348,10 @@ describe("les phrases « privé » : exactes dans chaque état", () => {
   });
 
   it("là où l'on range une envie : une phrase courte dit qu'une collection « Privée » la garde hors des Envies que voient vos amis", () => {
-    expect(fr.collections.privateNotOnShelf).toBe("Une Envie rangée dans une collection « Privée » n'apparaît pas dans les Envies que voient vos amis.");
-    expect(en.collections.privateNotOnShelf).toBe("A wish in a “Private” collection does not appear in the wishes your friends see.");
+    expect(fr.collections.privateNotOnShelf).toBe(
+      "Une Envie rangée dans une collection « Privée » n'apparaît pas dans les Envies que voient vos amis, sauf si elle est aussi dans une collection « Mes amis »."
+    );
+    expect(en.collections.privateNotOnShelf).toBe("A wish in a “Private” collection does not appear in the wishes your friends see, unless it is also in a “My friends” collection.");
     const sheet = source("components/add-to-collection-sheet.tsx");
     // Seulement réglage allumé (éteint, la phrase serait sans objet).
     expect(sheet).toMatch(/\{showsWishes\(profile\) \? \(\s*<Text style=\{styles\.hint\} testID="collection-privee-hors-etagere">\s*\{t\.collections\.privateNotOnShelf\}/);
@@ -374,7 +418,7 @@ describe("textes FR / EN", () => {
     expect(fr.friendShelves.settingWishesHelp).not.toContain("Éteint au départ");
     expect(fr.friendShelves.settingVaultHelp).not.toContain("Éteint au départ");
     expect(en.friendShelves.settingWishesHelp).not.toContain("Off at first");
-    expect(fr.friendShelves.settingWishesHelp).toContain("sauf celles rangées dans une collection « Privée »");
+    expect(fr.friendShelves.settingWishesHelp).toContain("sauf celles rangées seulement dans des collections « Privée »");
     expect(fr.friendShelves.settingVaultHelp).toContain("y compris les photos que vous avez prises vous-même");
     expect(fr.userProfile.noPostsNamed("Jade")).toBe("Jade n'a encore rien publié.");
     expect(en.userProfile.noPostsNamed("Jade")).toBe("Jade hasn't posted anything yet.");
@@ -384,6 +428,49 @@ describe("textes FR / EN", () => {
     for (const catalog of [fr.friendShelves, en.friendShelves]) {
       const text = JSON.stringify(catalog).toLowerCase();
       for (const word of ["authentique", "authentic", "promotion", "prix de référence", "reference price"]) expect(text).not.toContain(word);
+    }
+  });
+});
+
+describe("une Envie « Privée » aussi rangée dans une collection « Mes amis » : les phrases de l'app disent l'exception", () => {
+  const sentences = () => [
+    fr.collections.privateNotOnShelf,
+    fr.friendShelves.noticeWishes,
+    fr.friendShelves.noticeOutro,
+    fr.friendShelves.wishShareHint,
+    fr.wishlist.privateNoteFriends,
+    fr.friendShelves.settingWishesHelp,
+    en.collections.privateNotOnShelf,
+    en.friendShelves.noticeWishes,
+    en.friendShelves.noticeOutro,
+    en.friendShelves.wishShareHint,
+    en.wishlist.privateNoteFriends,
+    en.friendShelves.settingWishesHelp,
+  ];
+
+  it("permis : l'exception « Mes amis » est dite (FR et EN)", () => {
+    expect(fr.collections.privateNotOnShelf).toContain("sauf si elle est aussi dans une collection « Mes amis »");
+    expect(fr.friendShelves.noticeWishes).toContain("sauf si elle est aussi dans une collection « Mes amis »");
+    expect(en.collections.privateNotOnShelf).toContain("unless it is also in a “My friends” collection");
+    expect(en.friendShelves.noticeWishes).toContain("unless it is also in a “My friends” collection");
+    for (const text of [fr.friendShelves.wishShareHint, fr.wishlist.privateNoteFriends, fr.friendShelves.settingWishesHelp]) {
+      expect(text).toContain("sauf celles rangées seulement dans des collections « Privée »");
+    }
+    for (const text of [en.friendShelves.wishShareHint, en.wishlist.privateNoteFriends, en.friendShelves.settingWishesHelp]) {
+      expect(text).toContain("except those only in “Private” collections");
+    }
+    expect(fr.friendShelves.noticeOutro).toContain("vos collections « Mes amis » restent montrées comme avant");
+    expect(en.friendShelves.noticeOutro).toContain("your “My friends” collections stay shown as before");
+  });
+
+  it("refusé : les anciennes promesses sans exception (« n'apparaît pas. », « Rien n'est montré avant votre réponse »)", () => {
+    for (const text of sentences()) {
+      expect(text).not.toMatch(/« Privée » n'(apparaît pas dans les Envies que voient vos amis|y apparaît pas)\./);
+      expect(text).not.toContain("sauf celles rangées dans une collection « Privée »");
+      expect(text).not.toContain("Rien n'est montré avant votre réponse");
+      expect(text).not.toMatch(/“Private” collection does not appear (in the wishes your friends see|there)\./);
+      expect(text).not.toContain("except those in a “Private” collection");
+      expect(text).not.toContain("Nothing is shown before you answer");
     }
   });
 });
@@ -420,7 +507,7 @@ describe("qui voit vos Envies et votre Vault : des phrases courtes qui prévienn
 
   it("permis : les phrases de l'app, mot pour mot, avec leurs avertissements gardés", () => {
     expect(fr.friendShelves.settingWishesHelp).toBe(
-      `Allumé, vos amis (les membres que vous suivez et qui vous suivent) voient vos Envies, sauf celles rangées dans une collection « Privée » : titre, image (une copie faite par ${BRAND}), prix, lien vers la boutique, votre alerte de prix et le nom de vos collections « Mes amis ». Ils ne peuvent rien modifier. Jamais les pièces reçues ni vos publications enregistrées.`
+      `Allumé, vos amis (les membres que vous suivez et qui vous suivent) voient vos Envies, sauf celles rangées seulement dans des collections « Privée » : titre, image (une copie faite par ${BRAND}), prix, lien vers la boutique, votre alerte de prix et le nom de vos collections « Mes amis ». Ils ne peuvent rien modifier. Jamais les pièces reçues ni vos publications enregistrées.`
     );
     expect(fr.friendShelves.settingVaultHelp).toBe(
       "Allumé, vos amis voient les pièces de votre Vault : nom, catégorie, photo (y compris les photos que vous avez prises vous-même), date d'ajout et mention « Achat vérifié ». Ils ne peuvent rien modifier."
@@ -429,16 +516,16 @@ describe("qui voit vos Envies et votre Vault : des phrases courtes qui prévienn
       "Vos amis voient votre Vault, avec la date d'ajout et la mention « Achat vérifié » (Réglages) ; personne d'autre ne le voit. Pour montrer cette pièce à d'autres, partagez-la dans votre fil."
     );
     expect(fr.friendShelves.vaultFormNote).toBe("Vos amis verront cette pièce dans votre Vault (Réglages, « Montrer mon Vault à mes amis »).");
-    expect(fr.friendShelves.wishShareHint).toBe("Vos amis voient vos Envies, sauf celles rangées dans une collection « Privée ». Vous pouvez l'éteindre dans Réglages.");
-    expect(fr.wishlist.privateNoteFriends).toBe("Vos amis voient vos Envies, sauf celles rangées dans une collection « Privée ». Vous pouvez l'éteindre dans Réglages.");
+    expect(fr.friendShelves.wishShareHint).toBe("Vos amis voient vos Envies, sauf celles rangées seulement dans des collections « Privée ». Vous pouvez l'éteindre dans Réglages.");
+    expect(fr.wishlist.privateNoteFriends).toBe("Vos amis voient vos Envies, sauf celles rangées seulement dans des collections « Privée ». Vous pouvez l'éteindre dans Réglages.");
     expect(en.friendShelves.settingWishesHelp).toBe(
-      `When on, your friends (members you follow who follow you back) see your wishes, except those in a “Private” collection: title, image (a copy made by ${BRAND}), price, link to the shop, your price alert and the names of your “My friends” collections. They cannot change anything. Never the pieces you received or your saved posts.`
+      `When on, your friends (members you follow who follow you back) see your wishes, except those only in “Private” collections: title, image (a copy made by ${BRAND}), price, link to the shop, your price alert and the names of your “My friends” collections. They cannot change anything. Never the pieces you received or your saved posts.`
     );
     expect(en.friendShelves.settingVaultHelp).toBe(
       "When on, your friends see the pieces in your Vault: name, category, photo (including photos you took yourself), date added and the “Verified purchase” mark. They cannot change anything."
     );
-    expect(en.friendShelves.wishShareHint).toBe("Your friends see your wishes, except those in a “Private” collection. You can turn it off in Settings.");
-    expect(en.wishlist.privateNoteFriends).toBe("Your friends see your wishes, except those in a “Private” collection. You can turn it off in Settings.");
+    expect(en.friendShelves.wishShareHint).toBe("Your friends see your wishes, except those only in “Private” collections. You can turn it off in Settings.");
+    expect(en.wishlist.privateNoteFriends).toBe("Your friends see your wishes, except those only in “Private” collections. You can turn it off in Settings.");
   });
 
   it("refusé : ni « toutes » / « chaque », ni exception de la modération dans les phrases de l'app", () => {

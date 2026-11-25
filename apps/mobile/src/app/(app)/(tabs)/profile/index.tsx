@@ -205,10 +205,9 @@ export default function ProfileScreen() {
         </Pressable>
       </View>
 
-      {/* Étagères des amis (refonte) : l'information « Ce que vos amis peuvent voir », tant que vous n'y avez pas répondu. */}
-      <View style={styles.noticeWrap}>
-        <FriendShelvesNotice />
-      </View>
+      {/* Étagères des amis (refonte) : l'information « Ce que vos amis peuvent voir », tant que vous n'y avez pas répondu.
+          Sa marge n'existe que si elle est montrée : sinon, l'en-tête reste celui d'avant. */}
+      <FriendShelvesNotice style={styles.noticeWrap} />
 
       <View style={styles.seg}>
         <Pressable

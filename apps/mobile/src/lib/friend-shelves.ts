@@ -78,6 +78,25 @@ export function needsFriendShelvesNotice(profile: ShelvesProfile | null | undefi
   return friendShelvesSettingShown(profile) && profile?.friendShelvesInformed === false && (showsWishes(profile) || showsVault(profile));
 }
 
+/** L'information à l'écran : celle de `needsFriendShelvesNotice`, sauf si ce
+ * membre vient d'y répondre sur cet appareil (`answeredFor` = son id). La
+ * réponse enregistrée cache la carte aussitôt, même si le rechargement du
+ * profil qui suit échoue (sinon, la carte resterait sous le message « C'est
+ * noté »). Un autre membre connecté ensuite n'est pas concerné. */
+export function friendShelvesNoticeVisible(profile: (ShelvesProfile & { id?: string }) | null | undefined, answeredFor: string | null): boolean {
+  if (!needsFriendShelvesNotice(profile)) return false;
+  return answeredFor === null || profile?.id !== answeredFor;
+}
+
+/** L'annonce VoiceOver de l'information : une fois par apparition, et non à
+ * chaque montage de la carte (le profil la remonte à chaque onglet et à la fin
+ * du chargement ; Réglages en monte une deuxième par-dessus). Cachée, la carte
+ * pourra être annoncée de nouveau quand elle réapparaît. */
+export function noticeAnnouncement(alreadyAnnounced: boolean, shown: boolean): { announce: boolean; announced: boolean } {
+  if (!shown) return { announce: false, announced: false };
+  return { announce: !alreadyAnnounced, announced: true };
+}
+
 /** Les lignes de l'information, selon les réglages allumés (langue active à l'appel). */
 export function friendShelvesNoticeLines(profile: ShelvesProfile | null | undefined): string[] {
   return [
