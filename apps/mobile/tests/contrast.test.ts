@@ -81,21 +81,52 @@ describe("noir et ivoire : l'accent a la couleur du texte", () => {
   });
 });
 
-/** Vert clair ou pastel : teinte entre le jaune-vert et le vert d'eau, assez saturée, et claire. */
-function vertClair(hex: string): boolean {
+/** Teinte HSV (0-360) d'une couleur, ou null pour un gris. */
+function teinte(hex: string): number | null {
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255) as [number, number, number];
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
-  if (max - min < 0.08) return false; // un gris
-  const teinte = max === r ? (60 * ((g - b) / (max - min)) + 360) % 360 : max === g ? 60 * ((b - r) / (max - min)) + 120 : 60 * ((r - g) / (max - min)) + 240;
-  return teinte >= 75 && teinte <= 170 && luminance(hex) > 0.2;
+  if (max - min < 0.08) return null; // un gris
+  return max === r ? (60 * ((g - b) / (max - min)) + 360) % 360 : max === g ? 60 * ((b - r) / (max - min)) + 120 : 60 * ((r - g) / (max - min)) + 240;
 }
+
+/** Vert clair ou pastel : teinte entre le jaune-vert et le vert d'eau, assez saturée, et claire. */
+function vertClair(hex: string): boolean {
+  const h = teinte(hex);
+  return h !== null && h >= 75 && h <= 170 && luminance(hex) > 0.2;
+}
+
+/** Bleu-vert clair (pétrole pâle, vert d'eau) : il se lit comme un vert pâle. */
+function bleuVertClair(hex: string): boolean {
+  const h = teinte(hex);
+  return h !== null && h > 170 && h <= 200 && luminance(hex) > 0.2;
+}
+
+/** Vert vif : saturé et lumineux (un vert « fluo »), même s'il n'est pas pâle. */
+function vertVif(hex: string): boolean {
+  const h = teinte(hex);
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255) as [number, number, number];
+  const max = Math.max(r, g, b);
+  return h !== null && h >= 75 && h <= 170 && (max - Math.min(r, g, b)) / max >= 0.5 && max >= 0.5;
+}
+
+const interdit = (hex: string) => vertClair(hex) || bleuVertClair(hex) || vertVif(hex);
 
 describe("plus aucun vert clair à l'écran", () => {
   it("ni dans les deux palettes, ni dans les photos de profil par défaut", () => {
     const couleurs = [...Object.values(lightPalette), ...Object.values(darkPalette), ...avatarBackgrounds.light, ...avatarBackgrounds.dark].filter((valeur) => /^#[0-9A-F]{6}$/i.test(valeur));
     expect(couleurs.length).toBeGreaterThan(50);
-    expect(couleurs.filter(vertClair)).toEqual([]);
+    expect(couleurs.filter(interdit)).toEqual([]);
+  });
+
+  it("photos de profil : chacune des huit valeurs des DEUX listes est lue, aucune n'est un vert ou bleu-vert pâle ni un vert vif", () => {
+    for (const liste of [avatarBackgrounds.light, avatarBackgrounds.dark]) {
+      expect(liste).toHaveLength(8);
+      for (const valeur of liste) {
+        expect(valeur).toMatch(/^#[0-9A-F]{6}$/i);
+        expect(interdit(valeur), valeur).toBe(false);
+      }
+    }
   });
 
   it("le garde-fou reconnaît l'ancienne sauge, pas le vert anglais foncé ni les gris", () => {
@@ -104,5 +135,15 @@ describe("plus aucun vert clair à l'écran", () => {
     expect(vertClair("#004225")).toBe(false);
     expect(vertClair("#F4F2EE")).toBe(false);
     expect(vertClair("#C8C38A")).toBe(false); // olive des photos de profil : un jaune sourd
+  });
+
+  it("le garde-fou refuse le bleu-vert pâle et le vert vif, et laisse le pétrole foncé, l'ardoise et le bois de rose", () => {
+    expect(bleuVertClair("#9CC8CC")).toBe(true); // l'ancien pétrole du thème sombre
+    expect(vertVif("#00C853")).toBe(true);
+    expect(interdit("#9CC8CC")).toBe(true);
+    expect(bleuVertClair("#2F5D62")).toBe(false); // pétrole foncé du thème clair : sombre et sourd
+    expect(vertVif("#004225")).toBe(false); // vert anglais : profond, pas vif
+    expect(interdit("#A7BBCF")).toBe(false); // ardoise : un bleu
+    expect(interdit("#C4948C")).toBe(false); // bois de rose
   });
 });

@@ -100,12 +100,14 @@ export type ColorScheme = "light" | "dark";
 // (lib/avatar-look.ts). Huit teintes sourdes de la famille de la palette —
 // vert british racing en clair et lavande sourde en sombre (lot « couleurs
 // et logo » : plus de vert clair à l'écran), brique (proche de `danger`),
-// acier, olive, ardoise, prune, camel, pétrole —, déclinées pour chaque
-// thème au même rang. Initiales écrites en `blanc` du thème (blanc en clair, brun très
+// acier, olive, ardoise, prune, camel, et pétrole foncé en clair mais bois de
+// rose en sombre (le pétrole clair, un bleu-vert pâle, se lisait comme le
+// vert clair écarté par le fondateur) —, déclinées pour chaque thème au même
+// rang. Initiales écrites en `blanc` du thème (blanc en clair, brun très
 // profond en sombre) : au moins 6:1 partout (tests/avatar-look.test.ts).
 export const avatarBackgrounds: Readonly<Record<ColorScheme, readonly string[]>> = {
   light: ["#004225", "#A1412C", "#57575C", "#5B5A2C", "#3E5266", "#6A3F57", "#855A2E", "#2F5D62"],
-  dark: ["#B1A8D0", "#E8917B", "#B3AFA8", "#C8C38A", "#A7BBCF", "#D4A7BE", "#D8B48A", "#9CC8CC"],
+  dark: ["#B1A8D0", "#E8917B", "#B3AFA8", "#C8C38A", "#A7BBCF", "#D4A7BE", "#D8B48A", "#C4948C"],
 };
 
 let activePalette: Palette = lightPalette;
