@@ -1,10 +1,12 @@
-import { Pressable, Text, TextInput, View } from "react-native";
+import { useState } from "react";
+import { Pressable, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { color, font, getActiveScheme, radius, size, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import type { Piece } from "@/api/types";
 import { ClockIcon, SearchIcon } from "@/components/icons";
 import { PieceTile } from "@/components/piece-tile";
 import { recentDayLabel } from "@/lib/recent-searches";
+import { placeholderFor } from "@/lib/text-fit";
 import { themedStyles } from "@/theme/themed-styles";
 
 /** Une recherche récente : sa meilleure proposition et son jour. */
@@ -53,6 +55,9 @@ export function RecentSearchTile({ entry, column, onOpen }: { entry: RecentSearc
  * section, caché tant que l'historique est vide. Les mots partent au serveur
  * pour filtrer vos propres recherches ; ils ne sont gardés nulle part. */
 export function HistorySearchField({ value, onChangeText, onClear }: { value: string; onChangeText: (value: string) => void; onClear: () => void }) {
+  // Lot « finitions de l'œil » : champ étroit ou texte agrandi, le texte d'attente court (jamais coupé au milieu d'une lettre).
+  const { fontScale } = useWindowDimensions();
+  const [inputWidth, setInputWidth] = useState(0);
   return (
     <View style={styles.searchBar}>
       <View style={styles.searchIcon}>
@@ -62,7 +67,8 @@ export function HistorySearchField({ value, onChangeText, onClear }: { value: st
         style={styles.searchInput}
         value={value}
         onChangeText={onChangeText}
-        placeholder={t.retrouverPieces.historySearchPlaceholder}
+        placeholder={placeholderFor(t.retrouverPieces.historySearchPlaceholder, t.retrouverPieces.historySearchPlaceholderShort, inputWidth, font.secondary, fontScale)}
+        onLayout={(event) => setInputWidth(event.nativeEvent.layout.width)}
         placeholderTextColor={color.acier}
         accessibilityLabel={t.retrouverPieces.historySearchLabel}
         autoCapitalize="none"

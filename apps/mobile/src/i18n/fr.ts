@@ -397,6 +397,8 @@ export const fr = {
       lineEnd: ".",
     },
     privacyFrame: (platform: string) => `Vidéo lue par ${platform}. Pour l'image de ce moment, notre serveur demande la vidéo publique à ${platform}, sans votre identité, et ne la garde pas. À défaut, seule l'image prise sur votre téléphone est envoyée, puis effacée de votre téléphone.`,
+    // Lot « finitions de l'œil » : texte d'attente court quand le champ est étroit ou le texte agrandi (jamais coupé au milieu d'une lettre).
+    linkPlaceholderShort: "Lien de la vidéo",
   },
   // Mission « liens vidéo » : écran de secours, pièces déjà repérées par
   // d'autres membres (jamais qui), lien en attente. TEXTES À VALIDER.
@@ -889,6 +891,8 @@ export const fr = {
     historyLoading: "Chargement de votre historique",
     historyUnavailable: "La recherche dans votre historique n'est pas encore disponible. Réessayez un peu plus tard.",
     historyResultsShown: "Résultats de votre recherche affichés.",
+    // Lot « finitions de l'œil » : texte d'attente court (champ étroit, texte agrandi).
+    historySearchPlaceholderShort: "Rechercher",
   },
   // Lot 5 : envoyer une envie à une personne sur Spotto.
   sendPiece: {

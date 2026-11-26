@@ -76,6 +76,7 @@ import { ForeignShopNote } from "@/components/foreign-shop-note";
 import { OfferMarkNote } from "@/components/offer-mark";
 import { StockNote } from "@/components/stock-note";
 import { VerdictLine, verdictLineShown } from "@/components/verdict-line";
+import { actionsInTwoRows } from "@/lib/text-fit";
 import { verdictToTrack } from "@/lib/verdict";
 import { LuxuryResaleEntry } from "@/components/luxury-resale";
 import { luxuryResaleToTrack } from "@/lib/luxury-resale";
@@ -161,9 +162,9 @@ export default function ResultScreen() {
   // Voie B (lot c) : seconde recherche avec les mots refusée, sans leurs propositions pour l'instant.
   const [textSearchUsed, setTextSearchUsed] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
-  // Grand texte : la rangée d'actions passe en deux rangées de deux (lot « fidélité aux maquettes »).
-  const { fontScale } = useWindowDimensions();
-  const wideText = fontScale > 1.3;
+  // La rangée d'actions passe en deux rangées de deux dès que « Je l'ai achetée » ne tient plus sur une ligne
+  // dans sa case : selon la largeur ET la taille du texte (lot « finitions de l'œil », lib/text-fit.ts).
+  const { fontScale, width: windowWidth } = useWindowDimensions();
   const heroReveal = useHeroReveal(scrollRef);
   // Pour amener l'écran sur une section (relecture E2, ORD-5).
   const noPriceSection = useRef<View>(null);
@@ -715,6 +716,9 @@ export default function ResultScreen() {
   // Grand texte : le titre s'écarte de « Fermer » mesuré (jamais par-dessus) et ne prend jamais ses touchers.
   const [closeWidth, setCloseWidth] = useState(0);
   const titleInset = Math.max(NAV_TITLE_INSET, closeWidth + 8);
+  // Lot « finitions de l'œil » : quand « Fermer » grandit (grand texte, petit écran), le titre n'est plus centré
+  // à tout prix : il prend la place libre jusqu'au bord droit (la case de droite est vide) plutôt que d'être coupé.
+  const titleRight = titleInset > NAV_TITLE_INSET ? space.md : titleInset;
   const renderNav = (title: string, label?: string) => (
     <View style={styles.nav}>
       <Pressable
@@ -725,7 +729,7 @@ export default function ResultScreen() {
       >
         <Text style={styles.close}>{t.spotter.close}</Text>
       </Pressable>
-      <View style={[styles.navTitleZone, { left: titleInset, right: titleInset }]} pointerEvents="none">
+      <View style={[styles.navTitleZone, { left: titleInset, right: titleRight }]} pointerEvents="none">
         <Text style={styles.navTitle} numberOfLines={1} accessibilityRole="header" accessibilityLabel={label}>
           {title}
         </Text>
@@ -885,6 +889,9 @@ export default function ResultScreen() {
   // Cases de la rangée d'actions : filet à gauche des cases 2 à 4 ; grand texte, deux rangées de deux
   // (filet en haut des cases 3 et 4, pas à gauche de la case 3) ; avec trois cases, la troisième prend toute la largeur.
   const actionCount = piece.real ? 4 : 3;
+  // Les libellés de départ (jamais ceux d'après un toucher : la rangée ne change pas de forme sous le doigt).
+  const actionLabels = [t.result.keep, t.result.markAsBought, lookAllowed ? t.look.share : t.result.share, ...(piece.real ? [t.result.moreShort] : [])];
+  const wideText = actionsInTwoRows(windowWidth, fontScale, actionLabels, actionCount);
   const actionCell = (position: number) =>
     wideText
       ? [
@@ -1279,7 +1286,8 @@ const styles = themedStyles(() => ({
   close: { fontSize: font.body, fontWeight: "400", color: color.encre },
   // Centré sur l'écran comme la maquette (« Fermer » est plus large que la case vide de droite) ; jamais sous les deux côtés.
   navTitleZone: { position: "absolute", top: 0, bottom: 0, left: NAV_TITLE_INSET, right: NAV_TITLE_INSET, justifyContent: "center" },
-  navTitle: { textAlign: "center", fontSize: font.secondary, fontWeight: "500", color: color.encre },
+  // Même taille que « Fermer » (maquette 4) : les deux lignes de base sont alignées (lot « finitions de l'œil »).
+  navTitle: { textAlign: "center", fontSize: font.body, fontWeight: "500", color: color.encre },
   content: { paddingHorizontal: space.md, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   count: { fontSize: font.caption, lineHeight: 18, color: color.acier, marginBottom: space.xs },
   verdictPlace: { minHeight: 1 },
@@ -1304,8 +1312,10 @@ const styles = themedStyles(() => ({
   // Rangée soudée : un seul cadre, des filets entre les cases ; minHeight (jamais height) : un libellé long passe à la ligne.
   actions: { flexDirection: "row", marginTop: space.sm, minHeight: 56, borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, borderCurve: "continuous", overflow: "hidden" },
   actionsWrap: { flexWrap: "wrap" },
-  action: { flex: 1, minHeight: 56, alignItems: "center", justifyContent: "center", gap: 4, paddingHorizontal: 2, paddingVertical: 6 },
-  actionHalf: { width: "50%", minHeight: 56, alignItems: "center", justifyContent: "center", gap: 4, paddingHorizontal: 2, paddingVertical: 6 },
+  // Lot « finitions de l'œil » : contenu calé en haut (pictogrammes sur une même ligne, libellés alignés entre eux
+  // même quand l'un passe sur deux lignes) ; aucune marge sur les côtés (lib/text-fit.ts, actionsInTwoRows).
+  action: { flex: 1, minHeight: 56, alignItems: "center", justifyContent: "flex-start", gap: 4, paddingHorizontal: 0, paddingTop: 10, paddingBottom: 8 },
+  actionHalf: { width: "50%", minHeight: 56, alignItems: "center", justifyContent: "flex-start", gap: 4, paddingHorizontal: 0, paddingTop: 10, paddingBottom: 8 },
   actionFull: { width: "100%" },
   actionDivider: { borderLeftWidth: 1, borderLeftColor: color.filet },
   actionTopDivider: { borderTopWidth: 1, borderTopColor: color.filet },

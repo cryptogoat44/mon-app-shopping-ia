@@ -11,7 +11,8 @@ import { useAuth } from "@/lib/auth-context";
 import { useMessagesStatus } from "@/lib/use-messages-status";
 import { useCollectionsStatus } from "@/lib/use-collections-status";
 import { useWishAlertsStatus } from "@/lib/use-wish-alerts-status";
-import { alertDetails, bellOn, bellVisible, canReportWish, priceDropNow, type StockReportTarget } from "@/lib/wish-alerts";
+import { alertDetails, bellButtonText, bellOn, bellVisible, canReportWish, priceDropNow, type StockReportTarget } from "@/lib/wish-alerts";
+import { pairStacked } from "@/lib/text-fit";
 import { searchCountryFrom } from "@/lib/foreign-shop";
 import { keepAlertAllowed, turnOffKeepAlert, turnOnKeepAlert } from "@/lib/keep-alert";
 import { addToVaultFromQuestion, noStepFor, targetOfWish } from "@/lib/purchase-question";
@@ -83,9 +84,11 @@ export default function WishlistItemScreen() {
   const [stockReport, setStockReport] = useState<StockReportTarget | null>(null);
   // Zoom à deux doigts sur place (retours du build 3) : la page ne défile pas pendant le pincement.
   const [zoomState, setZoomState] = useState<ZoomState>("idle");
-  // Grand texte : « Je l'ai achetée » et la cloche l'un sous l'autre (lot « fidélité aux maquettes »).
-  const { fontScale } = useWindowDimensions();
-  const pairItem = fontScale > 1.3 ? null : styles.pairItem;
+  // « Je l'ai achetée » et la cloche l'un sous l'autre dès que l'un des deux ne tient plus sur une ligne dans sa
+  // moitié : selon la largeur ET la taille du texte (lot « finitions de l'œil », lib/text-fit.ts).
+  const { fontScale, width: windowWidth } = useWindowDimensions();
+  const pairStackedNow = pairStacked(windowWidth, fontScale, [t.result.markAsBought, bellButtonText(alertState)]);
+  const pairItem = pairStackedNow ? null : styles.pairItem;
   // Parcours 3 : « Vous l'avez achetée ? » au retour de la boutique, depuis le
   // bouton principal d'une Envie qui a sa proposition d'origine
   // (lib/use-purchase-question.ts) ; jamais pour une pièce déjà au Vault
@@ -294,7 +297,7 @@ export default function WishlistItemScreen() {
           {/* Maquette « Écrin » 6 : « Je l'ai achetée » et la cloche côte à côte (l'un sous l'autre en grand texte) ; seul, un bouton prend
               toute la largeur. Lot 2 : la cloche, jamais pour une pièce achetée (aucune alerte ne partirait). */}
           {item.productMatchId || bellVisible(alerts, alertState, item.inVault) ? (
-            <View style={[styles.pairRow, { flexDirection: fontScale > 1.3 ? "column" : "row" }]}>
+            <View style={[styles.pairRow, { flexDirection: pairStackedNow ? "column" : "row" }]}>
               {item.productMatchId ? (
                 // Sa feuille de catégorie et son message d'erreur restent sous le bouton.
                 <View style={pairItem}>

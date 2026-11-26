@@ -81,8 +81,10 @@ describe("Spotter (maquettes 1-accueil)", () => {
     expect(styleOf(entry, "pasteButton")).toContain("minHeight: 44");
     expect(styleOf(entry, "pasteButton")).not.toContain("minHeight: 40");
     // Safari sur iPhone zoome la page sous 16 px : 16 sur le site.
-    expect(styleOf(entry, "input")).toContain('fontSize: Platform.OS === "web" ? 16 : font.secondary');
-    expect(entry).toContain("placeholder={label}");
+    // Lot « finitions de l'œil » : la même taille (16 sur le site), nommée pour le calcul du texte d'attente court.
+    expect(styleOf(entry, "input")).toContain("fontSize: INPUT_FONT_SIZE");
+    expect(entry).toContain('const INPUT_FONT_SIZE = Platform.OS === "web" ? 16 : font.secondary;');
+    expect(entry).toContain("placeholder={placeholderFor(label, t.player.linkPlaceholderShort, inputWidth, INPUT_FONT_SIZE, fontScale)}");
     expect(entry).toContain("accessibilityLabel={label}");
     expect(entry).toContain('{Platform.OS === "web" ? <Text style={styles.hint}>{t.player.linkHintWeb}</Text> : null}');
     expect(fr.spotter).not.toHaveProperty("linkPlaceholder");
@@ -189,7 +191,9 @@ describe("Résultat, la grande carte (maquettes 4-resultat-grande-carte)", () =>
   it("barre : « Fermer » 17/400 sans hitSlop, titre système 15/500 ; la case vide de droite reste (pas d'icône de réglages)", () => {
     expect(styleOf(screen, "nav")).toContain("height: 44,");
     expect(styleOf(screen, "close")).toContain('fontSize: font.body, fontWeight: "400", color: color.encre');
-    expect(styleOf(screen, "navTitle")).toContain('fontSize: font.secondary, fontWeight: "500", color: color.encre');
+    // Lot « finitions de l'œil » : la taille de « Fermer » (font.body), lignes de base alignées.
+    expect(styleOf(screen, "navTitle")).toContain('fontSize: font.body, fontWeight: "500", color: color.encre');
+    expect(styleOf(screen, "close")).toContain("fontSize: font.body");
     expect(styleOf(screen, "navTitle")).not.toContain("serifFont");
     const nav = screen.slice(screen.indexOf("const renderNav = "), screen.indexOf("const nav = renderNav("));
     expect(nav).not.toContain("hitSlop");
@@ -203,7 +207,9 @@ describe("Résultat, la grande carte (maquettes 4-resultat-grande-carte)", () =>
   // Relecture du lot : au grand texte, le titre posé par-dessus prenait les touchers de « Fermer ».
   it("barre : le titre ne prend aucun toucher et s'écarte de « Fermer » mesuré (permis : 76 au moins)", () => {
     const nav = screen.slice(screen.indexOf("const renderNav = "), screen.indexOf("const nav = renderNav("));
-    expect(nav).toContain('<View style={[styles.navTitleZone, { left: titleInset, right: titleInset }]} pointerEvents="none">');
+    expect(nav).toContain('<View style={[styles.navTitleZone, { left: titleInset, right: titleRight }]} pointerEvents="none">');
+    // Grand texte : le titre décentré vers la place libre de droite, jamais sous « Fermer ».
+    expect(screen).toContain("const titleRight = titleInset > NAV_TITLE_INSET ? space.md : titleInset;");
     expect(screen).toContain("const titleInset = Math.max(NAV_TITLE_INSET, closeWidth + 8);");
     expect(screen).toContain("const NAV_TITLE_INSET = 76;");
   });
@@ -298,7 +304,8 @@ describe("Résultat, la grande carte (maquettes 4-resultat-grande-carte)", () =>
     expect(screen).not.toMatch(/[{ ,]height: 56/);
     expect(screen).not.toMatch(/style=\{styles\.actionLabel\} numberOfLines/);
     expect(feedback).not.toMatch(/style=\{styles\.actionLabel\} numberOfLines/);
-    expect(screen).toContain("const wideText = fontScale > 1.3;");
+    // Lot « finitions de l'œil » : la bascule dépend de la largeur ET de la taille du texte (lib/text-fit.ts, tests/finitions-oeil.test.ts).
+    expect(screen).toContain("const wideText = actionsInTwoRows(windowWidth, fontScale, actionLabels, actionCount);");
     expect(styleOf(screen, "actionsWrap")).toContain('flexWrap: "wrap"');
     expect(styleOf(screen, "actionHalf")).toContain('width: "50%"');
   });
@@ -431,7 +438,9 @@ describe("Fiche d'une envie (maquette 6)", () => {
     const pair = envie.slice(envie.indexOf("<View style={[styles.pairRow"), envie.indexOf("<View style={styles.alerts}>"));
     expect(pair).toContain("<WishBoughtButton");
     expect(pair).toContain("<WishAlertButton");
-    expect(pair).toContain('flexDirection: fontScale > 1.3 ? "column" : "row"');
+    // Lot « finitions de l'œil » : l'un sous l'autre dès que l'un des deux ne tient plus sur une ligne (largeur ET taille du texte).
+    expect(pair).toContain('flexDirection: pairStackedNow ? "column" : "row"');
+    expect(envie).toContain("const pairStackedNow = pairStacked(windowWidth, fontScale, [t.result.markAsBought, bellButtonText(alertState)]);");
     expect(envie.slice(envie.indexOf("<View style={styles.alerts}>"))).toContain('<StockReportLink');
     expect(code("components/stock-report-sheet.tsx")).toContain('testID="plus-disponible"');
     expect(envie).toContain("externalIcon");
@@ -563,7 +572,8 @@ describe("« Entourez la pièce » (maquette 3-entourer-poudre)", () => {
     expect(ask).not.toContain("styles.fieldLabel");
     expect(ask).toContain("placeholder={`${t.launch.photoLabel} · ${t.launch.photoPlaceholder}`}");
     expect(ask).toContain("label={t.launch.photoLabel}");
-    expect(styleOf(views, "inputBoxed")).toContain('fontSize: Platform.OS === "web" ? 16 : font.secondary');
+    expect(styleOf(views, "inputBoxed")).toContain("fontSize: BOXED_FONT_SIZE");
+    expect(views).toContain('const BOXED_FONT_SIZE = Platform.OS === "web" ? 16 : font.secondary;');
     // La question des vidéos garde son champ souligné.
     expect(styleOf(views, "input")).toContain("borderBottomWidth: 1");
   });

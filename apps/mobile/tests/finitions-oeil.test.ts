@@ -2,6 +2,9 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { EDGE_INSET_PER_BLUR, EDGE_STRIP, edgeBands, fillsTile } from "../src/lib/piece-image";
+import { actionsInTwoRows, estimatedTextWidth, pairStacked, placeholderFor } from "../src/lib/text-fit";
+import { fr } from "../src/i18n/fr";
+import { en } from "../src/i18n/en";
 
 // Lot « finitions de l'œil » (retours3/lots/lot-12-finitions.md) : ce qu'un
 // regard exigeant voyait encore sur les vrais écrans.
@@ -188,5 +191,78 @@ describe("5 · le prix n'est jamais coupé ; 4 · le rythme d'« Autres proposit
     expect(card).toContain("<ShopLink piece={piece} placement={placement} tight />");
     // Zones touchables gardées.
     expect(style("shopLink")).toContain("minHeight: size.touchTarget");
+  });
+});
+
+describe("6 · petites largeurs et grand texte (lib/text-fit.ts)", () => {
+  const actions = [fr.result.keep, fr.result.markAsBought, fr.result.share, fr.result.moreShort];
+  const actionsEn = [en.result.keep, en.result.markAsBought, en.result.share, en.result.moreShort];
+
+  it("estimation large : « Je l'ai achetée » en 12 points au moins aussi large que mesuré sur le site (83 points)", () => {
+    expect(estimatedTextWidth("Je l'ai achetée", 12, 1)).toBeGreaterThanOrEqual(83);
+    expect(estimatedTextWidth("Je l'ai achetée", 12, 1.3)).toBeCloseTo(estimatedTextWidth("Je l'ai achetée", 12, 1) * 1.3, 6);
+    // Un texte plus petit que la normale n'est jamais compté plus étroit.
+    expect(estimatedTextWidth("abc", 12, 0.8)).toBe(estimatedTextWidth("abc", 12, 1));
+  });
+
+  it("rangée soudée : une rangée de quatre à 390 pt ; deux rangées de deux à 320 pt, et à 390 pt texte × 1,3", () => {
+    expect(actionsInTwoRows(390, 1, actions)).toBe(false);
+    expect(actionsInTwoRows(320, 1, actions)).toBe(true);
+    expect(actionsInTwoRows(390, 1.3, actions)).toBe(true);
+    // Anglais : « I bought it » tient à 390 comme à 375.
+    expect(actionsInTwoRows(390, 1, actionsEn)).toBe(false);
+    expect(actionsInTwoRows(375, 1, actionsEn)).toBe(false);
+    // Le site large (480 au plus) : une rangée.
+    expect(actionsInTwoRows(1280, 1, actions)).toBe(false);
+  });
+
+  it("fiche d'une envie : côte à côte à 390 pt ; l'un sous l'autre à 320 pt et à 390 pt texte × 1,3 ; un seul bouton, jamais « empilé »", () => {
+    const pair = [fr.result.markAsBought, fr.wishAlerts.bellOff];
+    expect(pairStacked(390, 1, pair)).toBe(false);
+    expect(pairStacked(320, 1, pair)).toBe(true);
+    expect(pairStacked(390, 1.3, pair)).toBe(true);
+    expect(pairStacked(320, 1, [fr.result.markAsBought])).toBe(false);
+  });
+
+  it("textes d'attente : le long s'il tient dans le champ mesuré, sinon le court ; largeur inconnue : le court si le texte est agrandi", () => {
+    expect(placeholderFor(fr.player.linkLabel, fr.player.linkPlaceholderShort, 210, 16, 1)).toBe(fr.player.linkLabel);
+    expect(placeholderFor(fr.player.linkLabel, fr.player.linkPlaceholderShort, 140, 16, 1)).toBe(fr.player.linkPlaceholderShort);
+    expect(placeholderFor(fr.player.linkLabel, fr.player.linkPlaceholderShort, 210, 16, 1.3)).toBe(fr.player.linkPlaceholderShort);
+    expect(placeholderFor(fr.player.linkLabel, fr.player.linkPlaceholderShort, 0, 16, 1)).toBe(fr.player.linkLabel);
+    expect(placeholderFor(fr.player.linkLabel, fr.player.linkPlaceholderShort, 0, 16, 1.3)).toBe(fr.player.linkPlaceholderShort);
+    // Les textes courts tiennent là où les longs étaient coupés (captures du rapport des yeux : 320 pt).
+    expect(estimatedTextWidth(fr.player.linkPlaceholderShort, 16, 1)).toBeLessThan(140);
+    expect(estimatedTextWidth(fr.retrouverPieces.historySearchPlaceholderShort, 15, 1.3)).toBeLessThan(200);
+    expect([en.player.linkPlaceholderShort, en.retrouverPieces.historySearchPlaceholderShort]).toEqual(["Video link", "Search"]);
+    expect([fr.player.linkPlaceholderShort, fr.retrouverPieces.historySearchPlaceholderShort]).toEqual(["Lien de la vidéo", "Rechercher"]);
+  });
+
+  it("les écrans s'en servent : rangée d'actions, fiche d'une envie, trois champs (le nom lu reste le libellé entier)", () => {
+    const screen = read("src/app/(app)/spot/result.tsx");
+    expect(screen).toContain("const wideText = actionsInTwoRows(windowWidth, fontScale, actionLabels, actionCount);");
+    expect(screen).not.toContain("fontScale > 1.3");
+    expect(screen).toMatch(/\n  action: \{[^}]*justifyContent: "flex-start"/);
+    expect(screen).toMatch(/\n  actionHalf: \{[^}]*justifyContent: "flex-start"/);
+    const envie = read("src/app/(app)/envie.tsx");
+    expect(envie).not.toContain("fontScale > 1.3");
+    expect(envie).toContain('flexDirection: pairStackedNow ? "column" : "row"');
+    const link = read("src/components/link-entry.tsx");
+    expect(link).toContain("accessibilityLabel={label}");
+    expect(link).toContain("onLayout={(event) => setInputWidth(event.nativeEvent.layout.width)}");
+    const history = read("src/components/recent-searches.tsx");
+    expect(history).toContain("placeholder={placeholderFor(t.retrouverPieces.historySearchPlaceholder, t.retrouverPieces.historySearchPlaceholderShort, inputWidth, font.secondary, fontScale)}");
+    expect(history).toContain("accessibilityLabel={t.retrouverPieces.historySearchLabel}");
+    const views = read("src/components/spot-launch-views.tsx");
+    expect(views).toContain("shortPlaceholder={t.launch.photoLabel}");
+    expect(views).toContain("label={t.launch.photoLabel}");
+  });
+
+  it("Résultat : une seule rangée de pastilles qui défile ; titre de la barre à la taille de « Fermer », jamais sous lui", () => {
+    const bar = read("src/components/result-sort-bar.tsx");
+    expect(bar).toContain("<ScrollView horizontal showsHorizontalScrollIndicator={false}");
+    const screen = read("src/app/(app)/spot/result.tsx");
+    expect(screen).toMatch(/\n  navTitle: \{[^}]*fontSize: font\.body/);
+    expect(screen).toMatch(/\n  close: \{[^}]*fontSize: font\.body/);
+    expect(screen).toContain("{ left: titleInset, right: titleRight }");
   });
 });

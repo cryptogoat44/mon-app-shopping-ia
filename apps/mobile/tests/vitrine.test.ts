@@ -273,7 +273,10 @@ describe("la grande carte et l'écran des résultats, resserrés", () => {
     // Lot « finitions de l'œil » : resserrée (4 au lieu de 12), sans marge au-dessus des pastilles.
     expect(styleOf(bar, "bar")).toContain("marginBottom: space.xs");
     expect(styleOf(bar, "filters")).not.toContain("marginTop");
-    expect(styleOf(bar, "filters")).toContain('flexDirection: "row", flexWrap: "wrap", gap: space.sm');
+    // Lot « finitions de l'œil » : une seule rangée qui défile sur le côté (refusé : une pastille seule sur une deuxième rangée).
+    expect(styleOf(bar, "filters")).toContain('flexDirection: "row", gap: space.sm');
+    expect(styleOf(bar, "filters")).not.toContain("flexWrap");
+    expect(bar).toContain('<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters} testID="sort-chips">');
     expect(bar).not.toContain("stockLine");
     for (const id of ['testID="result-sort-bar"', 'testID="with-price-only"', 'testID="in-stock-only"', 'testID="price-summary"']) expect(bar).toContain(id);
     expect(screen).toContain('testID="verdict-place"');

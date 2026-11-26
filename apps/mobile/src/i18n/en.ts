@@ -377,6 +377,8 @@ export const en: Catalog = {
       lineEnd: ".",
     },
     privacyFrame: (platform: string) => `Video played by ${platform}. For the image of this moment, our server requests the public video from ${platform}, without your identity, and does not keep it. Failing that, only the frame taken on your phone is sent, then deleted from your phone.`,
+    // "Finishing touches" batch: short placeholder when the field is narrow or the text is enlarged (never cut mid-letter).
+    linkPlaceholderShort: "Video link",
   },
   videoLink: {
     fallbackTitle: "Spot this video",
@@ -794,6 +796,8 @@ export const en: Catalog = {
     historyLoading: "Loading your history",
     historyUnavailable: "Searching your history isn't available yet. Please try again a little later.",
     historyResultsShown: "Your search results are shown.",
+    // "Finishing touches" batch: short placeholder (narrow field, enlarged text).
+    historySearchPlaceholderShort: "Search",
   },
   sendPiece: {
     title: "Send to…",

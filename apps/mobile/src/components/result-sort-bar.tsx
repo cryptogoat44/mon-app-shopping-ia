@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { color, font, radius, size, space } from "@/theme/tokens";
 import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
@@ -50,7 +50,9 @@ export function ResultSortBar({
 }) {
   return (
     <View style={styles.bar} testID="result-sort-bar">
-      <View style={styles.filters}>
+      {/* Une seule rangée de pastilles, qui défile sur le côté quand elle ne tient pas (320 points, grand texte)
+          plutôt qu'une pastille seule sur une deuxième rangée (lot « finitions de l'œil »). */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters} testID="sort-chips">
         <SortMenuButton view={view} onChange={onChange} hiddenSummary={verdict ? summary : null} />
         <Pressable
           accessibilityRole="switch"
@@ -70,7 +72,7 @@ export function ResultSortBar({
           </View>
         </Pressable>
         {stockShown ? <InStockOnlyToggle view={view} onChange={onChange} /> : null}
-      </View>
+      </ScrollView>
       {/* Le verdict seul, ou le résumé des prix (mis à jour à l'arrivée des boutiques : annoncé sans couper, site et Android). */}
       {verdict ? (
         verdict
@@ -210,7 +212,7 @@ export function WithPriceOnlyEmpty({ onShowAll }: { onShowAll: () => void }) {
 
 const styles = themedStyles(() => ({
   bar: { marginBottom: space.xs },
-  filters: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
+  filters: { flexDirection: "row", gap: space.sm },
   // Zone tactile de 44 points autour d'une pastille de 32 (maquette « Écrin » 4). Grand texte : la pastille
   // grandit (minHeight, jamais height), ne dépasse jamais la ligne et son libellé passe à la ligne (aucun numberOfLines).
   chipZone: { minHeight: size.touchTarget, justifyContent: "center", flexShrink: 1, maxWidth: "100%" },
