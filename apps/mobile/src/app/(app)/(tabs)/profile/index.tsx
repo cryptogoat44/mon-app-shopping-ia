@@ -275,7 +275,7 @@ export default function ProfileScreen() {
                 >
                   {/* La tuile « Écrin » des grilles (components/piece-tile.tsx) : 4:5, la pièce entière. */}
                   {item.imageUrl ? (
-                    <PieceTile variant="grid" size="card" hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} edgeColor={item.edgeColor} accessibilityLabel={item.title} recyclingKey={item.id} />
+                    <PieceTile variant="grid" size="card" hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} accessibilityLabel={item.title} edgeColor={item.edgeColor} recyclingKey={item.id} />
                   ) : (
                     <View style={styles.vaultThumb}>
                       <ClockIcon size={30} tint={color.encre} />
