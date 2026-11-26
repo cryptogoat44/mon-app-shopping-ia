@@ -136,7 +136,7 @@ describe("quelles propositions", () => {
     const urls = httpsRequest.mock.calls.map((call) => String(call[0]));
     expect(urls).toHaveLength(8);
     expect(urls).not.toContain(shop(9));
-    // Les trois premières partent d'abord : l'ordre déjà rangé, sans tri.
+    // Les trois premières partent d'abord : l'ordre d'enregistrement (rang), sans tri.
     expect(urls.slice(0, 3)).toEqual([shop(1), shop(2), shop(3)]);
   });
 

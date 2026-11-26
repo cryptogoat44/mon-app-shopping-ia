@@ -22,8 +22,10 @@
 //   fondateur, 26 novembre 2026), à n'allumer qu'avec la politique de
 //   confidentialité mise à jour. Juste après le rangement d'une section
 //   « boutiques » ou « vos mots » (routes/searches.ts), ses 8 premières
-//   propositions, dans l'ordre déjà rangé (aucune boutique favorisée), jamais
-//   les propositions Lens (elles ont déjà leur image) ni une page de Google.
+//   propositions par rang, dans l'ordre d'enregistrement (aucune boutique
+//   favorisée ; pas toujours l'ordre affiché : searchRows/shopTrust remontent
+//   la boutique de la marque et les boutiques connues), jamais les
+//   propositions Lens (elles ont déjà leur image) ni une page de Google.
 //   Un POOL à part de la file : 3 lectures à la fois, une seule à la fois par
 //   boutique (nom d'hôte), 16 s au total par section (ce qui n'a pas commencé
 //   est abandonné), 30 lectures par minute pour tout le serveur (au-delà, le
@@ -529,7 +531,7 @@ async function enqueueKeptPieces(fastify: FastifyInstance, log: FastifyBaseLogge
 // retours du build 3, décision du fondateur) : à part de la file ci-dessus,
 // un seul pour tout le serveur.
 
-/** Les premières propositions d'une section, dans l'ordre déjà rangé. */
+/** Les premières propositions d'une section, dans l'ordre d'enregistrement (rang). */
 export const RESULT_IMAGES_PER_SECTION = 8;
 /** Lectures en même temps au plus (toutes recherches confondues). */
 export const RESULT_IMAGE_CONCURRENCY = 3;
