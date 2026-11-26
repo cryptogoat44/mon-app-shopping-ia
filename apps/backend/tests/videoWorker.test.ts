@@ -8,6 +8,7 @@ import { normalizeVideoLink, type VideoLink } from "@monapp/shared-types";
 import {
   AI_KEY_MISSING,
   CONFIG_WARNING,
+  FRAME_CONFIG_WARNING,
   VIDEO_WORKER_ERROR_CODES,
   VIDEO_WORKER_MAX_FRAMES,
   VIDEO_WORKER_MAX_RESPONSE_BYTES,
@@ -143,8 +144,15 @@ describe("réglages du service vidéo (lus une fois, au démarrage)", () => {
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn.mock.calls[0]![0]).toEqual({ problems: [AI_KEY_MISSING] });
     // Réglages invalides : signalés, que l'analyse soit allumée ou non.
+    // Analyse coupée : la ligne nomme l'image du moment, jamais l'analyse.
     logVideoWorkerConfigState({ state: "invalid", problems: ["VIDEO_WORKER_SECRET : absent"] }, false, { warn }, false);
     expect(warn).toHaveBeenCalledTimes(2);
+    expect(warn.mock.calls[1]).toEqual([{ problems: ["VIDEO_WORKER_SECRET : absent"] }, FRAME_CONFIG_WARNING]);
+    expect(FRAME_CONFIG_WARNING).toContain("Image du moment");
+    expect(FRAME_CONFIG_WARNING).not.toMatch(/Analyse/);
+    // Analyse allumée : la ligne de l'analyse, comme avant.
+    logVideoWorkerConfigState({ state: "invalid", problems: ["VIDEO_WORKER_SECRET : absent"] }, false, { warn }, true);
+    expect(warn.mock.calls[2]![1]).toBe(CONFIG_WARNING);
   });
 
   it("réseau privé : noms internes sans point, localhost, adresses IPv4 locales ou privées", () => {

@@ -137,6 +137,9 @@ interface WarnLog {
 }
 
 export const CONFIG_WARNING = "Analyse des liens vidéo coupée : réglages invalides";
+/** Même ligne quand seule l'image du moment est allumée (l'analyse est
+ * coupée) : elle nomme la fonction réellement coupée. */
+export const FRAME_CONFIG_WARNING = "Image du moment coupée : réglages du service vidéo invalides";
 
 /** Une seule ligne de journal, au démarrage, quand un interrupteur est allumé
  * mais que le service vidéo ne peut pas marcher : les variables à corriger,
@@ -144,7 +147,7 @@ export const CONFIG_WARNING = "Analyse des liens vidéo coupée : réglages inva
  * n'est signalée que si l'ANALYSE est allumée (`analysisOn`) : l'image du
  * moment, seule, n'en a pas besoin. */
 export function logVideoWorkerConfigState(state: VideoWorkerConfigState, aiAvailable: boolean, log: WarnLog, analysisOn = true): void {
-  if (state.state === "invalid") log.warn({ problems: state.problems }, CONFIG_WARNING);
+  if (state.state === "invalid") log.warn({ problems: state.problems }, analysisOn ? CONFIG_WARNING : FRAME_CONFIG_WARNING);
   else if (state.state === "ready" && analysisOn && !aiAvailable) log.warn({ problems: [AI_KEY_MISSING] }, CONFIG_WARNING);
 }
 
