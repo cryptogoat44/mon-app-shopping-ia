@@ -395,6 +395,11 @@ describe("POST /api/video-links/frame : cas refusés", () => {
     const many = await frameOf(target, { url: SHARED_TEXT, atSeconds: AT });
     expect(many.statusCode).toBe(502);
     expect(many.json().error).toBe("video_unavailable");
+    // Refusé : plusieurs images dont la première est proche de l'instant (seul le contrôle du nombre la refuse).
+    workerReply = () => jsonResponse(200, { durationSeconds: 7, frames: [3.0, 4.2, 5.4].map(one) });
+    const near = await frameOf(target, { url: SHARED_TEXT, atSeconds: AT });
+    expect(near.statusCode).toBe(502);
+    expect(near.json().error).toBe("video_unavailable");
     // Refusé : une seule image, mais du début de la vidéo, pour un instant demandé à 3,2 s.
     workerReply = () => jsonResponse(200, { durationSeconds: 7, frames: [one(0.4)] });
     expect((await frameOf(target, { url: SHARED_TEXT, atSeconds: AT })).statusCode).toBe(502);
