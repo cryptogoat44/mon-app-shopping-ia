@@ -90,21 +90,24 @@ export const OUTSIDE_VEIL = { color: "#0B0A09", opacity: 0.5 } as const;
 export const INSIDE_VEIL = { color: "#F4F2EE", opacity: 0.1 } as const;
 /** Masques du voile : blanc = voilé, noir = clair. Le bord est adouci par des
  * anneaux le long de la forme, du plus large et presque voilé au plus fin et
- * presque clair (level : part du voile, de 0 à 1). Le voile ivoire du dedans
+ * presque clair (level : part du voile, de 0 à 1), jusqu'au bord même de la
+ * forme (le dernier anneau, à moins de 12 %, passe en douceur au clair du
+ * dedans). Le voile ivoire du dedans
  * suit les mêmes anneaux, inversés : la zone éclairée n'a pas de bord net. */
 export const MASK = {
   veiled: "#FFFFFF",
   clear: "#000000",
   rings: [
     { width: 36, level: 0.96 },
-    { width: 32, level: 0.91 },
-    { width: 28, level: 0.85 },
-    { width: 24, level: 0.78 },
-    { width: 20, level: 0.7 },
-    { width: 16, level: 0.61 },
-    { width: 12, level: 0.51 },
-    { width: 8, level: 0.41 },
-    { width: 4, level: 0.3 },
+    { width: 32, level: 0.9 },
+    { width: 28, level: 0.82 },
+    { width: 24, level: 0.73 },
+    { width: 20, level: 0.63 },
+    { width: 16, level: 0.52 },
+    { width: 12, level: 0.41 },
+    { width: 8, level: 0.3 },
+    { width: 4, level: 0.19 },
+    { width: 2, level: 0.09 },
   ],
 } as const;
 /** Bord lumineux de la forme, après le lâcher : quelques filets ivoire
@@ -228,8 +231,11 @@ export interface PowderPath {
  * jointifs (légèrement recouverts), regroupés en au plus `layer.bands`
  * chemins. Les tranches sont découpées à pas égal d'opacité (et non de
  * longueur) : la queue, d'éclat presque constant, tient en peu de tranches,
- * la montée vers la tête en a le plus ; d'une tranche à l'autre, l'opacité ne
- * saute jamais de plus de `layer.alpha / layer.bands`. Une couleur et une
+ * la montée vers la tête en a le plus ; un pas vaut `layer.alpha / layer.bands`.
+ * Chaque tranche prend l'opacité moyenne de ses morceaux : d'une tranche à la
+ * suivante, l'écart reste d'environ un pas (moins de deux sur un tracé long,
+ * davantage sur un geste très court, où un morceau de 3 pt franchit plusieurs
+ * pas et des tranches restent vides). Une couleur et une
  * opacité par tranche (moyennes de ses morceaux) ; les morceaux éteints ne
  * sont pas dessinés (une copie avec `from` ne s'allume qu'à partir de là). Le bout arrondi (un disque à la tête) est dans
  * le chemin de la dernière tranche.
