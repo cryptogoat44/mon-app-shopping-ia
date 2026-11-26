@@ -143,6 +143,23 @@ describe("la tuile de pièce (components/piece-tile.tsx)", () => {
     expect(tile).toContain("accessibilityLabel={enlargeable ? undefined : accessibilityLabel}");
   });
 
+  it("refusé : la taille mesurée oubliée quand la grande image arrive ; permis : une autre vignette repart de zéro", () => {
+    const key = tile.match(/const imageKey = ([^;]+);/)![1];
+    expect(key).not.toContain("hdUri");
+    expect(key).toBe("fallbackUri");
+    expect(tile).toContain("const naturalSize = natural?.uri === imageKey ? natural.size : null;");
+  });
+
+  it("refusé : le flou visible à travers un détourage transparent ; permis : le flou dans les bandes", () => {
+    // Taille connue : les deux boîtes du premier plan sont opaques.
+    expect(tile).toContain('foreground = { style: [StyleSheet.absoluteFill, { backgroundColor: color.plinthe }], fit: "cover" };');
+    expect(tile).toMatch(/top: \(frame\.height - shown\.height\) \/ 2, backgroundColor: color\.plinthe \}/);
+    // Taille inconnue : pas de fond, pour ne pas cacher le flou pendant le chargement.
+    expect(tile).toContain('let foreground: { style: StyleProp<ImageStyle>; fit: "contain" | "cover" } = { style: StyleSheet.absoluteFill, fit: "contain" };');
+    // Le flou reste sous toute la tuile.
+    expect(tile).toContain("style={styles.blur}");
+  });
+
   it("aucune couleur en dur, aucune dépendance nouvelle", () => {
     expect(tile).not.toMatch(/#[0-9A-Fa-f]{3,8}\b/);
     const imports = [...tile.matchAll(/from "([^"]+)"/g)].map((m) => m[1]);
