@@ -327,18 +327,19 @@ const styles = themedStyles(() => ({
     justifyContent: "center",
   },
   bellOn: { backgroundColor: color.vert, borderColor: color.vert },
+  // Maquette « Écrin » 6 : 44 pt, à côté de « Je l'ai achetée » (mêmes valeurs).
   button: {
-    minHeight: 48,
+    minHeight: 44,
     borderWidth: 1,
     borderColor: color.filet,
     borderRadius: radius.md,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: space.sm,
-    paddingHorizontal: space.md,
+    gap: 8,
+    paddingHorizontal: 12,
   },
-  buttonLabel: { flexShrink: 1, color: color.vert, fontSize: font.secondary, fontWeight: "600", textAlign: "center" },
+  buttonLabel: { flexShrink: 1, color: color.vert, fontSize: font.secondary, fontWeight: "500", textAlign: "center" },
   avoider: { flex: 1, justifyContent: "flex-end" },
   backdrop: { flex: 1, backgroundColor: color.voile },
   sheet: {

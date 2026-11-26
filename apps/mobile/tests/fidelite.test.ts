@@ -363,3 +363,51 @@ describe("Résultat, « Autres propositions » (maquette 5)", () => {
     expect(styleOf(card, "shopLinkChevron")).not.toContain("lienSouligne");
   });
 });
+
+describe("Fiche d'une envie (maquette 6)", () => {
+  const envie = code("app/(app)/envie.tsx");
+
+  it("barre : « ‹ Envies » 17/400 sans hitSlop ; partage en haut à droite seulement avec un lien de boutique ; refusé : sans condition", () => {
+    expect(styleOf(envie, "nav")).toContain("height: 44,");
+    expect(styleOf(envie, "backLabel")).toContain('fontSize: font.body, fontWeight: "400", color: color.encre');
+    expect(envie).toContain("<Text style={styles.backLabel}>‹ {t.wishlistItem.back}</Text>");
+    const nav = envie.slice(envie.indexOf("<View style={styles.nav}>"), envie.indexOf("{state !== \"ready\" || !item ? ("));
+    expect(nav).not.toContain("hitSlop");
+    expect(nav).toContain('{state === "ready" && item?.merchantUrl ? (');
+    expect(nav).toContain("onPress={handleShareOutside}");
+    expect(nav).toContain("accessibilityLabel={t.wishlistItem.shareOutside}");
+    // Le bouton du bas « Partager hors de Spotto » reste.
+    expect(envie).toContain("<Text style={styles.secondaryLabel}>{t.wishlistItem.shareOutside}</Text>");
+  });
+
+  it("gouttière de 16 pt, photo en 4:5 (jamais carrée) ; refusé : 24", () => {
+    expect(styleOf(envie, "content")).toContain("paddingHorizontal: space.md");
+    expect(styleOf(envie, "content")).not.toContain("padding: space.lg");
+    expect(envie).not.toContain("aspectRatio={1}");
+  });
+
+  it("ligne du prix : boutique et prix à gauche, dernier prix vu et stock à droite ; refusé : la marge négative d'avant", () => {
+    const row = envie.slice(envie.indexOf("<View style={styles.priceRow}>\n"), envie.indexOf("})()}"));
+    expect(row).toContain('testID="dernier-prix-vu"');
+    expect(row).toContain('testID="etat-du-stock"');
+    expect(styleOf(envie, "priceRow")).toContain('flexWrap: "wrap", justifyContent: "space-between"');
+    expect(envie).not.toContain("marginTop: -space.md");
+    // « Baisse de prix » reste au-dessus de la rangée.
+    expect(envie.indexOf('testID="baisse-de-prix"')).toBeLessThan(envie.indexOf('testID="dernier-prix-vu"'));
+  });
+
+  it("« Je l'ai achetée » et la cloche côte à côte (l'un sous l'autre en grand texte) ; « Plus disponible ? » juste dessous, jamais sous « Plus »", () => {
+    const pair = envie.slice(envie.indexOf("<View style={[styles.pairRow"), envie.indexOf("<View style={styles.alerts}>"));
+    expect(pair).toContain("<WishBoughtButton");
+    expect(pair).toContain("<WishAlertButton");
+    expect(pair).toContain('flexDirection: fontScale > 1.3 ? "column" : "row"');
+    expect(envie.slice(envie.indexOf("<View style={styles.alerts}>"))).toContain('<StockReportLink');
+    expect(code("components/stock-report-sheet.tsx")).toContain('testID="plus-disponible"');
+    expect(envie).toContain("externalIcon");
+    const bought = code("components/wish-bought-button.tsx");
+    expect(bought).toContain("<BagCheckIcon />");
+    expect(styleOf(bought, "button")).toContain("minHeight: 44");
+    expect(styleOf(bought, "button")).not.toMatch(/[{ ]height: /);
+    expect(styleOf(code("components/merchant-link-button.tsx"), "primary")).toContain("minHeight: 52");
+  });
+});

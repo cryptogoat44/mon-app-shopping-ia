@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable, Text } from "react-native";
+import { Pressable, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import * as Haptics from "expo-haptics";
 import type { VaultCategory, WishlistItemDetail } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
@@ -8,6 +8,7 @@ import { addVaultItemFromMatch } from "@/lib/api";
 import { useToast } from "@/lib/toast-context";
 import { vaultChanged } from "@/lib/vault-changes";
 import { ErrorMessage } from "@/components/error-message";
+import { BagCheckIcon } from "@/components/icons";
 import { VaultCategorySheet } from "@/components/vault-category-sheet";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -20,10 +21,13 @@ import { themedStyles } from "@/theme/themed-styles";
 export function WishBoughtButton({
   item,
   onAdded,
+  style,
 }: {
   item: Pick<WishlistItemDetail, "title" | "imageUrl" | "productMatchId" | "inVault">;
   /** La fiche passe à « Ajoutée au Vault » (relue du serveur à chaque retour). */
   onAdded: () => void;
+  /** Le bouton posé dans une rangée par l'écran (fiche d'une envie) : sans sa marge du haut. */
+  style?: StyleProp<ViewStyle>;
 }) {
   const { showToast } = useToast();
   const [choosing, setChoosing] = useState(false);
@@ -55,13 +59,18 @@ export function WishBoughtButton({
   return (
     <>
       <Pressable
-        style={styles.button}
+        style={[styles.button, style ? style : styles.buttonAlone]}
         onPress={() => setChoosing(true)}
         disabled={done || adding}
         accessibilityRole="button"
         accessibilityState={{ disabled: done || adding, busy: adding }}
       >
-        <Text style={[styles.label, done ? styles.labelDone : null]}>{done ? t.result.bought : adding ? t.vaultForm.submitting : t.result.markAsBought}</Text>
+        <View accessible={false}>
+          <BagCheckIcon />
+        </View>
+        <Text style={[styles.label, done ? styles.labelDone : null]} numberOfLines={2}>
+          {done ? t.result.bought : adding ? t.vaultForm.submitting : t.result.markAsBought}
+        </Text>
       </Pressable>
       {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
       <VaultCategorySheet visible={choosing} onClose={() => setChoosing(false)} onChoose={(category) => void handleChoose(category)} />
@@ -70,8 +79,10 @@ export function WishBoughtButton({
 }
 
 const styles = themedStyles(() => ({
-  button: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, minHeight: 48, alignItems: "center", justifyContent: "center", marginTop: space.sm },
-  label: { color: color.vert, fontSize: font.secondary, fontWeight: "600" },
+  // Maquette « Écrin » 6 : 44 pt, le sac coché avant le libellé.
+  button: { minHeight: 44, borderWidth: 1, borderRadius: radius.md, borderColor: color.filet, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 12 },
+  buttonAlone: { marginTop: space.sm },
+  label: { flexShrink: 1, color: color.vert, fontSize: font.secondary, fontWeight: "500", textAlign: "center" },
   labelDone: { color: color.acier },
   error: { fontSize: font.caption, marginTop: space.sm, textAlign: "center" },
 }));

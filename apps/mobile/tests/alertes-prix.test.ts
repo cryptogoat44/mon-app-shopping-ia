@@ -249,7 +249,8 @@ describe("la cloche et sa feuille", () => {
   });
 
   it("une cloche sur la fiche et sur chaque envie des listes (Envies et vos collections), zone à part", () => {
-    expect(envie).toContain('<WishAlertButton title={item.title} state={alertState} onPress={() => setAlertSheet(true)} />');
+    // Lot « fidélité aux maquettes » : posée à côté de « Je l'ai achetée », la moitié de la rangée.
+    expect(envie).toContain('<WishAlertButton title={item.title} state={alertState} onPress={() => setAlertSheet(true)} style={pairItem} />');
     expect(envie).toContain("<WishAlertSheet wish={{ id: item.id, title: item.title }} state={alertState} visible={alertSheet}");
     // Liste : la même grille sert à « Toutes » et aux collections (getCollectionWishlist).
     expect(panel).toContain("selectedKey ? getCollectionWishlist(selectedKey, cursor) : getWishlist(cursor)");
