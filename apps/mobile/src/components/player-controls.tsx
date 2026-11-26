@@ -21,13 +21,20 @@
 // - Son (tranché le 26 novembre 2026) : les commandes de TikTok cachées, il
 //   n'y aurait sinon aucun moyen de remettre le son. Trois états : inconnu,
 //   activé, muet ; il suit onMute s'il arrive, sinon notre dernière commande.
+// - Largeur : celle de la vidéo, jamais moins de 300 pt (controlsRowWidth),
+//   dans la largeur de la colonne : sur un petit iPhone ou en grand texte, la
+//   vidéo rétrécit et le trait garderait sinon quelques points à peine. Le
+//   temps est plafonné en grand texte (TIME_MAX_FONT_SCALE).
+// - Pendant le glissé, onDraggingChange bloque le défilement de l'écran (sur
+//   iPhone, un défilement qui démarre prend le doigt) ; si le geste est quand
+//   même repris, le dernier seekTo part quand même.
 // Couleurs : jetons seulement (tests/couleurs-et-logo.test.ts).
 import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, PanResponder, Pressable, Text, View, type AccessibilityActionEvent, type LayoutChangeEvent } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { color, font, space } from "@/theme/tokens";
 import { t } from "@/i18n";
-import { formatPlayerTime, progressFraction, seekSeconds } from "@/lib/player-state";
+import { controlsRowWidth, formatPlayerTime, progressFraction, seekSeconds } from "@/lib/player-state";
 import { useReduceMotion } from "@/lib/use-reduce-motion";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -40,6 +47,8 @@ const SEEK_SETTLE_MS = 400;
 /** VoiceOver : balayer haut/bas avance ou recule de 2 s. */
 const ACCESSIBILITY_STEP_S = 2;
 const ICON = 20;
+/** Le temps grandit avec le texte, au plus de 30 %. */
+export const TIME_MAX_FONT_SCALE = 1.3;
 
 export interface PlayerControlsProps {
   width: number;
@@ -54,6 +63,8 @@ export interface PlayerControlsProps {
   onSound: () => void;
   /** La toute première fois (bouton Lecture = accord) : la rangée au repos, son bouton son éteint. */
   idle?: boolean;
+  /** Glissé en cours (true) ou fini (false) : l'écran bloque son défilement pendant ce temps. */
+  onDraggingChange?: (dragging: boolean) => void;
 }
 
 export function PlayIcon({ size = ICON, fill }: { size?: number; fill: string }) {
@@ -96,13 +107,28 @@ export function PlayerControls(p: PlayerControlsProps) {
   const lastSeekAt = useRef(0);
   const lastSeekSent = useRef(0);
   const startX = useRef(0);
+  const lastTarget = useRef(0);
 
   const fraction = progressFraction(p.currentTime, p.duration);
   const enabled = fraction !== null && !p.idle;
 
   // Le PanResponder est créé une fois : il lit l'état du moment ici.
-  const live = useRef({ duration: p.duration, trackWidth, enabled, onSeek: p.onSeek });
-  live.current = { duration: p.duration, trackWidth, enabled, onSeek: p.onSeek };
+  const live = useRef({ duration: p.duration, trackWidth, enabled, onSeek: p.onSeek, onDraggingChange: p.onDraggingChange });
+  live.current = { duration: p.duration, trackWidth, enabled, onSeek: p.onSeek, onDraggingChange: p.onDraggingChange };
+  // Trait encore sans largeur : il ne prend pas le doigt (un toucher ramènerait sinon à 0:00).
+  const canDrag = () => live.current.enabled && live.current.trackWidth > 0;
+  // Rangée retirée en plein glissé (repli sur les commandes de TikTok) : le défilement de l'écran revient.
+  const draggingNow = useRef(false);
+  function reportDragging(value: boolean) {
+    draggingNow.current = value;
+    live.current.onDraggingChange?.(value);
+  }
+  useEffect(
+    () => () => {
+      if (draggingNow.current) live.current.onDraggingChange?.(false);
+    },
+    []
+  );
 
   // Avancement entre deux temps du lecteur (jamais pendant le glissé, ni juste après un seekTo).
   useEffect(() => {
@@ -140,19 +166,22 @@ export function PlayerControls(p: PlayerControlsProps) {
 
   const pan = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => live.current.enabled,
-      onMoveShouldSetPanResponder: () => live.current.enabled,
+      onStartShouldSetPanResponder: canDrag,
+      onMoveShouldSetPanResponder: canDrag,
       // Le défilement de l'écran ne prend pas le geste en cours.
       onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: (event) => {
         startX.current = event.nativeEvent.locationX;
         const target = fractionAt(startX.current);
+        lastTarget.current = target;
+        reportDragging(true);
         setDragging(true);
         setDragFraction(target);
         progress.setValue(target);
       },
       onPanResponderMove: (_event, gesture) => {
         const target = fractionAt(startX.current + gesture.dx);
+        lastTarget.current = target;
         setDragFraction(target);
         progress.setValue(target);
         seekTo(target, false);
@@ -164,11 +193,15 @@ export function PlayerControls(p: PlayerControlsProps) {
         lastUpdate.current = null;
         setDragFraction(null);
         setDragging(false);
+        reportDragging(false);
       },
+      // Geste repris (défilement, appel…) : le dernier endroit atteint part quand même.
       onPanResponderTerminate: () => {
+        seekTo(lastTarget.current, true);
         lastUpdate.current = null;
         setDragFraction(null);
         setDragging(false);
+        reportDragging(false);
       },
     })
   ).current;
@@ -193,7 +226,7 @@ export function PlayerControls(p: PlayerControlsProps) {
   const soundLabel = p.sound === "on" ? t.player.controls.mute : p.sound === "muted" ? t.player.controls.unmute : t.player.controls.sound;
 
   return (
-    <View style={[styles.row, { width: p.width }]}>
+    <View style={[styles.row, { width: controlsRowWidth(p.width) }]}>
       <Pressable
         onPress={p.playing ? p.onPause : p.onPlay}
         style={styles.button}
@@ -223,7 +256,11 @@ export function PlayerControls(p: PlayerControlsProps) {
         </View>
         {enabled ? <Animated.View pointerEvents="none" style={[styles.knob, { width: knob, height: knob, borderRadius: knob / 2, marginTop: -knob / 2, left: knobLeft }]} /> : null}
       </View>
-      {timeText ? <Text style={styles.time}>{timeText}</Text> : null}
+      {timeText ? (
+        <Text style={styles.time} numberOfLines={1} maxFontSizeMultiplier={TIME_MAX_FONT_SCALE}>
+          {timeText}
+        </Text>
+      ) : null}
       <Pressable onPress={p.onSound} disabled={p.idle} style={styles.button} accessibilityRole="button" accessibilityLabel={soundLabel} accessibilityState={{ disabled: Boolean(p.idle) }}>
         <SoundIcon stroke={color.acier} muted={p.sound === "muted"} />
       </Pressable>
@@ -232,7 +269,7 @@ export function PlayerControls(p: PlayerControlsProps) {
 }
 
 const styles = themedStyles(() => ({
-  row: { flexDirection: "row", alignItems: "center", minHeight: 44, gap: space.xs },
+  row: { flexDirection: "row", alignItems: "center", minHeight: 44, gap: space.xs, maxWidth: "100%" },
   button: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   trackZone: { flex: 1, height: 44, justifyContent: "center" },
   track: { height: 2, borderRadius: 2, backgroundColor: color.filet, overflow: "hidden" },

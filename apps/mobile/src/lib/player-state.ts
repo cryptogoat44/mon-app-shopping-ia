@@ -297,6 +297,17 @@ export function seekSeconds(fraction: number, duration: number): number {
   return Math.min(Math.max(0, duration - 0.1), Math.max(0, safe * duration));
 }
 
+/** Largeur minimale de notre barre : lecture 44 + son 44 + le temps (≈ 80) + 3 écarts de 4 ≈ 180 pt
+ * fixes, et au moins ≈ 120 pt de trait pour le prendre au doigt. */
+export const CONTROLS_MIN_WIDTH = 300;
+
+/** Largeur de notre barre : celle de la vidéo, jamais moins de CONTROLS_MIN_WIDTH (la rangée est en
+ * plus bornée à la largeur de la colonne : maxWidth 100 %). Petit iPhone ou grand texte : la vidéo
+ * rétrécit, pas le trait. */
+export function controlsRowWidth(videoWidth: number): number {
+  return Math.max(Number.isFinite(videoWidth) ? Math.floor(videoWidth) : 0, CONTROLS_MIN_WIDTH);
+}
+
 /** « 0:05 », « 1:02 » : minutes et secondes entières, jamais négatif. */
 export function formatPlayerTime(seconds: number): string {
   const whole = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;

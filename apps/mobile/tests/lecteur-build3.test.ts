@@ -93,6 +93,20 @@ describe("le bouton Lecture vaut accord (plus d'écran d'accord)", () => {
   it("Réglages : après retrait, le texte dit que la prochaine vidéo ne sera chargée qu'au toucher de Lecture", () => {
     expect(code("src/components/player-consent-setting.tsx")).toContain("PLAYER_CONSENT_BY_PLAY_BUTTON ? t.player.settings.withdrawnPlay : t.player.settings.withdrawn");
   });
+
+  it("Réglages sans aucun accord (lien « Réglages » de la première fois) : la section s'affiche avec la règle, sans bouton", () => {
+    const setting = code("src/components/player-consent-setting.tsx");
+    // Permis : bouton Lecture = accord → titre et règle même sans accord.
+    expect(setting).toContain("const playIsConsent = PLAYER_CONSENT_GATE && PLAYER_CONSENT_BY_PLAY_BUTTON;");
+    expect(setting).toContain('if (!isPlayerAvailable() || state === "loading" || (state === "none" && !playIsConsent)) return null;');
+    expect(setting).toContain('state === "none" ? t.player.settings.none');
+    // Refusé : rien sans accord (l'ancien comportement), ni le bouton « Retirer » sans accord.
+    expect(setting).not.toContain('if (!isPlayerAvailable() || state === "none") return null;');
+    expect(setting).toContain('{state === "given" ? (');
+    // Refusé : « Accord retiré » pour qui n'a jamais donné d'accord.
+    expect(read("src/i18n/fr.ts")).toContain(`none: "Aucune vidéo n'est chargée chez TikTok ou Instagram tant que vous n'avez pas touché Lecture.",`);
+    expect(read("src/i18n/en.ts")).toContain(`none: "No video is loaded from TikTok or Instagram until you press Play.",`);
+  });
 });
 
 describe("le lecteur : actions visibles, barre de lecture sous la vidéo", () => {
@@ -133,8 +147,31 @@ describe("le lecteur : actions visibles, barre de lecture sous la vidéo", () =>
     expect(screen).toContain('controlsModeRef.current === "tiktok" ? TIKTOK_PLAYER_PARAMS_NATIVE : undefined');
   });
 
-  it("phrase de confidentialité : celle d'avant, sauf quand le serveur donne l'image du moment (TikTok)", () => {
-    expect(playerBranch()).toContain('{frameEnabled && platform === "tiktok" ? t.player.privacyFrame(name) : t.player.privacy(name)}');
+  it("phrase de confidentialité : celle du serveur seulement quand il sera vraiment demandé (TikTok, temps du lecteur arrivé) ; sinon celle d'avant", () => {
+    const branch = playerBranch();
+    // Permis : interrupteur allumé, lecteur TikTok, un temps arrivé (comme shouldAskServer).
+    expect(branch).toContain("{frameEnabled && isTikTokPlayer && progress !== null ? t.player.privacyFrame(name) : t.player.privacy(name)}");
+    // Refusé : la phrase du serveur pour toute vidéo TikTok, temps arrivé ou non (repli sans temps, « Spotter » trop tôt).
+    expect(branch).not.toContain('{frameEnabled && platform === "tiktok" ? t.player.privacyFrame(name)');
+  });
+
+  it("phrase du serveur : elle dit aussi le secours (l'image prise sur le téléphone, envoyée puis effacée), FR et EN", () => {
+    expect(read("src/i18n/fr.ts")).toContain("et ne la garde pas. À défaut, seule l'image prise sur votre téléphone est envoyée, puis effacée.`");
+    expect(read("src/i18n/en.ts")).toContain("and does not keep it. Failing that, only the frame taken on your phone is sent, then deleted.`");
+  });
+
+  it("« Trouver la pièce automatiquement » pendant l'attente de l'image du moment : la demande est abandonnée (rien ne part par-dessus l'analyse)", () => {
+    const screen = code(SCREEN);
+    const start = screen.indexOf("function backToAuto() {");
+    const body = screen.slice(start, screen.indexOf("\n  }", start));
+    // Permis : l'abandon d'abord, puis l'étape « auto ».
+    expect(body).toContain("spotAbort.current?.abort();");
+    expect(body.indexOf("spotAbort.current?.abort();")).toBeLessThan(body.indexOf('setStage({ kind: "auto" })'));
+    expect(screen).toMatch(/function playerToAuto\(\) \{[\s\S]*?backToAuto\(\);/);
+    // Refusé : un résultat arrivé après l'abandon ne mène ni à « Entourez la pièce » ni au secours.
+    const spot = screen.slice(screen.indexOf("async function spotMoment()"), screen.indexOf("async function firstPlay()"));
+    expect(spot.indexOf("if (!alive.current || controller.signal.aborted) return;")).toBeLessThan(spot.indexOf("return fallback(choice.reason)"));
+    expect(spot.indexOf("if (!alive.current || controller.signal.aborted) return;")).toBeLessThan(spot.indexOf('router.push({ pathname: "/spot/lancer"'));
   });
 
   it("vidéo et fond de la première fois arrondis à 14, courbe continue", () => {
@@ -169,7 +206,9 @@ describe("components/player-controls.tsx", () => {
 
   it("éteinte tant qu'aucune durée n'est arrivée : le trait ne prend pas le doigt, ni rond ni temps", () => {
     expect(controls).toContain("const enabled = fraction !== null && !p.idle;");
-    expect(controls).toContain("onStartShouldSetPanResponder: () => live.current.enabled,");
+    expect(controls).toContain("const canDrag = () => live.current.enabled && live.current.trackWidth > 0;");
+    expect(controls).toContain("onStartShouldSetPanResponder: canDrag,");
+    expect(controls).toContain("onMoveShouldSetPanResponder: canDrag,");
     expect(controls).toContain("{enabled ? <Animated.View");
   });
 
@@ -178,6 +217,28 @@ describe("components/player-controls.tsx", () => {
     expect(controls).toContain("const SEEK_SETTLE_MS = 400;");
     expect(controls).toContain("seekTo(target, false);");
     expect(controls).toContain("seekTo(target, true);");
+  });
+
+  it("largeur : celle de la vidéo, jamais moins de 300 pt, bornée à la colonne ; le temps plafonné en grand texte", () => {
+    // Permis : controlsRowWidth et maxWidth 100 %.
+    expect(controls).toContain("<View style={[styles.row, { width: controlsRowWidth(p.width) }]}>");
+    expect(controls).toContain('row: { flexDirection: "row", alignItems: "center", minHeight: 44, gap: space.xs, maxWidth: "100%" },');
+    expect(controls).toContain("maxFontSizeMultiplier={TIME_MAX_FONT_SCALE}");
+    expect(controls).toContain("const TIME_MAX_FONT_SCALE = 1.3;");
+    // Refusé : la rangée à la seule largeur de la vidéo.
+    expect(controls).not.toContain("{ width: p.width }");
+  });
+
+  it("glissé : le défilement de l'écran est bloqué pendant le geste ; geste repris, le dernier seekTo part quand même", () => {
+    expect(controls).toContain("reportDragging(true);");
+    expect(controls.match(/reportDragging\(false\);/g)).toHaveLength(2);
+    const terminate = controls.slice(controls.indexOf("onPanResponderTerminate:"), controls.indexOf("})", controls.indexOf("onPanResponderTerminate:")));
+    expect(terminate).toContain("seekTo(lastTarget.current, true);");
+    // Rangée retirée en plein glissé : le défilement revient.
+    expect(controls).toContain("if (draggingNow.current) live.current.onDraggingChange?.(false);");
+    const screen = code(SCREEN);
+    expect(screen).toContain("onDraggingChange={setDragging}");
+    expect(screen).toContain("scrollEnabled={!dragging}");
   });
 
   it("le son : un bouton toujours là, trois états, libellés « Son », « Couper le son », « Activer le son »", () => {

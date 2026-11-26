@@ -6,6 +6,8 @@ import type { FrameSample } from "../src/lib/frame-sample";
 import { decodePngSample } from "../src/lib/png-pixels";
 import {
   BLUR_LIMITS,
+  CONTROLS_MIN_WIDTH,
+  controlsRowWidth,
   PLAYER_MIN_HEIGHT,
   embedHeight,
   estimatedActionsHeight,
@@ -230,6 +232,20 @@ describe("barre de lecture (retours du build 3)", () => {
     expect(formatPlayerTime(62)).toBe("1:02");
     expect(formatPlayerTime(-3)).toBe("0:00");
     expect(formatPlayerTime(Number.NaN)).toBe("0:00");
+  });
+});
+
+describe("largeur de notre barre de lecture (petit iPhone, grand texte)", () => {
+  it("refusé : la seule largeur de la vidéo quand elle est étroite (iPhone SE : vidéo de 209 pt, trait de ≈ 30 pt)", () => {
+    expect(CONTROLS_MIN_WIDTH).toBe(300);
+    expect(controlsRowWidth(209)).toBe(300);
+    expect(controlsRowWidth(135)).toBe(300);
+    expect(controlsRowWidth(Number.NaN)).toBe(300);
+  });
+
+  it("permis : la largeur de la vidéo quand elle laisse assez de trait (iPhone du fondateur : 300 pt et plus)", () => {
+    expect(controlsRowWidth(300)).toBe(300);
+    expect(controlsRowWidth(342.6)).toBe(342);
   });
 });
 

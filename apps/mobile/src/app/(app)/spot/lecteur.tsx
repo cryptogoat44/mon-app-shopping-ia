@@ -362,6 +362,9 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
   }
 
   function backToAuto() {
+    // « Spotter ce moment » encore en attente (image du serveur : jusqu'à 30 s) : abandonné, rien ne part
+    // par-dessus l'analyse, l'instantané est effacé (spotMoment, finally).
+    spotAbort.current?.abort();
     setMessage(null);
     // Après un échec : la question de nouveau, la description gardée (jamais le même échec réaffiché).
     if (auto.phase.kind === "failed") auto.editQuery();
@@ -924,6 +927,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
               onPause={pauseVideo}
               onSeek={seekVideo}
               onSound={toggleSound}
+              onDraggingChange={setDragging}
             />
           ) : null}
           <View style={styles.captionRow}>
@@ -953,8 +957,9 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
             </Pressable>
           ) : null}
         </View>
-        {/* L'image vient de notre serveur (TikTok, interrupteur allumé) : la phrase le dit ; sinon celle d'avant. */}
-        <Text style={styles.privacy}>{frameEnabled && platform === "tiktok" ? t.player.privacyFrame(name) : t.player.privacy(name)}</Text>
+        {/* L'image sera demandée à notre serveur (TikTok, interrupteur allumé, temps du lecteur connu : comme
+            shouldAskServer) : la phrase le dit ; sinon (temps pas encore arrivé, repli sans temps) celle d'avant. */}
+        <Text style={styles.privacy}>{frameEnabled && isTikTokPlayer && progress !== null ? t.player.privacyFrame(name) : t.player.privacy(name)}</Text>
         {errorLine}
         {memory}
       </View>
