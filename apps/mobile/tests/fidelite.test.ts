@@ -185,6 +185,19 @@ describe("Résultat, la grande carte (maquettes 4-resultat-grande-carte)", () =>
     expect(screen).not.toContain("t.result.count(result.pieces.length");
   });
 
+  // Relecture du lot : au grand texte, le titre posé par-dessus prenait les touchers de « Fermer ».
+  it("barre : le titre ne prend aucun toucher et s'écarte de « Fermer » mesuré (permis : 76 au moins)", () => {
+    const nav = screen.slice(screen.indexOf("const renderNav = "), screen.indexOf("const nav = renderNav("));
+    expect(nav).toContain('<View style={[styles.navTitleZone, { left: titleInset, right: titleInset }]} pointerEvents="none">');
+    expect(screen).toContain("const titleInset = Math.max(NAV_TITLE_INSET, closeWidth + 8);");
+    expect(screen).toContain("const NAV_TITLE_INSET = 76;");
+  });
+
+  it("refusé : un titre de barre en position absolue qui peut recevoir les touchers", () => {
+    expect(styleOf(screen, "navTitle")).not.toContain("position: \"absolute\"");
+    expect(screen).not.toMatch(/<Text style=\{styles\.navTitle\}[^>]*>\s*\{title\}\s*<\/Text>\s*<View style=\{styles\.navSide\} \/>/);
+  });
+
   it("grande image carrée ; refusé : carrée ailleurs (fiche d'une envie, Vault, look restent en 4:5)", () => {
     expect(screen).toMatch(/<PieceTile\s+variant="hero"\s+enlargeable\s+aspectRatio=\{1\}/);
     expect(styleOf(screen, "heroSkeleton")).toContain("aspectRatio: 1,");

@@ -712,14 +712,24 @@ export default function ResultScreen() {
 
   // Lot « fidélité aux maquettes » (décision 13) : en titre, le nombre de propositions que l'écran peut montrer ;
   // la requête reste dans le nom lu par VoiceOver. À droite, la case vide de 44 équilibre le titre (décision 12).
+  // Grand texte : le titre s'écarte de « Fermer » mesuré (jamais par-dessus) et ne prend jamais ses touchers.
+  const [closeWidth, setCloseWidth] = useState(0);
+  const titleInset = Math.max(NAV_TITLE_INSET, closeWidth + 8);
   const renderNav = (title: string, label?: string) => (
     <View style={styles.nav}>
-      <Pressable onPress={() => closeSpotter(router)} style={styles.navSide} accessibilityRole="button">
+      <Pressable
+        onPress={() => closeSpotter(router)}
+        onLayout={(event) => setCloseWidth(event.nativeEvent.layout.width + event.nativeEvent.layout.x)}
+        style={styles.navSide}
+        accessibilityRole="button"
+      >
         <Text style={styles.close}>{t.spotter.close}</Text>
       </Pressable>
-      <Text style={styles.navTitle} numberOfLines={1} accessibilityRole="header" accessibilityLabel={label}>
-        {title}
-      </Text>
+      <View style={[styles.navTitleZone, { left: titleInset, right: titleInset }]} pointerEvents="none">
+        <Text style={styles.navTitle} numberOfLines={1} accessibilityRole="header" accessibilityLabel={label}>
+          {title}
+        </Text>
+      </View>
       <View style={styles.navSide} />
     </View>
   );
@@ -1250,13 +1260,17 @@ function FailureView({
   );
 }
 
+/** Écart minimal du titre de la barre à chaque bord ; plus grand quand « Fermer » mesuré est plus large (grand texte). */
+const NAV_TITLE_INSET = 76;
+
 const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   nav: { height: 44, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 8 },
   navSide: { minHeight: 44, minWidth: 44, paddingHorizontal: 8, justifyContent: "center" },
   close: { fontSize: font.body, fontWeight: "400", color: color.encre },
   // Centré sur l'écran comme la maquette (« Fermer » est plus large que la case vide de droite) ; jamais sous les deux côtés.
-  navTitle: { position: "absolute", left: 76, right: 76, textAlign: "center", fontSize: font.secondary, fontWeight: "500", color: color.encre },
+  navTitleZone: { position: "absolute", top: 0, bottom: 0, left: NAV_TITLE_INSET, right: NAV_TITLE_INSET, justifyContent: "center" },
+  navTitle: { textAlign: "center", fontSize: font.secondary, fontWeight: "500", color: color.encre },
   content: { paddingHorizontal: space.md, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   count: { fontSize: font.caption, lineHeight: 18, color: color.acier, marginBottom: space.xs },
   verdictPlace: { minHeight: 1 },
