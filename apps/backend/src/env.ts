@@ -156,8 +156,9 @@ const envSchema = z.object({
   // Couleur des bords de la vignette des propositions (retours du build 3,
   // lot « couleur des bords », lib/edgeColor.ts) : le serveur télécharge la
   // petite image d'une proposition affichée, mesure la couleur unie de ses
-  // bords et ne garde que cette couleur, EN MÉMOIRE (7 jours, rien dans la
-  // base) ; l'app s'en sert comme fond derrière une photo qui ne remplit pas
+  // bords et ne garde, EN MÉMOIRE, qu'une empreinte de l'adresse de l'image
+  // et cette couleur (ou « non mesurable »), 7 jours au plus (1 jour pour
+  // « non mesurable »), rien dans la base ; l'app s'en sert comme fond derrière une photo qui ne remplit pas
   // sa tuile. ÉTEINTE par défaut : seule la valeur exacte "true" l'allume ; à
   // allumer seulement une fois la politique de confidentialité mise à jour
   // (téléchargement nouveau, côté serveur). Hors de la liste des variables

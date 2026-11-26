@@ -30,6 +30,9 @@ import type { Resolver } from "../src/lib/publicImage.js";
 import {
   EDGE_COLORS_PER_MINUTE,
   EDGE_COLOR_CONCURRENCY,
+  EDGE_COLOR_RETRY_MS,
+  EDGE_COLOR_SWEEP_MS,
+  EDGE_COLOR_TTL_MS,
   edgeColorFor,
   edgeColorField,
   edgesToMeasure,
@@ -39,6 +42,7 @@ import {
   queueKeptEdgeColors,
   queueSearchEdgeColors,
   resetEdgeColorMemory,
+  sweepExpiredEdgeColors,
 } from "../src/lib/edgeColor.js";
 import { toProductSearch, type MatchRow, type SearchRow } from "../src/lib/searchRows.js";
 import { fakeSupabase } from "./fakeSupabase.js";
@@ -320,6 +324,86 @@ describe("la file de mesure", () => {
   });
 });
 
+describe("correctifs de la relecture : durée tenue, empreinte, redirections, réponse qui annonce la mesure", () => {
+  it("permis : une couleur gardée moins de 7 jours ; refusé : au-delà, effacée par le balayage SANS nouvelle visite de l'adresse", async () => {
+    switches.on = true;
+    const { log } = logger();
+    answerNext({ status: 200, headers: PNG, body: whiteSquare });
+    const start = Date.now();
+    const now = vi.spyOn(Date, "now").mockReturnValue(start);
+    queueEdgeColors(log, [THUMB], PUBLIC);
+    await vi.waitFor(() => expect(edgeColorFor(THUMB)).toBe("#ffffff"));
+    // Six jours plus tard : toujours là.
+    sweepExpiredEdgeColors(start + 6 * 24 * 60 * 60 * 1000);
+    expect(edgeColorFor(THUMB)).toBe("#ffffff");
+    // Le balayage passe juste avant les 7 jours (une minute d'avance au plus), sans consulter l'adresse.
+    sweepExpiredEdgeColors(start + EDGE_COLOR_TTL_MS - EDGE_COLOR_SWEEP_MS);
+    now.mockReturnValue(start);
+    expect(edgeColorFor(THUMB)).toBeUndefined();
+  });
+
+  it("refusé : une entrée « non mesurable » ne passe pas 1 jour ; le balayage tourne seul (minuterie qui ne retient pas le serveur)", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
+    try {
+      switches.on = true;
+      const { log, info } = logger();
+      answerNext({ status: 403 });
+      queueEdgeColors(log, [THUMB], PUBLIC);
+      await vi.waitFor(() => expect(info).toHaveBeenCalledWith("Couleur des bords : échec"));
+      // Encore là après 23 h : une seule tentative par jour.
+      vi.advanceTimersByTime(23 * 60 * 60 * 1000);
+      expect(queueEdgeColors(log, [THUMB], PUBLIC)).toBe(false);
+      // Le jour passé, la minuterie seule l'a effacée : l'adresse peut être remesurée.
+      vi.advanceTimersByTime(EDGE_COLOR_RETRY_MS - 23 * 60 * 60 * 1000);
+      expect(queueEdgeColors(log, [THUMB], PUBLIC)).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("le cache ne garde jamais l'adresse en clair : une empreinte SHA-256 seulement", () => {
+    const source = readFileSync(join(__dirname, "../src/lib/edgeColor.ts"), "utf8");
+    expect(source).toContain('createHash("sha256").update(imageUrl).digest("base64url")');
+    expect(source).toContain("cache.set(key, { color, at: now });");
+    expect(source).not.toMatch(/cache\.(set|get|delete)\(imageUrl/);
+    expect(source).toContain("pending.add(keyOf(imageUrl));");
+  });
+
+  it("refusé : une vignette qui redirige vers un réseau social n'est jamais appelée là-bas (échec) ; permis : une redirection ordinaire", async () => {
+    switches.on = true;
+    const { log, info } = logger();
+    answerNext({ status: 302, headers: { location: "https://scontent.cdninstagram.com/v/photo.jpg" } });
+    queueEdgeColors(log, [THUMB], PUBLIC);
+    await vi.waitFor(() => expect(info).toHaveBeenCalledWith("Couleur des bords : échec"));
+    expect(httpsRequest).toHaveBeenCalledTimes(1);
+    expect(String(httpsRequest.mock.calls[0]![0])).toBe(THUMB);
+    const other = "https://images.exemple.fr/veste.png";
+    answerNext({ status: 302, headers: { location: "https://cdn.exemple.fr/veste.png" } });
+    answerNext({ status: 200, headers: PNG, body: whiteSquare });
+    queueEdgeColors(log, [other], PUBLIC);
+    await vi.waitFor(() => expect(edgeColorFor(other)).toBe("#ffffff"));
+    expect(String(httpsRequest.mock.calls.at(-1)![0])).toBe("https://cdn.exemple.fr/veste.png");
+  });
+
+  it("la file dit si elle a vraiment mis une vignette en file : refusé (éteint, déjà en cache, rien de mesurable) → false ; permis → true", async () => {
+    const { log } = logger();
+    expect(queueSearchEdgeColors(log, { matches: [{ imageUrl: THUMB }] }, PUBLIC)).toBe(false);
+    switches.on = true;
+    answerNext({ status: 200, headers: PNG, body: whiteSquare });
+    expect(queueSearchEdgeColors(log, { matches: [{ imageUrl: "http://images.exemple.fr/a.png" }] }, PUBLIC)).toBe(false);
+    expect(queueSearchEdgeColors(log, { matches: [{ imageUrl: THUMB }] }, PUBLIC)).toBe(true);
+    // Déjà en file, puis déjà en cache : rien de neuf.
+    expect(queueSearchEdgeColors(log, { matches: [{ imageUrl: THUMB }] }, PUBLIC)).toBe(false);
+    await vi.waitFor(() => expect(edgeColorFor(THUMB)).toBe("#ffffff"));
+    expect(queueSearchEdgeColors(log, { matches: [{ imageUrl: THUMB }] }, PUBLIC)).toBe(false);
+  });
+
+  it("les trois réponses de recherche n'ajoutent edgeColorsPending que si une vignette vient d'être mise en file", () => {
+    const searches = readFileSync(join(__dirname, "../src/routes/searches.ts"), "utf8");
+    expect(searches.match(/queueSearchEdgeColors\(request\.log, (outcome|full|reread)\) \? \{ \.\.\.(outcome|full|reread), edgeColorsPending: true \} : (outcome|full|reread)/g)).toHaveLength(3);
+  });
+});
+
 describe("Envies et Vault : seulement l'image encore celle du résultat", () => {
   const MATCH = "f0000000-0000-4000-8000-000000000001";
   const PERSONAL = "f0000000-0000-4000-8000-000000000002";
@@ -433,7 +517,8 @@ describe("branchement dans les routes (lecture du code)", () => {
   });
 
   it("aucune écriture dans la base, aucune autre route", () => {
-    const source = read("lib/edgeColor.ts");
+    // L'empreinte de l'adresse (node:crypto, createHash(...).update) n'est pas une écriture dans la base.
+    const source = read("lib/edgeColor.ts").replace('createHash("sha256").update(imageUrl)', "");
     expect(source).not.toMatch(/\.(insert|update|upsert)\(/);
     expect(source).not.toMatch(/\.rpc\(/);
     // Une seule lecture : l'image du résultat, pour écarter les photos personnelles.

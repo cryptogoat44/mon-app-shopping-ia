@@ -380,6 +380,12 @@ export interface ProductSearch {
    * à chaque relecture. Absent : aucune entrée (dans le doute, historique,
    * ancien serveur). Une app plus ancienne l'ignore. */
   luxuryResale?: LuxuryResale;
+  /** Couleur des bords (lot « couleur des bords ») : présent (true)
+   * seulement quand cette réponse vient de mettre en file la mesure d'au
+   * moins une vignette ; l'app relit alors la recherche à +6 s et +16 s pour
+   * recevoir les couleurs. Absent : rien en file, fonction coupée, ancien
+   * serveur. Une app plus ancienne l'ignore. */
+  edgeColorsPending?: boolean;
 }
 
 /** Seconde main de luxe : la maison retenue et les liens vers la recherche

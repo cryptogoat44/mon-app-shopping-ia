@@ -22,10 +22,13 @@
 //
 // Vie privée : la boutique ou Google ne reçoivent RIEN du membre (c'est notre
 // serveur qui appelle, avec l'identité honnête de notre robot, sans cookie).
-// L'image est lue en mémoire puis oubliée ; seule la couleur (« #rrggbb »)
-// est gardée, EN MÉMOIRE du serveur (aucune colonne, aucune migration), au
-// plus 7 jours, sans lien avec un compte ni une recherche. Journal : des
-// compteurs seulement, jamais d'adresse.
+// L'image est lue en mémoire puis oubliée ; seules sont gardées, EN MÉMOIRE
+// du serveur (aucune colonne, aucune migration), une EMPREINTE de l'adresse
+// de la vignette (SHA-256 : l'adresse elle-même n'est pas gardée) et sa
+// couleur (« #rrggbb ») ou la mention « non mesurable », 7 jours au plus
+// (1 jour pour « non mesurable »), sans lien avec un compte ni une
+// recherche ; un balayage régulier efface ce qui a passé sa durée, même sans
+// nouvelle visite. Journal : des compteurs seulement, jamais d'adresse.
 //
 // Garde-fous : ceux de lib/publicImage.ts (https, adresses publiques
 // revérifiées à chaque redirection, DNS épinglé, 3 redirections au plus) ;
@@ -35,6 +38,7 @@
 // 30 par minute pour tout le serveur (au-delà : rien, l'adresse reviendra à
 // la prochaine ouverture) ; une tentative par adresse et par jour, même en
 // échec. Tout se passe APRÈS la réponse : jamais une attente pour le membre.
+import { createHash } from "node:crypto";
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import sharp from "sharp";
 import { env } from "../env.js";
@@ -171,25 +175,59 @@ export async function measureEdgeColor(data: Buffer): Promise<string | null> {
 }
 
 // ---------------------------------------------------------------------------
-// Le cache en mémoire (aucune colonne) : adresse de la vignette → couleur
+// Le cache en mémoire (aucune colonne) : empreinte de l'adresse de la
+// vignette → couleur. L'adresse elle-même n'est jamais une clé du cache.
+
+/** Intervalle du balayage des entrées passées. */
+export const EDGE_COLOR_SWEEP_MS = 60 * 1000;
 
 const cache = new Map<string, { color: string | null; at: number }>();
+let sweepTimer: ReturnType<typeof setInterval> | null = null;
+
+/** L'empreinte (SHA-256) d'une adresse : seule forme gardée par le cache. */
+function keyOf(imageUrl: string): string {
+  return createHash("sha256").update(imageUrl).digest("base64url");
+}
+
+function lifetimeOf(entry: { color: string | null }): number {
+  return entry.color ? EDGE_COLOR_TTL_MS : EDGE_COLOR_RETRY_MS;
+}
 
 function freshEntry(imageUrl: string, now: number): { color: string | null; at: number } | undefined {
-  const entry = cache.get(imageUrl);
+  const key = keyOf(imageUrl);
+  const entry = cache.get(key);
   if (!entry) return undefined;
-  if (now - entry.at < (entry.color ? EDGE_COLOR_TTL_MS : EDGE_COLOR_RETRY_MS)) return entry;
-  cache.delete(imageUrl);
+  if (now - entry.at < lifetimeOf(entry)) return entry;
+  cache.delete(key);
   return undefined;
 }
 
+/** Efface toute entrée qui aura passé sa durée (7 jours, 1 jour pour « non
+ * mesurable ») avant le prochain balayage : la durée promise tient même
+ * sans nouvelle visite de la même adresse. */
+export function sweepExpiredEdgeColors(now: number = Date.now()): void {
+  for (const [key, entry] of cache) {
+    if (now - entry.at >= lifetimeOf(entry) - EDGE_COLOR_SWEEP_MS) cache.delete(key);
+  }
+  if (cache.size === 0 && sweepTimer) {
+    clearInterval(sweepTimer);
+    sweepTimer = null;
+  }
+}
+
 function remember(imageUrl: string, color: string | null, now: number): void {
-  cache.delete(imageUrl);
-  cache.set(imageUrl, { color, at: now });
+  const key = keyOf(imageUrl);
+  cache.delete(key);
+  cache.set(key, { color, at: now });
   while (cache.size > EDGE_COLOR_CACHE_MAX) {
     const oldest = cache.keys().next().value;
     if (oldest === undefined) break;
     cache.delete(oldest);
+  }
+  sweepExpiredEdgeColors(now);
+  if (!sweepTimer && cache.size > 0) {
+    sweepTimer = setInterval(() => sweepExpiredEdgeColors(), EDGE_COLOR_SWEEP_MS);
+    sweepTimer.unref?.();
   }
 }
 
@@ -212,6 +250,8 @@ export function edgeColorField(imageUrl: string | null | undefined): { edgeColor
 // La file de mesure (après la réponse)
 
 const waiting: { imageUrl: string; log: FastifyBaseLogger; resolver?: Resolver }[] = [];
+/** Empreintes des adresses en file (l'adresse ne vit que dans `waiting`,
+ * le temps de la mesure). */
 const pending = new Set<string>();
 let active = 0;
 let windowStart = 0;
@@ -220,6 +260,8 @@ let windowCount = 0;
 /** Pour les tests seulement : vide le cache, la file et le compteur de la minute. */
 export function resetEdgeColorMemory(): void {
   cache.clear();
+  if (sweepTimer) clearInterval(sweepTimer);
+  sweepTimer = null;
   waiting.length = 0;
   pending.clear();
   active = 0;
@@ -256,17 +298,22 @@ const SOCIAL_IMAGE_HOSTS = [
 export function isMeasurableImageUrl(imageUrl: unknown): imageUrl is string {
   if (typeof imageUrl !== "string" || imageUrl.length > MAX_URL_LENGTH) return false;
   try {
-    const host = checkImageUrl(imageUrl).hostname;
-    return !SOCIAL_IMAGE_HOSTS.some((pattern) => pattern.test(host));
+    return notSocialHost(checkImageUrl(imageUrl).hostname);
   } catch {
     return false;
   }
 }
 
-/** Télécharge la vignette (4 s, 1 Mo au plus, garde-fous de publicImage). */
+/** Hôte permis à chaque étape, redirections comprises : jamais un réseau social. */
+function notSocialHost(hostname: string): boolean {
+  return !SOCIAL_IMAGE_HOSTS.some((pattern) => pattern.test(hostname));
+}
+
+/** Télécharge la vignette (4 s, 1 Mo au plus, garde-fous de publicImage ;
+ * une redirection vers un réseau social est refusée avant toute connexion). */
 export async function fetchEdgeSample(imageUrl: string, resolver?: Resolver): Promise<Buffer | null> {
   const signal = AbortSignal.timeout(EDGE_COLOR_TIMEOUT_MS);
-  const { response } = await openPublicUrl(imageUrl, IMAGE_REQUEST_HEADERS, signal, resolver);
+  const { response } = await openPublicUrl(imageUrl, IMAGE_REQUEST_HEADERS, signal, resolver, notSocialHost);
   try {
     if (!String(response.headers["content-type"] ?? "").toLowerCase().startsWith("image/")) return null;
     const declared = Number(response.headers["content-length"]);
@@ -314,7 +361,7 @@ function drain(): void {
       .catch(() => undefined)
       .finally(() => {
         active -= 1;
-        pending.delete(next.imageUrl);
+        pending.delete(keyOf(next.imageUrl));
         drain();
       });
   }
@@ -325,30 +372,35 @@ function drain(): void {
  * EDGE_COLORS_PER_MINUTE pour la minute, le reste est laissé (il reviendra
  * à la prochaine ouverture). Rien si l'interrupteur est éteint. Ne rejette
  * jamais ; ne fait jamais attendre la réponse (téléchargements lancés au
- * tour suivant). */
-export function queueEdgeColors(log: FastifyBaseLogger, imageUrls: readonly (string | null | undefined)[], resolver?: Resolver): void {
+ * tour suivant). Rend true quand au moins une adresse a vraiment été mise
+ * en file (la réponse le dit à l'app : edgeColorsPending). */
+export function queueEdgeColors(log: FastifyBaseLogger, imageUrls: readonly (string | null | undefined)[], resolver?: Resolver): boolean {
   try {
-    if (!edgeColorEnabled()) return;
+    if (!edgeColorEnabled()) return false;
     const now = Date.now();
+    sweepExpiredEdgeColors(now);
     let added = false;
     for (const imageUrl of imageUrls) {
-      if (!isMeasurableImageUrl(imageUrl) || pending.has(imageUrl) || freshEntry(imageUrl, now)) continue;
+      if (!isMeasurableImageUrl(imageUrl) || pending.has(keyOf(imageUrl)) || freshEntry(imageUrl, now)) continue;
       if (!takeSlot(now)) break;
-      pending.add(imageUrl);
+      pending.add(keyOf(imageUrl));
       waiting.push({ imageUrl, log, ...(resolver ? { resolver } : {}) });
       added = true;
     }
     if (added) setImmediate(drain);
+    return added;
   } catch {
     // Jamais un échec de la réponse.
+    return false;
   }
 }
 
 /** Réponse d'une recherche : les EDGE_COLORS_PER_SEARCH premières
- * propositions, dans l'ordre de la réponse (aucune boutique favorisée). */
-export function queueSearchEdgeColors(log: FastifyBaseLogger, search: { matches: readonly { imageUrl: string }[] } | null | undefined, resolver?: Resolver): void {
-  if (!search || !edgeColorEnabled()) return;
-  queueEdgeColors(
+ * propositions, dans l'ordre de la réponse (aucune boutique favorisée).
+ * Rend true quand au moins une vignette a été mise en file. */
+export function queueSearchEdgeColors(log: FastifyBaseLogger, search: { matches: readonly { imageUrl: string }[] } | null | undefined, resolver?: Resolver): boolean {
+  if (!search || !edgeColorEnabled()) return false;
+  return queueEdgeColors(
     log,
     search.matches.slice(0, EDGE_COLORS_PER_SEARCH).map((match) => match.imageUrl),
     resolver
@@ -371,7 +423,7 @@ export function queueKeptEdgeColors(
     const now = Date.now();
     const candidates = new Map<string, string>();
     for (const row of rows) {
-      if (!row.product_match_id || typeof row.image_url !== "string" || pending.has(row.image_url) || freshEntry(row.image_url, now)) continue;
+      if (!row.product_match_id || typeof row.image_url !== "string" || pending.has(keyOf(row.image_url)) || freshEntry(row.image_url, now)) continue;
       candidates.set(row.product_match_id, row.image_url);
     }
     if (candidates.size === 0) return;

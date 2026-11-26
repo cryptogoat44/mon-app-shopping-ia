@@ -609,9 +609,9 @@ async function writeOutcome(fastify: FastifyInstance, request: FastifyRequest, i
   // Toutes ses propositions sont là : le verdict est calculé (lib/verdict.ts), sur une base qui a 0055.
   // Seconde main de luxe (lib/luxuryResale.ts) : calculée aussi, sans migration.
   const outcome = toProductSearch(search, matches, affiliateUrlByMatchId, new Map(), false, { verdict: await verdictColumnReady(fastify), luxuryResale: true });
-  // Couleur des bords des 12 premières vignettes, après la réponse (lib/edgeColor.ts, éteint par défaut).
-  queueSearchEdgeColors(request.log, outcome);
-  return outcome;
+  // Couleur des bords des 12 premières vignettes, après la réponse (lib/edgeColor.ts, éteint par défaut) ;
+  // edgeColorsPending (facultatif) seulement si une vignette vient d'être mise en file : l'app relira.
+  return queueSearchEdgeColors(request.log, outcome) ? { ...outcome, edgeColorsPending: true } : outcome;
 }
 
 /** Enregistre l'issue de l'appel et sa mesure, et renvoie la recherche
@@ -972,9 +972,9 @@ async function readSearchForReply(fastify: FastifyInstance, request: FastifyRequ
   const affiliateUrlByMatchId = await fetchAffiliateUrls(fastify, matchIds);
   const feedbackByMatchId = await fetchFeedbackReasons(fastify, userId, matchIds);
   const full = toProductSearch(row, matches, affiliateUrlByMatchId, feedbackByMatchId, true, { verdict: await verdictColumnReady(fastify), luxuryResale: true });
-  // Couleur des bords des 12 premières vignettes, après la réponse (lib/edgeColor.ts, éteint par défaut).
-  queueSearchEdgeColors(request.log, full);
-  return full;
+  // Couleur des bords des 12 premières vignettes, après la réponse (lib/edgeColor.ts, éteint par défaut) ;
+  // edgeColorsPending (facultatif) seulement si une vignette vient d'être mise en file : l'app relira.
+  return queueSearchEdgeColors(request.log, full) ? { ...full, edgeColorsPending: true } : full;
 }
 
 // ---- Boutiques ensuite (POST /api/searches/:id/complement, 0031) ----
@@ -1699,8 +1699,8 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
     const verdict = await verdictColumnReady(fastify);
     const reread: ProductSearch = { ...toProductSearch(row, matches, affiliateUrlByMatchId, feedbackByMatchId, textSearchOn, { verdict, luxuryResale: true }), wishlistMatchIds, vaultMatchIds };
 
-    // Couleur des bords des 12 premières vignettes, après la réponse (lib/edgeColor.ts, éteint par défaut).
-    queueSearchEdgeColors(request.log, reread);
-    return reply.send(reread);
+    // Couleur des bords des 12 premières vignettes, après la réponse (lib/edgeColor.ts, éteint par défaut) ;
+    // edgeColorsPending (facultatif) seulement si une vignette vient d'être mise en file : l'app relira.
+    return reply.send(queueSearchEdgeColors(request.log, reread) ? { ...reread, edgeColorsPending: true } : reread);
   });
 }
