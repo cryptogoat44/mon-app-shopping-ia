@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Pressable, Switch, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { Switch } from "@/components/switch";
 import { color, font, radius, space } from "@/theme/tokens";
 import { couleursInterrupteur } from "@/theme/accent";
 import { t } from "@/i18n";

@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
-import { Platform, Pressable, ScrollView, Switch, Text, View } from "react-native";
+import { Platform, Pressable, ScrollView, Text, View } from "react-native";
+import { Switch } from "@/components/switch";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { LEGAL_DOCUMENT_VERSIONS, type ConsentStatus } from "@monapp/shared-types";

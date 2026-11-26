@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
-import { Linking, Platform, Pressable, Switch, Text, View } from "react-native";
+import { Linking, Platform, Pressable, Text, View } from "react-native";
+import { Switch } from "@/components/switch";
 import { useFocusEffect } from "expo-router";
 import { space } from "@/theme/tokens";
 import { couleursInterrupteur } from "@/theme/accent";

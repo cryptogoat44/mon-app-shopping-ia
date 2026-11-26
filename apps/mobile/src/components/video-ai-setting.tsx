@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Switch, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { Switch } from "@/components/switch";
 import type { ConsentStatus } from "@monapp/shared-types";
 import { couleursInterrupteur } from "@/theme/accent";
 import { t } from "@/i18n";

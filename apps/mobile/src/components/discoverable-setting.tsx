@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Switch, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { Switch } from "@/components/switch";
 import { space } from "@/theme/tokens";
 import { couleursInterrupteur } from "@/theme/accent";
 import { t } from "@/i18n";

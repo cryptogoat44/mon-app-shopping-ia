@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, Switch, Text, TextInput, View, type StyleProp, type ViewStyle } from "react-native";
+import { Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, Text, TextInput, View, type StyleProp, type ViewStyle } from "react-native";
+import { Switch } from "@/components/switch";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { WishAlertState } from "@monapp/shared-types";
 import { color, font, radius, serifFont, serifLineHeight, size, space } from "@/theme/tokens";

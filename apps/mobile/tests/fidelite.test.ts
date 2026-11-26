@@ -558,3 +558,27 @@ describe("Lecteur, deux lignes (maquettes 2-lecteur)", () => {
     expect(styleOf(player, "linkLabel")).not.toContain('fontWeight: "600"');
   });
 });
+
+describe("partie B1 : l'interrupteur du site", () => {
+  const web = code("components/switch.web.tsx");
+  const users = ["app/(app)/settings.tsx", "components/activity-push-setting.tsx", "components/discoverable-setting.tsx", "components/latest-video-setting.tsx", "components/message-push-setting.tsx", "components/private-account-setting.tsx", "components/read-receipts-setting.tsx", "components/video-ai-setting.tsx", "components/wish-alert-sheet.tsx", "components/wish-alerts-setting.tsx"];
+
+  it("iPhone : le Switch de React Native, inchangé ; site : un interrupteur annoncé comme tel, piste 51 × 31, zone de 44", () => {
+    expect(code("components/switch.tsx")).toContain('export { Switch } from "react-native";');
+    expect(web).toContain("export function Switch(");
+    expect(web).toContain('accessibilityRole="switch"');
+    expect(web).toContain("aria-checked={value}");
+    expect(web).toContain("const TRACK = { width: 51, height: 31 };");
+    expect(styleOf(web, "zone")).toContain("minHeight: 44");
+    // Couleurs : celles de couleursInterrupteur (aucune couleur en dur) ; « Réduire les animations » respecté.
+    expect(web).not.toMatch(/#[0-9A-Fa-f]{3,8}\b/);
+    expect(web).toContain("if (reduceMotion) left.setValue(to);");
+  });
+
+  it.each(users)("%s : l'interrupteur commun ; refusé : celui de react-native-web importé directement", (path) => {
+    const source = code(path);
+    expect(source).toContain('import { Switch } from "@/components/switch";');
+    expect(source).not.toMatch(/import \{[^}]*\bSwitch\b[^}]*\} from "react-native";/);
+    expect(source).toContain("{...couleursInterrupteur(");
+  });
+});
