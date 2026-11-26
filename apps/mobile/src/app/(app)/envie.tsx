@@ -460,7 +460,8 @@ const styles = themedStyles(() => ({
   merchant: { marginTop: space.md, marginBottom: 0 },
   extraActions: { marginTop: space.sm },
   pairRow: { gap: space.sm, marginTop: space.sm },
-  pairItem: { flex: 1 },
+  // Deux moitiés égales, quelle que soit la longueur des libellés (flexBasis explicite : le site le lit aussi).
+  pairItem: { flexGrow: 1, flexShrink: 1, flexBasis: 0 },
   pairButton: { flexGrow: 1 },
   alerts: { marginBottom: space.md },
   stockReport: { alignSelf: "center", marginTop: 0 },
