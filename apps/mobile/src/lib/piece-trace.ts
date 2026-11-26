@@ -89,7 +89,8 @@ export const TRACE_MARGIN = 6;
  * verticale), le doigt fait défiler la page, comme avant le lot. */
 export const TRACE_START_MARGIN = 16;
 
-type Point = { x: number; y: number };
+/** Un point en points écran (dans le cadre de l'image, ou depuis son coin). */
+export type Point = { x: number; y: number };
 type Side = "left" | "right" | "top" | "bottom";
 const SIDES: readonly Side[] = ["left", "right", "top", "bottom"];
 const OPPOSITE: Record<Side, Side> = { left: "right", right: "left", top: "bottom", bottom: "top" };
@@ -156,9 +157,9 @@ function returnIndex(points: readonly Point[]): number {
 
 /** Pièce coupée par le bord de l'image : les deux bouts du tracé sont au bord
  * (même côté, ou deux côtés voisins) et le bord referme le tour, à condition
- * que le tracé s'en écarte et bombe vers l'intérieur. Renvoie la surface
- * ainsi entourée (avec le coin), ou null. */
-function edgeClosedArea(points: readonly Point[], display: Size): number | null {
+ * que le tracé s'en écarte et bombe vers l'intérieur. Renvoie le tour ainsi
+ * refermé (le tracé, plus le coin quand ce sont deux côtés voisins), ou null. */
+function edgeClosure(points: readonly Point[], display: Size): Point[] | null {
   const first = points[0];
   const last = points[points.length - 1];
   const chord = { x: last.x - first.x, y: last.y - first.y };
@@ -175,12 +176,18 @@ function edgeClosedArea(points: readonly Point[], display: Size): number | null 
       const bulge = Math.max(...points.map((point) => toInside * cross(chord, { x: point.x - first.x, y: point.y - first.y })));
       const depth = Math.max(...points.map((point) => Math.min(gap(point, start), gap(point, end))));
       if (bulge < EDGE_BULGE * length * length || depth < EDGE_DEPTH) continue;
-      if (start === end) return Math.abs(signedArea(points));
+      if (start === end) return [...points];
       const corner = { x: start === "right" || end === "right" ? display.width : 0, y: start === "bottom" || end === "bottom" ? display.height : 0 };
-      return Math.abs(signedArea([...points, corner]));
+      return [...points, corner];
     }
   }
   return null;
+}
+
+/** La surface du tour refermé par le bord (avec le coin), ou null. */
+function edgeClosedArea(points: readonly Point[], display: Size): number | null {
+  const shape = edgeClosure(points, display);
+  return shape ? Math.abs(signedArea(shape)) : null;
 }
 
 /** Un côté de la zone : borné à l'image, élargi autour de son milieu jusqu'à MIN_CROP. */
@@ -254,4 +261,82 @@ const rectPath = (box: Box) => `M${round(box.left)} ${round(box.top)}h${round(bo
  * un voile arrêté au bord de l'image y laissait un liseré clair. */
 export function outsidePath(crop: CropRect, image: Box, frame: Size): string {
   return `${rectPath({ left: 0, top: 0, ...frame })}${rectPath(cropToBox(crop, image))}`;
+}
+
+// Lot « entourer en poudre » : le DESSIN seulement. Rien ici ne change la zone
+// envoyée (zoneFromTrace, le rectangle autour du tracé) ; le tracé et sa forme
+// ne quittent jamais le téléphone. tracePath et outsidePath ne servent plus à
+// l'écran (gardées, avec leurs tests).
+
+/** Le tracé en points du cadre de l'image (`image` : où l'image s'affiche). */
+export function framePoints(trace: readonly TracePoint[], image: Box): Point[] {
+  return trace.map((point) => ({ x: image.left + point.x * image.width, y: image.top + point.y * image.height }));
+}
+
+/** Le cadre de l'IA (zoneFromCrop) : un rectangle déjà fermé, cinq points
+ * alignés sur les axes, le dernier sur le premier. Un tracé au doigt ne l'est
+ * jamais. */
+export function isFrameTrace(trace: readonly TracePoint[]): boolean {
+  if (trace.length !== 5) return false;
+  const [first, , , , last] = trace;
+  if (first.x !== last.x || first.y !== last.y) return false;
+  return trace.slice(1).every((point, index) => point.x === trace[index].x || point.y === trace[index].y);
+}
+
+/** La forme entourée, pour le dessin seulement (jamais envoyée), en points du
+ * cadre : un tour est coupé à son retour vers le départ (plus de queue) ; une
+ * pièce au bord est refermée par le bord (avec le coin si deux côtés) ; le
+ * cadre de l'IA passe tel quel. null : tracé non retenu (zoneFromTrace le
+ * refuse), rien à éclairer. */
+export function traceShape(trace: readonly TracePoint[], image: Box): Point[] | null {
+  if (!image.width || !image.height) return null;
+  if (isFrameTrace(trace)) return framePoints(trace, image);
+  const display = { width: image.width, height: image.height };
+  if (!zoneFromTrace(trace, display)) return null;
+  const points = trace.map((point) => ({ x: point.x * display.width, y: point.y * display.height }));
+  const back = returnIndex(points);
+  const shape = back >= 0 ? points.slice(0, back + 1) : edgeClosure(points, display);
+  return shape ? shape.map((point) => ({ x: image.left + point.x, y: image.top + point.y })) : null;
+}
+
+const mid = (a: Point, b: Point): Point => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+const pt = (point: Point) => `${round(point.x)} ${round(point.y)}`;
+
+/** Chemin SVG lissé : courbes quadratiques par les milieux (chaque point du
+ * tracé sert de point de contrôle, chaque courbe finit au milieu de deux
+ * points : la courbe reste dans la forme, sans dépassement). Fermé : part du
+ * milieu de p0-p1, boucle sur p0, finit par Z. Ouvert (pendant le geste) :
+ * part de p0, finit en pₙ par un L. Arrondi à 0,1 pt. */
+export function smoothPath(points: readonly Point[], closed: boolean): string {
+  const count = points.length;
+  if (count === 0) return "";
+  if (count === 1) return `M${pt(points[0])}`;
+  if (count === 2) return `M${pt(points[0])}L${pt(points[1])}${closed ? "Z" : ""}`;
+  if (!closed) {
+    let d = `M${pt(points[0])}`;
+    for (let index = 1; index < count - 1; index += 1) d += `Q${pt(points[index])} ${pt(mid(points[index], points[index + 1]))}`;
+    return `${d}L${pt(points[count - 1])}`;
+  }
+  let d = `M${pt(mid(points[0], points[1]))}`;
+  for (let index = 1; index <= count; index += 1) {
+    const current = points[index % count];
+    d += `Q${pt(current)} ${pt(mid(current, points[(index + 1) % count]))}`;
+  }
+  return `${d}Z`;
+}
+
+/** Rectangle aux coins arrondis (`r`, borné à la moitié du plus petit côté),
+ * en chemin SVG : le cadre de l'IA, qui garde sa forme de rectangle. */
+export function roundedRectPath(box: Box, r: number): string {
+  const radius = Math.max(0, Math.min(r, box.width / 2, box.height / 2));
+  const right = box.left + box.width;
+  const bottom = box.top + box.height;
+  const arc = (x: number, y: number) => `A${round(radius)} ${round(radius)} 0 0 1 ${round(x)} ${round(y)}`;
+  return (
+    `M${round(box.left + radius)} ${round(box.top)}` +
+    `H${round(right - radius)}${arc(right, box.top + radius)}` +
+    `V${round(bottom - radius)}${arc(right - radius, bottom)}` +
+    `H${round(box.left + radius)}${arc(box.left, bottom - radius)}` +
+    `V${round(box.top + radius)}${arc(box.left + radius, box.top)}Z`
+  );
 }
