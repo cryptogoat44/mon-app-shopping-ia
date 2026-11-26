@@ -1,6 +1,9 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { HOST_MESSAGE_SOURCE } from "../src/lib/player-host-page";
 import type { FrameSample } from "../src/lib/frame-sample";
+import { decodePngSample } from "../src/lib/png-pixels";
 import {
   BLUR_LIMITS,
   PLAYER_MIN_HEIGHT,
@@ -264,7 +267,36 @@ describe("image floue (retours du build 3 : contrôle de netteté de l'instantan
     expect(isBlurryFrame(frame)).toBe(true);
   });
 
-  it("permis : un plan sombre mais net", () => {
-    expect(isBlurryFrame(sample((x, y) => checker(x, y, 8, 70)))).toBe(false);
+  // Copies de 96 px (gris) des captures du fondateur, rognées sur la vidéo :
+  // 06 (l'image prise floue) et 05 (la vidéo nette, en pause).
+  const real = (name: string) => decodePngSample(new Uint8Array(readFileSync(fileURLToPath(new URL(`./images-nettete/${name}.png`, import.meta.url)))));
+  const darken = (frame: FrameSample, factor: number): FrameSample => ({ ...frame, gray: frame.gray.map((value) => Math.round(value * factor)) });
+
+  it("refusé : la vraie image floue (capture 06), même assombrie", () => {
+    const blurred = real("06-floue");
+    expect(isBlankFrame(blurred)).toBe(false);
+    expect(isBlurryFrame(blurred)).toBe(true);
+    expect(isBlurryFrame(darken(blurred, 0.25))).toBe(true);
+  });
+
+  it("permis : la vraie image nette (capture 05), et la même assombrie à 25 % et 15 % (plan sombre mais net)", () => {
+    const sharp = real("05-nette");
+    expect(isBlurryFrame(sharp)).toBe(false);
+    for (const factor of [0.25, 0.15]) {
+      const dark = darken(sharp, factor);
+      expect(isBlankFrame(dark)).toBe(false);
+      expect(isBlurryFrame(dark)).toBe(false);
+    }
+  });
+
+  it("la netteté ne dépend pas de la luminosité (rapport à la variance des gris)", () => {
+    const sharp = real("05-nette");
+    expect(frameSharpness(darken(sharp, 0.25)) / frameSharpness(sharp)).toBeGreaterThan(0.8);
+    expect(frameSharpness(real("06-floue"))).toBeLessThan(BLUR_LIMITS.minSharpness / 2);
+  });
+
+  it("refusé : une zone unie (rien à juger)", () => {
+    expect(frameSharpness(sample(() => 120))).toBe(0);
+    expect(isBlurryFrame(sample(() => 120))).toBe(true);
   });
 });

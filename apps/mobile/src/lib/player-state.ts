@@ -150,20 +150,26 @@ export function isBlankFrame(sample: FrameSample): boolean {
 // ---- Image floue (retours du build 3) ----
 // Second CONTRÔLE de l'instantané, sur la même petite copie de 96 px : une
 // image floue (capture 06 du fondateur : la vidéo floue, les pictogrammes de
-// TikTok nets) est refusée au lieu d'être envoyée. Netteté = variance du
-// laplacien (sharpness de video-stage1.ts, inchangée), mesurée dans la zone
-// de isBlankFrame seulement : sans la colonne de boutons de TikTok, l'en-tête
-// et le bas (nets même quand la vidéo est floue), ni le bouton central.
+// TikTok nets) est refusée au lieu d'être envoyée. Mesurée dans la zone de
+// isBlankFrame seulement : sans la colonne de boutons de TikTok, l'en-tête et
+// le bas (nets même quand la vidéo est floue), ni le bouton central.
+// Netteté RELATIVE : variance du laplacien (sharpness de video-stage1.ts,
+// inchangée) divisée par la variance des gris de la même zone. La variance du
+// laplacien seule croît comme le carré du contraste : un plan net mais sombre
+// (soirée, intérieur) mesurait moins que la capture floue 06 et était refusé.
+// Le rapport ne dépend pas de la luminosité.
 
 /** Seuil de départ, À CALIBRER sur l'iPhone (journal « [player] netteté » en
- * développement) ; repères mesurés sur des copies de 96 px : ≈ 36 flou,
- * ≈ 1 640 net. */
-export const BLUR_LIMITS = { minSharpness: 150 } as const;
+ * développement) ; repères mesurés sur des copies de 96 px des captures du
+ * fondateur : 06 floue ≈ 0,04 (0,06 assombrie) ; 05 nette ≈ 0,35 à 0,62, et
+ * autant assombrie à 25 % ou 15 %. */
+export const BLUR_LIMITS = { minSharpness: 0.1 } as const;
 
-/** Netteté de la zone examinée : les pixels du rectangle BLANK_ZONE recopiés
- * dans un nouvel échantillon, ceux de BLANK_HOLE remplacés par la moyenne de
- * la zone (pour ne pas créer de bords). Exportée pour le journal de
- * développement (calibrage). */
+/** Netteté relative de la zone examinée : les pixels du rectangle BLANK_ZONE
+ * recopiés dans un nouvel échantillon, ceux de BLANK_HOLE remplacés par la
+ * moyenne de la zone (pour ne pas créer de bords) ; variance du laplacien
+ * divisée par la variance des gris. Zone unie : 0. Exportée pour le journal
+ * de développement (calibrage). */
 export function frameSharpness(sample: FrameSample): number {
   if (sample.width < 3 || sample.height < 3) return 0;
   const left = Math.floor(BLANK_ZONE.left * sample.width);
@@ -185,15 +191,23 @@ export function frameSharpness(sample: FrameSample): number {
   }
   const mean = count > 0 ? Math.round(sum / count) : 0;
   const gray = new Uint8Array(width * height);
+  let graySum = 0;
+  let graySquares = 0;
   for (let y = top; y < bottom; y += 1) {
     for (let x = left; x < right; x += 1) {
-      gray[(y - top) * width + (x - left)] = isHole(x, y) ? mean : (sample.gray[y * sample.width + x] ?? 0);
+      const value = isHole(x, y) ? mean : (sample.gray[y * sample.width + x] ?? 0);
+      gray[(y - top) * width + (x - left)] = value;
+      graySum += value;
+      graySquares += value * value;
     }
   }
-  return sharpness({ gray, width, height, colors: [] });
+  const grayMean = graySum / gray.length;
+  const grayVariance = graySquares / gray.length - grayMean * grayMean;
+  if (grayVariance < 1) return 0;
+  return sharpness({ gray, width, height, colors: [] }) / grayVariance;
 }
 
-/** Image floue : netteté de la zone sous BLUR_LIMITS.minSharpness. */
+/** Image floue : netteté relative de la zone sous BLUR_LIMITS.minSharpness. */
 export function isBlurryFrame(sample: FrameSample): boolean {
   return frameSharpness(sample) < BLUR_LIMITS.minSharpness;
 }
