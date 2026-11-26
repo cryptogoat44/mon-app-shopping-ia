@@ -168,12 +168,20 @@ describe("le lecteur : actions visibles, barre de lecture sous la vidéo", () =>
 
   it("phrase du serveur et demande au serveur lisent le même fait : une durée arrivée du lecteur rechargé", () => {
     const screen = code(SCREEN);
-    // Permis : la demande exige la durée (gotDuration, posée avec progress) et le temps est remis à zéro à chaque lecteur.
-    expect(screen).toContain("const askServer = video !== null && time !== null && gotDuration.current && shouldAskServer(");
+    // Permis : la demande exige la durée affichée AU TOUCHER (progress, celle de la phrase), lue avant l'attente de la pause,
+    // et le temps est remis à zéro à chaque lecteur.
+    const start = screen.indexOf("async function spotMoment() {");
+    const body = screen.slice(start, screen.indexOf("const askServer", start));
+    expect(body).toMatch(/if \(!platform \|\| busy\) return;\s*(\/\/[^\n]*\n\s*)*const hadDuration = progress !== null;/);
+    expect(body.indexOf("const hadDuration = progress !== null;")).toBeLessThan(body.indexOf("await waitForPause();"));
+    expect(screen).toContain("const askServer = video !== null && time !== null && hadDuration && shouldAskServer(");
     expect(screen).toMatch(/gotDuration\.current = false;\s*lastTime\.current = null;/);
     expect(screen).toMatch(/gotDuration\.current = true;\s*setProgress\(\{ currentTime: hostMessage\.currentTime, duration: hostMessage\.duration \}\);/);
     // Refusé : une demande sur le seul temps (un temps de durée 0, ou resté d'un lecteur précédent), phrase d'avant à l'écran.
     expect(screen).not.toContain("const askServer = video !== null && time !== null && shouldAskServer(");
+    // Refusé : la durée relue APRÈS l'attente de la pause (une durée arrivée pendant l'attente ferait demander le serveur
+    // alors que la phrase lue disait « sans téléchargement »).
+    expect(screen).not.toContain("&& gotDuration.current && shouldAskServer(");
   });
 
   it("« Trouver la pièce automatiquement » pendant l'attente de l'image du moment : la demande est abandonnée (rien ne part par-dessus l'analyse)", () => {

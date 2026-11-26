@@ -563,6 +563,9 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
    * sinon le secours (lib/spot-moment.ts). Puis « Entourez la pièce ». */
   async function spotMoment() {
     if (!platform || busy) return;
+    // Décidé au toucher, sur ce que montrait la phrase de confidentialité (progress !== null) : une durée
+    // arrivée PENDANT l'attente de la pause ne fait pas demander l'image au serveur (« sans téléchargement » lu).
+    const hadDuration = progress !== null;
     setMessage(null);
     setBusy("spot");
     AccessibilityInfo.announceForAccessibility(t.player.taking);
@@ -577,8 +580,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
       if (!alive.current) return;
       const time = lastTime.current;
       const video = link;
-      // Même fait que la phrase de confidentialité (progress !== null) : une durée arrivée.
-      const askServer = video !== null && time !== null && gotDuration.current && shouldAskServer({ platform, frame: frameEnabled, lastTime: time });
+      const askServer = video !== null && time !== null && hadDuration && shouldAskServer({ platform, frame: frameEnabled, lastTime: time });
       const tag = frameRef.current ? findNodeHandle(frameRef.current) : null;
       const [snapshotResult, serverResult] = await Promise.allSettled([
         tag === null ? Promise.reject(new Error("no_view")) : snapshotPlayer(tag),
