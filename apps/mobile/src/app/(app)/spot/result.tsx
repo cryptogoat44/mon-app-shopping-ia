@@ -887,7 +887,7 @@ export default function ResultScreen() {
             d'office n'en a pas non plus (sinon elles sont toutes repliées en bas, avec le même texte). */}
         {/* Retours du build 3 (« trop d'espace partout ») : le décompte et l'ordre sur une seule ligne grise. */}
         {result.pieces.length > 0 || wordsLine ? (
-          <Text style={styles.count} numberOfLines={2}>
+          <Text style={styles.count}>
             {[result.pieces.length > 0 ? t.result.count(result.pieces.length, result.query) : null, wordsLine].filter(Boolean).join(" · ")}
           </Text>
         ) : null}

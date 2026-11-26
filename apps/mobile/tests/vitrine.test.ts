@@ -223,8 +223,14 @@ describe("la grande carte et l'écran des résultats, resserrés", () => {
   it("le décompte et l'ordre sur une seule ligne grise", () => {
     expect(screen.match(/style=\{styles\.count\}/g)).toHaveLength(1);
     expect(screen).toContain('wordsLine].filter(Boolean).join(" · ")');
-    expect(screen).toContain("<Text style={styles.count} numberOfLines={2}>");
     expect(styleOf(screen, "count")).toContain("marginBottom: space.xs");
+  });
+
+  it("refusé : la note d'ordre coupée par une limite de lignes (requête longue, petit écran, grand texte)", () => {
+    const tag = screen.slice(screen.indexOf("<Text style={styles.count}"), screen.indexOf(">", screen.indexOf("<Text style={styles.count}")) + 1);
+    expect(tag).not.toContain("numberOfLines");
+    // Permis : le décompte et la note restent dans le même texte, la note après « · ».
+    expect(tag).toBe("<Text style={styles.count}>");
   });
 
   it("rythme de la grande carte et de la grille", () => {
