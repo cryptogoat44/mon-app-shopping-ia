@@ -170,6 +170,13 @@ export function isBlankFrame(sample: FrameSample): boolean {
 // build 3). Limite assumée : 06 avec une ligne de sous-titre nette passe.
 // Aucune tuile avec un vrai bord (gros plan d'un tissu uni ou très fin, que
 // la copie de 96 px rend lisse) : rien à juger, l'image n'est PAS refusée.
+// Limite connue de la mesure : un tissu uni à plis doux (satin, maille) d'un
+// contraste ordinaire, net, mesure comme une image floue (≈ 0,02 à 0,37,
+// autant que 06), et aucun seuil ne les sépare. Le refus pour flou n'est donc
+// appliqué qu'à l'instantané de TikTok, où le fond flou (06) a été vu
+// (player-snapshot.ts, blurCheckApplies) ; pour Instagram, seul le contrôle
+// noir ou blanc. Sur TikTok, quand l'image du serveur manque, un tel gros
+// plan sans aucun bord peut encore être refusé (décision du fondateur).
 
 /** Seuil de départ, À CALIBRER sur l'iPhone (journal « [player] netteté » en
  * développement) ; repères mesurés sur des copies de 96 px : capture 06 floue
@@ -200,12 +207,13 @@ const SHARPNESS_TILES = 3;
  * BLANK_HOLE, sans les bandes noires du bord) : score de la tuile la plus
  * nette parmi celles qui ont des bords. Seuls comptent les pixels dont le pixel et ses quatre voisins
  * sont dans la zone et hors du trou (aucun bord inventé au bord du trou ni
- * lu dans la colonne de TikTok). Aucune tuile avec un vrai bord : null (rien
- * à juger). Image trop petite : 0. Exportée pour le journal de
+ * lu dans la colonne de TikTok). Aucune tuile avec un vrai bord, image trop
+ * petite, ou trop peu de lignes une fois les bandes noires retirées : null
+ * (rien à juger, pas refusée). Exportée pour le journal de
  * développement (calibrage). */
 export function frameSharpness(sample: FrameSample): number | null {
   const { width, height, gray } = sample;
-  if (width < 3 || height < 3) return 0;
+  if (width < 3 || height < 3) return null;
   let left = Math.floor(BLANK_ZONE.left * width);
   let right = Math.ceil(BLANK_ZONE.right * width);
   let top = Math.floor(BLANK_ZONE.top * height);
@@ -222,7 +230,8 @@ export function frameSharpness(sample: FrameSample): number | null {
   while (top < bottom && rowBlack(bottom - 1)) bottom -= 1;
   if (top > zoneTop) top += SHARPNESS_BAND_MARGIN;
   if (bottom < zoneBottom) bottom -= SHARPNESS_BAND_MARGIN;
-  if (right - left < 3 || bottom - top < 3) return 0;
+  // Plan sombre dont seule une mince bande est claire (fenêtres éclairées) : rien à juger, pas flou.
+  if (right - left < 3 || bottom - top < 3) return null;
   const isHole = (x: number, y: number) => inside((x + 0.5) / width, (y + 0.5) / height, BLANK_HOLE);
   const tileScores: number[] = [];
   for (let ty = 0; ty < SHARPNESS_TILES; ty += 1) {
@@ -283,6 +292,13 @@ export function frameSharpness(sample: FrameSample): number | null {
 export function isBlurryFrame(sample: FrameSample): boolean {
   const score = frameSharpness(sample);
   return score !== null && score < BLUR_LIMITS.minSharpness;
+}
+
+/** Le refus pour flou ne vaut que pour l'instantané du lecteur TikTok (fond
+ * flou de la capture 06) ; Instagram : seul le contrôle noir ou blanc (un
+ * gros plan net d'un tissu uni à plis doux y mesurerait comme flou). */
+export function blurCheckApplies(platform: PlayerPlatform): boolean {
+  return platform === "tiktok";
 }
 
 // ---- Commandes au lecteur TikTok (relayées par la page hôte) ----

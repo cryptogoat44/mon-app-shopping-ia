@@ -583,7 +583,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
       const askServer = video !== null && time !== null && hadDuration && shouldAskServer({ platform, frame: frameEnabled, lastTime: time });
       const tag = frameRef.current ? findNodeHandle(frameRef.current) : null;
       const [snapshotResult, serverResult] = await Promise.allSettled([
-        tag === null ? Promise.reject(new Error("no_view")) : snapshotPlayer(tag),
+        tag === null ? Promise.reject(new Error("no_view")) : snapshotPlayer(tag, platform),
         askServer && video && time !== null ? fetchVideoLinkFrame({ url: video.canonicalUrl, atSeconds: frameSeconds(time) }, controller.signal) : Promise.resolve(null),
       ]);
       shot = snapshotResult.status === "fulfilled" ? snapshotResult.value : null;

@@ -93,10 +93,10 @@ describe("lecteur-01 / reception-03 : instantanés du lecteur", () => {
 
   it("taille de l'instantané illisible : le fichier est effacé avant l'erreur (son adresse serait perdue)", async () => {
     getSize.mockImplementationOnce((_uri, _ok, fail) => fail(new Error("illisible")));
-    await expect(snapshotPlayer(7)).rejects.toThrow("illisible");
+    await expect(snapshotPlayer(7, "tiktok")).rejects.toThrow("illisible");
     expect(discardLocalFile).toHaveBeenCalledWith(`${disk.CACHE}lecteur-instantane/lecteur-instantane-1.jpg`);
     // Taille lue, image non vide : l'instantané n'est pas effacé (seule la petite copie du contrôle l'est), l'adresse est rendue.
-    await expect(snapshotPlayer(7)).resolves.toEqual({ uri: `${disk.CACHE}lecteur-instantane/lecteur-instantane-1.jpg`, width: 1600, height: 900 });
+    await expect(snapshotPlayer(7, "tiktok")).resolves.toEqual({ uri: `${disk.CACHE}lecteur-instantane/lecteur-instantane-1.jpg`, width: 1600, height: 900 });
     expect(discardLocalFile.mock.calls.map(([uri]) => uri)).toEqual([`${disk.CACHE}lecteur-instantane/lecteur-instantane-1.jpg`, smallCopy.uri]);
   });
 
@@ -105,17 +105,17 @@ describe("lecteur-01 / reception-03 : instantanés du lecteur", () => {
     const real = smallCopy.base64;
     try {
       smallCopy.base64 = grayPngBase64(96, 171, (x, y) => (x + y) % 20);
-      await expect(snapshotPlayer(7)).rejects.toThrow("blank_frame");
+      await expect(snapshotPlayer(7, "tiktok")).rejects.toThrow("blank_frame");
       expect(discardLocalFile).toHaveBeenCalledWith(snapshot);
       discardLocalFile.mockClear();
       smallCopy.base64 = "";
-      await expect(snapshotPlayer(7)).rejects.toThrow("blank_frame");
+      await expect(snapshotPlayer(7, "tiktok")).rejects.toThrow("blank_frame");
       expect(discardLocalFile).toHaveBeenCalledWith(snapshot);
     } finally {
       smallCopy.base64 = real;
     }
     // Permis : une vraie image passe.
-    await expect(snapshotPlayer(7)).resolves.toMatchObject({ uri: snapshot });
+    await expect(snapshotPlayer(7, "tiktok")).resolves.toMatchObject({ uri: snapshot });
     // Retours du build 3 : toute erreur de l'instantané passe par chooseSpotImage (lib/spot-moment.ts) ; sans
     // image du serveur, le même chemin de secours (snapshot_failed, ou snapshot_blurry pour une image floue).
     const screen = code("src/app/(app)/spot/lecteur.tsx");
@@ -130,14 +130,36 @@ describe("lecteur-01 / reception-03 : instantanés du lecteur", () => {
       // Des bords étalés partout (larges ondulations), ni noir ni blanc : flou.
       // (Un dégradé sans aucun vrai bord n'a rien à juger : il passe.)
       smallCopy.base64 = grayPngBase64(96, 171, (x, y) => Math.round(120 + 70 * Math.sin(x / 8) * Math.cos(y / 11)));
-      await expect(snapshotPlayer(7)).rejects.toThrow("blurry_frame");
+      await expect(snapshotPlayer(7, "tiktok")).rejects.toThrow("blurry_frame");
       expect(discardLocalFile).toHaveBeenCalledWith(snapshot);
     } finally {
       smallCopy.base64 = real;
     }
     discardLocalFile.mockClear();
-    await expect(snapshotPlayer(7)).resolves.toMatchObject({ uri: snapshot });
+    await expect(snapshotPlayer(7, "tiktok")).resolves.toMatchObject({ uri: snapshot });
     expect(discardLocalFile).not.toHaveBeenCalledWith(snapshot);
+  });
+
+  it("instantané d'Instagram : une image floue n'est pas refusée pour flou (seul le contrôle noir ou blanc) ; TikTok la refuse", async () => {
+    const snapshot = `${disk.CACHE}lecteur-instantane/lecteur-instantane-1.jpg`;
+    const real = smallCopy.base64;
+    try {
+      // Gros plan net d'un satin uni à plis doux (amplitude 15 à 30) : la mesure le prend pour flou.
+      for (const amplitude of [15, 30]) {
+        smallCopy.base64 = grayPngBase64(96, 171, (x, y) => Math.round(110 + amplitude * Math.sin((2 * Math.PI * (x + 0.4 * y)) / 22)));
+        // Permis : Instagram, l'instantané est la seule voie.
+        await expect(snapshotPlayer(7, "instagram")).resolves.toMatchObject({ uri: snapshot });
+        // Refusé : TikTok (fond flou de la capture 06), limite assumée quand l'image du serveur manque.
+        await expect(snapshotPlayer(7, "tiktok")).rejects.toThrow("blurry_frame");
+      }
+      // Instagram garde le contrôle noir ou blanc.
+      smallCopy.base64 = grayPngBase64(96, 171, (x, y) => (x + y) % 20);
+      await expect(snapshotPlayer(7, "instagram")).rejects.toThrow("blank_frame");
+    } finally {
+      smallCopy.base64 = real;
+    }
+    // L'écran passe la plateforme du lien à l'instantané.
+    expect(code("src/app/(app)/spot/lecteur.tsx")).toContain("snapshotPlayer(tag, platform)");
   });
 
   it("« Entourez la pièce » quitté : le brouillon dont l'image n'est pas à garder est abandonné (effet de démontage)", () => {

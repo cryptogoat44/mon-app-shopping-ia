@@ -6,6 +6,7 @@ import type { FrameSample } from "../src/lib/frame-sample";
 import { decodePngSample } from "../src/lib/png-pixels";
 import {
   BLUR_LIMITS,
+  blurCheckApplies,
   CONTROLS_MIN_WIDTH,
   controlsRowWidth,
   PLAYER_MIN_HEIGHT,
@@ -450,6 +451,57 @@ describe("image floue (retours du build 3 : contrôle de netteté de l'instantan
     expect(isBlankFrame(plainCoat)).toBe(false);
     expect(frameSharpness(plainCoat)).toBeNull();
     expect(isBlurryFrame(plainCoat)).toBe(false);
+  });
+
+  // Plan de nuit : fond sombre (8 à 20) et une seule mince bande de fenêtres
+  // éclairées, nettes, à 55 % de la hauteur.
+  const litStrip = (rows: number) =>
+    sample((x, y) => {
+      const top = Math.floor(0.55 * H);
+      if (y >= top && y < top + rows) return (x >> 1) % 2 ? 200 : 15;
+      return 8 + ((x * 7 + y * 3) % 13);
+    });
+
+  it("permis : un plan de nuit dont seule une mince bande est éclairée (4 ou 6 lignes) : rien à juger, pas refusé", () => {
+    for (const rows of [4, 6]) {
+      const frame = litStrip(rows);
+      expect(isBlankFrame(frame)).toBe(false);
+      expect(frameSharpness(frame)).toBeNull();
+      expect(isBlurryFrame(frame)).toBe(false);
+    }
+  });
+
+  it("refusé : la même bande éclairée mais floue et plus haute reste jugée (le null ne vaut que sans lignes à juger)", () => {
+    const frame = sample((x, y) => {
+      const top = Math.floor(0.4 * H);
+      if (y >= top && y < top + 40) return 110 + 60 * Math.sin(x / 8) * Math.cos(y / 11);
+      return 8 + ((x * 7 + y * 3) % 13);
+    });
+    expect(frameSharpness(frame)).not.toBeNull();
+    expect(isBlurryFrame(frame)).toBe(true);
+  });
+
+  it("le code rend null (rien à juger) et non 0 quand il ne reste pas assez de lignes", () => {
+    const source = readFileSync(fileURLToPath(new URL("../src/lib/player-state.ts", import.meta.url)), "utf8");
+    expect(source).toContain("if (right - left < 3 || bottom - top < 3) return null;");
+    expect(source).toContain("if (width < 3 || height < 3) return null;");
+    expect(source).not.toContain("bottom - top < 3) return 0;");
+  });
+
+  // Limite connue : un satin uni à plis doux (amplitude 15 à 30), net, mesure
+  // comme flou ; le refus pour flou ne vaut donc que pour TikTok.
+  const satin = (amplitude: number) => sample((x, y) => 110 + amplitude * Math.sin((2 * Math.PI * (x + 0.4 * y)) / 22));
+
+  it("limite connue : un satin net à plis doux est jugé flou par la mesure (amplitude 15 à 30)", () => {
+    for (const amplitude of [15, 30]) {
+      expect(isBlankFrame(satin(amplitude))).toBe(false);
+      expect(isBlurryFrame(satin(amplitude))).toBe(true);
+    }
+  });
+
+  it("refus pour flou : appliqué à TikTok (fond flou vu, capture 06), pas à Instagram (seule voie, le doute profite au membre)", () => {
+    expect(blurCheckApplies("tiktok")).toBe(true);
+    expect(blurCheckApplies("instagram")).toBe(false);
   });
 
   it("refusé : rien à juger ne vaut que sans aucun bord — l'image floue 06 a des bords mesurables, elle reste refusée", () => {
