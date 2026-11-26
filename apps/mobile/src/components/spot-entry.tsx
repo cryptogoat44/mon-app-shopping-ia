@@ -98,13 +98,14 @@ export function LatestVideoCard({
   const canExpand = !(tooLong && video.durationMs !== null);
   const open = expanded && canExpand;
   if (reduced) {
-    // Une seule ligne, toute touchable ; « Rouvrir » n'est que son libellé visible.
+    // Une seule ligne, toute touchable ; « Rouvrir », son seul geste visible, est
+    // aussi dans son nom (Commande vocale : « Toucher Rouvrir »).
     return (
       <Pressable
         style={styles.slim}
         onPress={onReveal}
         accessibilityRole="button"
-        accessibilityLabel={title}
+        accessibilityLabel={`${title}, ${t.spotter.latestVideoShow}`}
         accessibilityHint={t.spotter.latestVideoReveal}
         accessibilityState={{ expanded: false }}
       >

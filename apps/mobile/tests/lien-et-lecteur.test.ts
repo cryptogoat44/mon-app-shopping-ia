@@ -180,7 +180,9 @@ describe("carte « Votre dernière vidéo » : réduire au lieu de supprimer (re
     const slim = cardFn.slice(cardFn.indexOf("if (reduced) {"), cardFn.indexOf("return (\n    <View style={styles.card}>"));
     expect(slim).toContain("onPress={onReveal}");
     expect(slim).toContain('accessibilityRole="button"');
-    expect(slim).toContain("accessibilityLabel={title}");
+    // Le mot visible « Rouvrir » est dans le nom (WCAG 2.5.3) ; le titre seul est refusé.
+    expect(slim).toContain("accessibilityLabel={`${title}, ${t.spotter.latestVideoShow}`}");
+    expect(slim).not.toContain("accessibilityLabel={title}");
     expect(slim).toContain("accessibilityHint={t.spotter.latestVideoReveal}");
     expect(slim).toContain("accessibilityState={{ expanded: false }}");
     expect(slim).toContain("numberOfLines={1}");
