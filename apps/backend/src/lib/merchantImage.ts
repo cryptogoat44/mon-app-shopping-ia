@@ -22,10 +22,10 @@
 //   fondateur, 26 novembre 2026), à n'allumer qu'avec la politique de
 //   confidentialité mise à jour. Juste après le rangement d'une section
 //   « boutiques » ou « vos mots » (routes/searches.ts), ses 8 premières
-//   propositions par rang, dans l'ordre d'enregistrement (aucune boutique
-//   favorisée ; pas toujours l'ordre affiché : searchRows/shopTrust remontent
-//   la boutique de la marque et les boutiques connues), jamais les
-//   propositions Lens (elles ont déjà leur image) ni une page de Google.
+//   cartes telles qu'elles sont affichées (l'ordre de la relecture,
+//   displayedSection dans lib/searchRows.ts : aucune règle d'ordre nouvelle),
+//   jamais les propositions Lens (elles ont déjà leur image) ni une page de
+//   Google.
 //   Un POOL à part de la file : 3 lectures à la fois, une seule à la fois par
 //   boutique (nom d'hôte), 16 s au total par section (ce qui n'a pas commencé
 //   est abandonné), 30 lectures par minute pour tout le serveur (au-delà, le
@@ -531,7 +531,7 @@ async function enqueueKeptPieces(fastify: FastifyInstance, log: FastifyBaseLogge
 // retours du build 3, décision du fondateur) : à part de la file ci-dessus,
 // un seul pour tout le serveur.
 
-/** Les premières propositions d'une section, dans l'ordre d'enregistrement (rang). */
+/** Les premières cartes d'une section, dans l'ordre affiché (reçu tel quel de routes/searches.ts). */
 export const RESULT_IMAGES_PER_SECTION = 8;
 /** Lectures en même temps au plus (toutes recherches confondues). */
 export const RESULT_IMAGE_CONCURRENCY = 3;
@@ -663,17 +663,20 @@ export function upgradeResultMerchantImages(
 }
 
 /** Résultats d'une recherche (MERCHANT_IMAGE_RESULTS_ENABLED) : les 8
- * premières propositions d'une section "shopping" ou "words" qui viennent
- * d'être rangées. Après la réponse ; ne rejette jamais. */
+ * premières cartes affichées d'une section "shopping" ou "words" qui vient
+ * d'être rangée (`rows` dans l'ordre affiché ; une fonction : calculé
+ * seulement interrupteur allumé, et jamais un échec du rangement). Après la
+ * réponse ; ne rejette jamais. */
 export function queueResultMerchantImages(
   fastify: FastifyInstance,
   log: FastifyBaseLogger,
-  rows: readonly { id: string; merchant_url: string | null }[],
+  rows: readonly { id: string; merchant_url: string | null }[] | (() => readonly { id: string; merchant_url: string | null }[]),
   resolver?: Resolver
 ): void {
   try {
     if (!merchantImageResultsEnabled()) return;
-    const first = rows.slice(0, RESULT_IMAGES_PER_SECTION).map((row) => ({ id: row.id, merchant_url: row.merchant_url }));
+    const first = (typeof rows === "function" ? rows() : rows)
+      .slice(0, RESULT_IMAGES_PER_SECTION).map((row) => ({ id: row.id, merchant_url: row.merchant_url }));
     if (first.length === 0) return;
     setImmediate(() => {
       upgradeResultMerchantImages(fastify, log, first, resolver)
