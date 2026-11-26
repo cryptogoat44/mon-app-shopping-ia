@@ -301,7 +301,12 @@ export default function WishlistItemScreen() {
                   <WishBoughtButton item={item} style={styles.pairButton} onAdded={() => setItem((current) => (current ? { ...current, inVault: true } : current))} />
                 </View>
               ) : null}
-              {bellVisible(alerts, alertState, item.inVault) ? <WishAlertButton title={item.title} state={alertState} onPress={() => setAlertSheet(true)} style={pairItem} /> : null}
+              {/* Dans sa propre vue, comme « Je l'ai achetée » : la marge intérieure du bouton ne compte pas dans le partage (site). */}
+              {bellVisible(alerts, alertState, item.inVault) ? (
+                <View style={pairItem}>
+                  <WishAlertButton title={item.title} state={alertState} onPress={() => setAlertSheet(true)} style={styles.pairButton} />
+                </View>
+              ) : null}
             </View>
           ) : null}
           {/* « Plus disponible ? » (discret), centré juste sous la rangée, pour une pièce reconnue ; jamais sous « Plus ». */}

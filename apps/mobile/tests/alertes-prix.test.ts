@@ -161,7 +161,8 @@ describe("tout est caché sans les alertes sur le serveur (migration 0036 absent
   });
 
   it("les écrans ne montrent rien sans `available` (cloche, feuilles, interrupteur, « Plus disponible »)", () => {
-    expect(envie).toContain("{bellVisible(alerts, alertState, item.inVault) ? <WishAlertButton");
+    // Lot « fidélité aux maquettes » : la cloche dans sa moitié de rangée, toujours sous la même condition.
+    expect(envie).toMatch(/\{bellVisible\(alerts, alertState, item\.inVault\) \? \(\s*<View style=\{pairItem\}>\s*<WishAlertButton/);
     expect(envie).toContain("{canReportWish(alerts, alertState) ? (");
     expect(envie).toContain("{alerts.available ? (");
     expect(envie).toContain("setAlertState(status.available ? await fetchWishAlert(id) : null);");
@@ -250,7 +251,7 @@ describe("la cloche et sa feuille", () => {
 
   it("une cloche sur la fiche et sur chaque envie des listes (Envies et vos collections), zone à part", () => {
     // Lot « fidélité aux maquettes » : posée à côté de « Je l'ai achetée », la moitié de la rangée.
-    expect(envie).toContain('<WishAlertButton title={item.title} state={alertState} onPress={() => setAlertSheet(true)} style={pairItem} />');
+    expect(envie).toContain('<WishAlertButton title={item.title} state={alertState} onPress={() => setAlertSheet(true)} style={styles.pairButton} />');
     expect(envie).toContain("<WishAlertSheet wish={{ id: item.id, title: item.title }} state={alertState} visible={alertSheet}");
     // Liste : la même grille sert à « Toutes » et aux collections (getCollectionWishlist).
     expect(panel).toContain("selectedKey ? getCollectionWishlist(selectedKey, cursor) : getWishlist(cursor)");
