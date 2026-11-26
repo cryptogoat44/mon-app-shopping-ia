@@ -200,7 +200,9 @@ describe("le lecteur : actions visibles, barre de lecture sous la vidéo", () =>
 
   it("vidéo et fond de la première fois arrondis au jeton radius.piece (14), courbe continue", () => {
     expect(code("src/components/embedded-player.tsx")).toContain('frame: { backgroundColor: color.nuit, overflow: "hidden", borderRadius: radius.piece, borderCurve: "continuous" },');
-    expect(code(SCREEN)).toContain('poster: { backgroundColor: color.nuit, borderRadius: radius.piece, borderCurve: "continuous"');
+    // Lot « fidélité aux maquettes » : le fond de la première fois prend la teinte du cadre (sur nuit, il était invisible), même rayon.
+    expect(code(SCREEN)).toMatch(/poster: \{\s+backgroundColor: color\.nuitCadre,\s+borderWidth: StyleSheet\.hairlineWidth,\s+borderColor: color\.nuitFilet,\s+borderRadius: radius\.piece,\s+borderCurve: "continuous"/);
+    expect(code(SCREEN)).not.toContain("poster: { backgroundColor: color.nuit,");
     expect(read("src/theme/tokens.ts")).toMatch(/^\s+piece: 14,/m);
     // Assemblage : plus de constante locale en double du jeton.
     expect(read("src/components/embedded-player.tsx")).not.toMatch(/VIDEO_RADIUS|borderRadius: 14\b/);

@@ -1000,7 +1000,7 @@ const styles = themedStyles(() => ({
   captionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.sm, alignSelf: "stretch", minHeight: 44 },
   caption: { fontSize: font.caption, color: color.acier, flexShrink: 1 },
   link: { minHeight: 44, justifyContent: "center" },
-  linkLabel: { ...lienSouligne, fontSize: font.caption, color: color.vert, fontWeight: "600" },
+  linkLabel: { ...lienSouligne, fontSize: font.caption, color: color.vert },
   notice: { fontSize: font.caption, color: color.acier, lineHeight: 18, alignSelf: "stretch", textAlign: "center" },
   primary: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 52, flexDirection: "row", gap: space.sm, alignItems: "center", justifyContent: "center", paddingHorizontal: space.md, alignSelf: "stretch" },
   primaryDisabled: { backgroundColor: color.inactif },
@@ -1013,7 +1013,16 @@ const styles = themedStyles(() => ({
   keptNote: { fontSize: font.caption, color: color.acier, lineHeight: 18, alignSelf: "stretch" },
   // Retours du build 3 : zone d'actions mesurée sous la vidéo, et la toute première fois.
   actions: { alignSelf: "stretch", alignItems: "center", gap: space.sm },
-  poster: { backgroundColor: color.nuit, borderRadius: radius.piece, borderCurve: "continuous", alignItems: "center", justifyContent: "center" },
+  // Première fois, sans aucune image (rien n'est chargé chez TikTok avant le premier appui) : le cadre 9:16 se détache du fond (lot « fidélité aux maquettes »).
+  poster: {
+    backgroundColor: color.nuitCadre,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: color.nuitFilet,
+    borderRadius: radius.piece,
+    borderCurve: "continuous",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   playDisc: {
     width: 76,
     height: 76,
