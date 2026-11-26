@@ -68,9 +68,9 @@ export async function loadLatestVideoReduced(userId: string): Promise<boolean> {
   return parseLatestVideoReduced(await AsyncStorage.getItem(latestVideoReducedKey(userId)));
 }
 
+/** « 1 » repliée, « 0 » dépliée : absente vaut repliée (le défaut). */
 export async function saveLatestVideoReduced(userId: string, reduced: boolean): Promise<void> {
-  if (reduced) await AsyncStorage.setItem(latestVideoReducedKey(userId), "1");
-  else await AsyncStorage.removeItem(latestVideoReducedKey(userId));
+  await AsyncStorage.setItem(latestVideoReducedKey(userId), reduced ? "1" : "0");
 }
 
 /** Adresse du fichier, au « Lancer » (téléchargé depuis iCloud si besoin). */

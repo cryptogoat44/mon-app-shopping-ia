@@ -197,7 +197,14 @@ describe("carte « Votre dernière vidéo » : réduire au lieu de supprimer (re
     expect(card).toMatch(/slim: \{[^}]*borderColor: color\.filet,/);
     expect(card).toContain("slimThumb: { width: 32, height: 32, borderRadius: radius.pieceThumb,");
     expect(card).toContain('slimLabel: { flex: 1, fontSize: font.secondary, color: color.encre, fontVariant: ["tabular-nums"] }');
-    expect(card).toContain("slimLink: { ...lienSouligne,");
+    // Lot « fidélité aux maquettes » : deux textes, le titre en 500 puis la durée en acier ; jamais de « @pseudo ».
+    expect(slim).toContain("<Text style={styles.slimTitle}>{t.spotter.latestVideo}</Text>");
+    expect(slim).toContain("<Text style={styles.slimDuration}>{` · ${duration}`}</Text>");
+    expect(card).toContain('slimTitle: { fontWeight: "500" }');
+    expect(card).toContain("slimDuration: { color: color.acier }");
+    expect(slim).not.toContain("@");
+    expect(card).toContain('slimLink: { ...lienSouligne, fontSize: font.caption, color: color.vert, fontWeight: "400" }');
+    expect(card).not.toMatch(/slimLink: \{[^}]*fontWeight: "600"/);
   });
 
   it("refusé : réduire éteint la proposition (« no ») ; permis : la seule écriture de « no » est la réponse à la question, et Réglages", () => {
@@ -214,7 +221,11 @@ describe("carte « Votre dernière vidéo » : réduire au lieu de supprimer (re
 
   it("la forme retenue est lue AVEC l'état, avant d'afficher (jamais grande puis petite) ; un geste pendant la relecture l'emporte", () => {
     const load = hook.slice(hook.indexOf("const load = useCallback("), hook.indexOf("const refresh = useCallback("));
-    expect(load).toContain("await Promise.all([loadLatestVideo(userId), userId ? loadLatestVideoReduced(userId).catch(() => false) : Promise.resolve(false)])");
+    // Lot « fidélité aux maquettes » : repliée par défaut, chemins de repli compris.
+    expect(load).toContain("await Promise.all([loadLatestVideo(userId), userId ? loadLatestVideoReduced(userId).catch(() => true) : Promise.resolve(true)])");
+    expect(load).not.toContain(".catch(() => false)");
+    expect(hook).toContain("const [reduced, setReduced] = useState(true);");
+    expect(hook).not.toContain("const [reduced, setReduced] = useState(false);");
     expect(load.indexOf("setReduced(isReduced)")).toBeLessThan(load.indexOf("setState(next)"));
     expect(load).toContain("if (touches === reducedTouches.current) setReduced(isReduced);");
     // Retour sur Spotter : la carte repliée (champ des mots fermé), sa forme gardée.

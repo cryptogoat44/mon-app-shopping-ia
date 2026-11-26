@@ -99,7 +99,6 @@ export const en: Catalog = {
     title: "Spotter",
     close: "Close",
     lead: "Find a piece you saw in a video or a photo.",
-    linkPlaceholder: "Paste or type a link",
     paste: "Paste",
     pasteEmpty: "There's no link on your clipboard.",
     pasteDenied: "Paste the link directly into the field.",
@@ -115,9 +114,9 @@ export const en: Catalog = {
       `${BRAND} can show your gallery's latest video here, ready to be analyzed. iOS will then ask for access to your photos. The video stays on your iPhone: only a few frames leave it, when you tap “Search”.`,
     latestVideoYes: "Yes, suggest it",
     latestVideoNo: "No thanks",
-    latestVideoAskNote: "Your answer changes nothing else: “Add a video” is still available. You can change this anytime in Settings.",
+    latestVideoAskNote: "Your answer changes nothing else: “Video” is still available. You can change this anytime in Settings.",
     latestVideoNoAccess:
-      `Without full access to your photos, ${BRAND} can't find your latest video: choose it with “Add a video”. Access can be changed in the iPhone Settings.`,
+      `Without full access to your photos, ${BRAND} can't find your latest video: choose it with “Video”. Access can be changed in the iPhone Settings.`,
     latestVideoEmpty: "No video in your gallery yet: the most recent one will appear here.",
     latestVideoChoiceFailed: "Your answer couldn't be saved. Please try again.",
     recentlySpotted: "Recently spotted",
@@ -147,6 +146,10 @@ export const en: Catalog = {
     latestVideoReduce: "Collapse the “Your latest video” card",
     latestVideoReveal: "Shows the full card",
     latestVideoShow: "Show",
+    // "Matching the mockups" batch: short visible tile labels (VoiceOver still reads the full sentence).
+    tileVideo: "Video",
+    tilePhoto: "Photo",
+    tileCamera: "Camera",
   },
   video: {
     title: "Choose the frame",
@@ -770,7 +773,7 @@ export const en: Catalog = {
     affiliateMention: "(affiliate link)",
   },
   retrouverPieces: {
-    recentLead: "Reopening a result doesn't count toward your daily searches.",
+    recentLead: "Reopening doesn't count toward your daily searches.",
     recentLoadError: "Unable to show your recent searches. Check your connection, then try again.",
     today: "Today",
     yesterday: "Yesterday",
@@ -1300,8 +1303,8 @@ export const en: Catalog = {
     latestVideoSwitchLabel: "Automatically suggest my latest video in Spotter",
     latestVideoOn: "On: Spotter suggests your gallery's latest video, ready to be analyzed.",
     latestVideoOnNoAccess:
-      `On, but ${BRAND} doesn't have full access to your photos: your latest video can't be found. You choose it with “Add a video”.`,
-    latestVideoOff: `Off: you choose the video with “Add a video”, without ${BRAND} reading your gallery.`,
+      `On, but ${BRAND} doesn't have full access to your photos: your latest video can't be found. You choose it with “Video” on Spotter.`,
+    latestVideoOff: `Off: you choose the video with “Video” on Spotter, without ${BRAND} reading your gallery.`,
     latestVideoAccessLeft: `${BRAND} still has access to your photos, without using it: you can remove it in the iPhone Settings.`,
     latestVideoOpenSettings: "Open iPhone Settings",
     latestVideoFailed: "Your choice couldn't be saved. Please try again.",

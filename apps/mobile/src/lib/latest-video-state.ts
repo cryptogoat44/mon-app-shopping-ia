@@ -47,8 +47,10 @@ export function latestVideoReducedKey(userId: string): string {
   return `spotto.latest-video-reduced.${userId}`;
 }
 
+/** Lot « fidélité aux maquettes » (décision 17) : repliée par défaut. Absente
+ * (ou illisible) : repliée ; « 0 » : dépliée par le membre ; « 1 » : repliée. */
 export function parseLatestVideoReduced(value: string | null): boolean {
-  return value === "1";
+  return value !== "0";
 }
 
 /** Réponse d'iOS → accès. Seul « all » est un accès complet ; un accès

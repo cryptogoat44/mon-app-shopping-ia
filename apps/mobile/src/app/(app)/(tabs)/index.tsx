@@ -45,7 +45,8 @@ function useLatestVideo() {
   const [answer, setAnswer] = useState<"idle" | "saving" | "failed" | "answered">("idle");
   // Retours du build 3, point 3 : la carte se replie en une ligne fine au lieu
   // de disparaître ; la forme est retenue sur l'appareil, par compte.
-  const [reduced, setReduced] = useState(false);
+  // Lot « fidélité aux maquettes » (décision 17) : repliée par défaut, la ligne fine de la maquette.
+  const [reduced, setReduced] = useState(true);
   // Un geste pendant une relecture l'emporte sur la valeur relue (lue avant lui).
   const reducedTouches = useRef(0);
   // Carte repliée sur une ligne par défaut, et de nouveau à chaque retour sur Spotter.
@@ -54,8 +55,8 @@ function useLatestVideo() {
     const touches = reducedTouches.current;
     try {
       // Lues ensemble : la carte ne s'affiche jamais grande puis petite. Forme
-      // illisible : la carte entière (jamais la carte cachée pour si peu).
-      const [next, isReduced] = await Promise.all([loadLatestVideo(userId), userId ? loadLatestVideoReduced(userId).catch(() => false) : Promise.resolve(false)]);
+      // illisible : repliée, le défaut (jamais la carte cachée pour si peu).
+      const [next, isReduced] = await Promise.all([loadLatestVideo(userId), userId ? loadLatestVideoReduced(userId).catch(() => true) : Promise.resolve(true)]);
       if (touches === reducedTouches.current) setReduced(isReduced);
       setState(next);
     } catch {
@@ -160,7 +161,7 @@ function useSpotterEntries(reveal: () => void) {
     try {
       const taken = await takePhotoForSpotter();
       if (taken.kind === "denied") return setMessage(t.cameraCapture.denied);
-      await openPhoto(taken, t.cameraCapture.unavailable(t.spotter.addPhoto), "app", { entry: "photo_camera" });
+      await openPhoto(taken, t.cameraCapture.unavailable(t.spotter.tilePhoto), "app", { entry: "photo_camera" });
     } finally {
       setBusy(null);
     }
@@ -193,7 +194,7 @@ function useSpotterEntries(reveal: () => void) {
       // rangée dans « recherche-image/ » du cache, vidé à chaque lancement (app fermée en plein parcours).
       const visual = item.origin === "visual_intelligence";
       const ready = visual && prepared.kind === "picked" ? { ...prepared, uri: await moveIntoCaptureCache(prepared.uri) } : prepared;
-      await openPhoto(ready, t.share.imageUnreadable(t.spotter.addPhoto), visual ? "visual_intelligence" : "share", {
+      await openPhoto(ready, t.share.imageUnreadable(t.spotter.tilePhoto), visual ? "visual_intelligence" : "share", {
         discardImageAfterSearch: visual,
         entry: visual ? "photo_visual_search" : "photo_share",
       });
@@ -253,8 +254,9 @@ function HistoryHeader({ history }: { history: ReturnType<typeof useSearchHistor
       </Text>
       {failedFirst ? null : (
         <>
-          <Text style={styles.recentLead}>{t.retrouverPieces.recentLead}</Text>
           <HistorySearchField value={history.text} onChangeText={history.onChangeText} onClear={history.clear} />
+          {/* Règle du quota : gardée, juste au-dessus des cases qu'elle concerne (lot « fidélité aux maquettes »). */}
+          <Text style={styles.recentLead}>{t.retrouverPieces.recentLead}</Text>
         </>
       )}
     </View>
@@ -421,15 +423,15 @@ export default function SpotterScreen() {
 
 const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
-  content: { paddingHorizontal: space.lg, paddingTop: space.md, maxWidth: 480, alignSelf: "center", width: "100%" },
+  content: { paddingHorizontal: space.md, paddingTop: space.md, maxWidth: 480, alignSelf: "center", width: "100%" },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, lineHeight: serifLineHeight.display, letterSpacing: serifDisplayLetterSpacing, color: color.encre },
-  lead: { fontSize: font.secondary, color: color.acier, marginTop: space.xs, lineHeight: 21 },
+  lead: { fontSize: font.caption, lineHeight: 18, color: color.acier, marginTop: space.xs },
   feedback: { fontSize: font.caption, marginTop: space.sm, lineHeight: 18 },
   sharedHelp: { marginTop: space.lg },
-  dropHint: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginTop: space.md, textAlign: "center" },
-  recentSection: { marginTop: space.xxl - space.xs, marginBottom: space.md, gap: space.sm },
-  recentTitle: { fontSize: font.body, fontWeight: "600", color: color.encre },
-  recentLead: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
+  dropHint: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginTop: space.sm, textAlign: "center" },
+  recentSection: { marginTop: space.lg, marginBottom: 12, gap: space.xs },
+  recentTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre },
+  recentLead: { fontSize: font.caption, lineHeight: 18, color: color.acier, marginTop: space.xs },
   historyLoading: { marginTop: space.lg, minHeight: size.touchTarget },
   historyNote: { alignItems: "center", marginTop: space.lg },
   historyMessage: { fontSize: font.secondary, textAlign: "center", lineHeight: 21 },

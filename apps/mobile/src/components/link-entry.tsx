@@ -1,10 +1,9 @@
 import { useRef, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, Text, TextInput, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
-import { color, font, radius, space } from "@/theme/tokens";
-import { lienSouligne } from "@/theme/accent";
+import { color, font, getActiveScheme, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
-import { ClipboardIcon } from "@/components/icons";
+import { ClipboardIcon, LinkIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
 import { detectLink, type LinkDetection } from "@/lib/link-detection";
 import { linkRefusal, linkStep } from "@/lib/link-step";
@@ -107,9 +106,11 @@ export function LinkEntry({ onHelp }: { onHelp: () => void }) {
 
   return (
     <>
-      <Text style={styles.label}>{label}</Text>
-      {Platform.OS === "web" ? <Text style={styles.hint}>{t.player.linkHintWeb}</Text> : null}
+      {/* Lot « fidélité aux maquettes » : un bloc plein ; le libellé devient le texte d'attente et reste le nom lu (VoiceOver, aria-label du site). */}
       <View style={styles.field}>
+        <View accessible={false}>
+          <LinkIcon size={18} tint={color.acier} />
+        </View>
         <TextInput
           style={styles.input}
           value={link}
@@ -117,7 +118,7 @@ export function LinkEntry({ onHelp }: { onHelp: () => void }) {
             setLink(text);
             setMessage(null);
           }}
-          placeholder={t.spotter.linkPlaceholder}
+          placeholder={label}
           placeholderTextColor={color.acier}
           autoCapitalize="none"
           autoCorrect={false}
@@ -131,11 +132,12 @@ export function LinkEntry({ onHelp }: { onHelp: () => void }) {
             <Text style={styles.clearLabel}>×</Text>
           </Pressable>
         ) : null}
-        <Pressable onPress={handlePaste} hitSlop={10} style={styles.pasteButton} accessibilityRole="button">
-          <ClipboardIcon size={16} tint={color.vert} />
+        <Pressable onPress={handlePaste} style={styles.pasteButton} accessibilityRole="button">
+          <ClipboardIcon size={15} tint={color.encre} />
           <Text style={styles.pasteLabel}>{t.spotter.paste}</Text>
         </Pressable>
       </View>
+      {Platform.OS === "web" ? <Text style={styles.hint}>{t.player.linkHintWeb}</Text> : null}
       {link.length > 0 ? <DetectionCard detection={detection} /> : null}
       {message ? <ErrorMessage style={styles.feedback}>{message}</ErrorMessage> : null}
       {link.length > 0 ? (
@@ -157,14 +159,40 @@ export function LinkEntry({ onHelp }: { onHelp: () => void }) {
 }
 
 const styles = themedStyles(() => ({
-  label: { fontSize: font.caption, color: color.acier, marginTop: space.lg },
-  hint: { fontSize: font.caption, color: color.acier, marginTop: space.xs, lineHeight: 18 },
-  field: { flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: color.filet, gap: space.sm },
-  input: { flex: 1, fontSize: font.body, color: color.encre, paddingVertical: 12 },
+  hint: { fontSize: font.caption, lineHeight: 18, color: color.acier, marginTop: space.sm },
+  field: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 52,
+    borderRadius: radius.md,
+    borderCurve: "continuous",
+    backgroundColor: color.surface,
+    // Thème clair seulement : un filet (même façon que la tuile de pièce).
+    borderWidth: getActiveScheme() === "light" ? 1 : 0,
+    borderColor: color.filet,
+    paddingLeft: 14,
+    paddingRight: 6,
+    gap: 10,
+    marginTop: space.md,
+  },
+  // 16 sur le site : Safari sur iPhone zoome toute la page quand un champ de moins de 16 px prend le curseur.
+  input: { flex: 1, minWidth: 0, fontSize: Platform.OS === "web" ? 16 : font.secondary, color: color.encre, paddingVertical: 12 },
   clearButton: { minWidth: 32, minHeight: 44, alignItems: "center", justifyContent: "center" },
   clearLabel: { fontSize: 22, lineHeight: 24, color: color.acier },
-  pasteButton: { flexDirection: "row", alignItems: "center", gap: 5, minHeight: 44, minWidth: 44 },
-  pasteLabel: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  // Un bouton encadré (plus un lien) : la maquette dit 40 de haut, on garde la cible de 44, qui tient dans 52.
+  pasteButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    minHeight: 44,
+    paddingHorizontal: 14,
+    borderRadius: radius.md,
+    borderCurve: "continuous",
+    backgroundColor: color.porcelaine,
+    borderWidth: 1,
+    borderColor: color.filet,
+  },
+  pasteLabel: { fontSize: font.secondary, fontWeight: "500", color: color.encre },
   detected: { flexDirection: "row", alignItems: "center", gap: space.sm, marginTop: space.md },
   platformChip: { backgroundColor: color.encre, borderRadius: radius.full, paddingHorizontal: 11, height: 26, justifyContent: "center" },
   platformChipLabel: { color: color.blanc, fontSize: font.caption, fontWeight: "600" },

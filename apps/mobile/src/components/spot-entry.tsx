@@ -2,7 +2,7 @@ import { useEffect, type ReactNode } from "react";
 import { AccessibilityInfo, ActivityIndicator, Platform, Pressable, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { VIDEO_AI } from "@monapp/shared-types";
-import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
+import { color, font, getActiveScheme, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { CameraIcon, ChevronIcon, TakePhotoIcon, VideoIcon } from "@/components/icons";
@@ -18,17 +18,38 @@ import { themedStyles } from "@/theme/themed-styles";
 // et sur l'app iPhone, en option, la dernière vidéo de la galerie, prête à
 // être analysée (lib/latest-video-state.ts).
 
-function Tile({ icon, label, onPress, busy, disabled }: { icon: ReactNode; label: string; onPress: () => void; busy: boolean; disabled: boolean }) {
+/** Lot « fidélité aux maquettes » : libellé visible court (`label`), phrase
+ * entière lue par VoiceOver (`accessibilityLabel`), qui contient toujours le
+ * libellé visible (Commande vocale d'iOS agit sur le nom lu : « Toucher Photo »). */
+function Tile({
+  icon,
+  label,
+  accessibilityLabel,
+  onPress,
+  busy,
+  disabled,
+}: {
+  icon: ReactNode;
+  label: string;
+  accessibilityLabel: string;
+  onPress: () => void;
+  busy: boolean;
+  disabled: boolean;
+}) {
   return (
-    <Pressable style={styles.tile} onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityState={{ busy, disabled }}>
+    <Pressable style={styles.tile} onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={accessibilityLabel} accessibilityState={{ busy, disabled }}>
       {busy ? <ActivityIndicator color={color.vert} /> : icon}
-      <Text style={styles.tileLabel}>{label}</Text>
+      <Text style={styles.tileLabel} numberOfLines={2}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
 
 /** Entrées égales, côte à côte : vidéo et photo ; sur l'app iPhone, aussi
- * « Prendre une photo », à côté de l'import (lot « app iPhone prête »). */
+ * l'appareil photo, à côté de l'import (lot « app iPhone prête »).
+ * `videoLabel` : la phrase lue de la tuile vidéo (« Ajouter une vidéo » ou
+ * « Choisir une autre vidéo ») ; le libellé visible est « Vidéo ». */
 export function EntryTiles({
   videoLabel,
   onVideo,
@@ -45,10 +66,31 @@ export function EntryTiles({
 }) {
   return (
     <View style={styles.tiles}>
-      <Tile icon={<VideoIcon size={24} tint={color.vert} />} label={videoLabel} onPress={onVideo} busy={busy === "video"} disabled={busy !== null} />
-      <Tile icon={<CameraIcon size={24} tint={color.vert} />} label={t.spotter.addPhoto} onPress={onPhoto} busy={busy === "photo"} disabled={busy !== null} />
+      <Tile
+        icon={<VideoIcon size={24} tint={color.vert} />}
+        label={t.spotter.tileVideo}
+        accessibilityLabel={videoLabel}
+        onPress={onVideo}
+        busy={busy === "video"}
+        disabled={busy !== null}
+      />
+      <Tile
+        icon={<CameraIcon size={24} tint={color.vert} />}
+        label={t.spotter.tilePhoto}
+        accessibilityLabel={t.spotter.addPhoto}
+        onPress={onPhoto}
+        busy={busy === "photo"}
+        disabled={busy !== null}
+      />
       {onCamera ? (
-        <Tile icon={<TakePhotoIcon size={24} tint={color.vert} />} label={t.cameraCapture.takePhoto} onPress={onCamera} busy={busy === "camera"} disabled={busy !== null} />
+        <Tile
+          icon={<TakePhotoIcon size={24} tint={color.vert} />}
+          label={t.spotter.tileCamera}
+          accessibilityLabel={`${t.spotter.tileCamera}, ${t.cameraCapture.takePhoto}`}
+          onPress={onCamera}
+          busy={busy === "camera"}
+          disabled={busy !== null}
+        />
       ) : null}
     </View>
   );
@@ -111,7 +153,8 @@ export function LatestVideoCard({
       >
         <Image source={{ uri: video.id }} style={styles.slimThumb} contentFit="cover" accessible={false} />
         <Text style={styles.slimLabel} numberOfLines={1}>
-          {title}
+          <Text style={styles.slimTitle}>{t.spotter.latestVideo}</Text>
+          {duration ? <Text style={styles.slimDuration}>{` · ${duration}`}</Text> : null}
         </Text>
         <Text style={styles.slimLink}>{t.spotter.latestVideoShow}</Text>
       </Pressable>
@@ -199,20 +242,23 @@ export function LatestVideoNote({ message }: { message: string }) {
 }
 
 const styles = themedStyles(() => ({
-  tiles: { flexDirection: "row", gap: space.sm, marginTop: space.lg },
+  tiles: { flexDirection: "row", gap: space.sm, marginTop: 12 },
+  // Tuiles pleines de la maquette « Écrin » (lot « fidélité aux maquettes ») : minHeight, jamais height (grand texte).
   tile: {
     flex: 1,
-    minHeight: 104,
-    borderWidth: 1,
-    borderColor: color.filet,
+    minHeight: 76,
     borderRadius: radius.md,
+    borderCurve: "continuous",
+    backgroundColor: color.surface,
+    borderWidth: getActiveScheme() === "light" ? 1 : 0,
+    borderColor: color.filet,
     alignItems: "center",
     justifyContent: "center",
     gap: space.sm,
-    paddingHorizontal: space.sm,
-    paddingVertical: space.md,
+    paddingVertical: 12,
+    paddingHorizontal: space.xs,
   },
-  tileLabel: { color: color.encre, fontSize: font.secondary, fontWeight: "600", textAlign: "center" },
+  tileLabel: { fontSize: font.caption, lineHeight: 16, fontWeight: "500", color: color.encre, textAlign: "center" },
   card: { marginTop: space.lg, borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md },
   cardHead: { flexDirection: "row", alignItems: "center", gap: space.sm },
   cardRow: { flex: 1, flexDirection: "row", alignItems: "center", gap: space.md, minHeight: 64 },
@@ -220,22 +266,25 @@ const styles = themedStyles(() => ({
   reduce: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   // Carte repliée (retours du build 3, point 3 ; maquette « Écrin » 1-accueil) : une ligne fine de 44 pt.
   slim: {
-    marginTop: space.md,
+    marginTop: space.sm,
     minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
-    gap: space.sm,
+    gap: 10,
     borderWidth: 1,
     borderColor: color.filet,
     borderRadius: radius.md,
     borderCurve: "continuous",
     paddingLeft: space.xs + 2,
-    paddingRight: space.md,
+    paddingRight: 12,
     paddingVertical: space.xs,
   },
   slimThumb: { width: 32, height: 32, borderRadius: radius.pieceThumb, borderCurve: "continuous", backgroundColor: color.plinthe, overflow: "hidden" },
   slimLabel: { flex: 1, fontSize: font.secondary, color: color.encre, fontVariant: ["tabular-nums"] },
-  slimLink: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  // Deux textes : « Votre dernière vidéo » en 500, puis « · 0:27 » en acier (jamais de « @pseudo » : une vidéo de la galerie n'a pas d'auteur).
+  slimTitle: { fontWeight: "500" },
+  slimDuration: { color: color.acier },
+  slimLink: { ...lienSouligne, fontSize: font.caption, color: color.vert, fontWeight: "400" },
   cardText: { flex: 1 },
   cardTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, lineHeight: serifLineHeight.body, color: color.encre },
   cardMeta: { fontSize: font.caption, color: color.acier, marginTop: 4, fontVariant: ["tabular-nums"] },

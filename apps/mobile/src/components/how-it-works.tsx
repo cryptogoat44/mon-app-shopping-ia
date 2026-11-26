@@ -28,7 +28,7 @@ export function HowItWorksCard() {
       <Text style={styles.title} accessibilityRole="header">
         {t.firstTry.howItWorks.title}
       </Text>
-      {(isPlayerAvailable() ? t.player.howItWorksSteps(t.player.spot) : t.firstTry.howItWorks.steps(t.spotter.addPhoto)).map((text, index) => {
+      {(isPlayerAvailable() ? t.player.howItWorksSteps(t.player.spot) : t.firstTry.howItWorks.steps(t.spotter.tilePhoto)).map((text, index) => {
         const Icon = STEP_ICONS[index] ?? TagIcon;
         return (
           <View key={index} style={styles.step} accessible accessibilityLabel={`${index + 1}. ${text}`}>

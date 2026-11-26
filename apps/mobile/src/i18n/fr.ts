@@ -104,8 +104,7 @@ export const fr = {
   spotter: {
     title: "Spotter",
     close: "Fermer",
-    lead: "Retrouvez une pièce vue dans une vidéo ou sur une photo.",
-    linkPlaceholder: "Collez ou tapez un lien",
+    lead: "Retrouvez une pièce vue dans une vidéo ou une photo.",
     paste: "Coller",
     pasteEmpty: "Le presse-papiers ne contient pas de lien.",
     pasteDenied: "Collez le lien directement dans le champ.",
@@ -121,9 +120,9 @@ export const fr = {
       `${BRAND} peut afficher ici la dernière vidéo de votre galerie, prête à être analysée. iOS vous demandera alors l'accès à vos photos. La vidéo reste sur votre iPhone : seules quelques images en partent, quand vous appuyez sur « Lancer ».`,
     latestVideoYes: "Oui, me la proposer",
     latestVideoNo: "Non merci",
-    latestVideoAskNote: "Votre réponse ne change rien d'autre : « Ajouter une vidéo » reste disponible. Modifiable à tout moment dans Réglages.",
+    latestVideoAskNote: "Votre réponse ne change rien d'autre : « Vidéo » reste disponible. Modifiable à tout moment dans Réglages.",
     latestVideoNoAccess:
-      `Sans l'accès complet à vos photos, ${BRAND} ne peut pas repérer votre dernière vidéo : choisissez-la avec « Ajouter une vidéo ». L'accès se modifie dans les Réglages de l'iPhone.`,
+      `Sans l'accès complet à vos photos, ${BRAND} ne peut pas repérer votre dernière vidéo : choisissez-la avec « Vidéo ». L'accès se modifie dans les Réglages de l'iPhone.`,
     latestVideoEmpty: "Aucune vidéo dans votre galerie pour l'instant : la plus récente apparaîtra ici.",
     latestVideoChoiceFailed: "Votre réponse n'a pas pu être enregistrée. Réessayez.",
     recentlySpotted: "Récemment spottées",
@@ -151,6 +150,10 @@ export const fr = {
     latestVideoReduce: "Réduire la carte « Votre dernière vidéo »",
     latestVideoReveal: "Affiche la carte en entier",
     latestVideoShow: "Rouvrir",
+    // Lot « fidélité aux maquettes » : libellés visibles courts des tuiles (la phrase entière reste lue par VoiceOver).
+    tileVideo: "Vidéo",
+    tilePhoto: "Photo",
+    tileCamera: "Appareil photo",
   },
   // Lot 4 : choix d'une image dans une vidéo importée (la vidéo reste sur l'appareil).
   video: {
@@ -865,7 +868,7 @@ export const fr = {
   // Lot « Retrouver ses pièces » : toutes les recherches récentes (« Tout
   // voir ») et « Je l'ai achetée » depuis la fiche d'une envie.
   retrouverPieces: {
-    recentLead: "Rouvrir un résultat ne compte pas dans vos recherches du jour.",
+    recentLead: "Rouvrir ne compte pas dans vos recherches du jour.",
     recentLoadError: "Impossible d'afficher vos recherches récentes. Vérifiez votre connexion, puis réessayez.",
     today: "Aujourd'hui",
     yesterday: "Hier",
@@ -1422,8 +1425,8 @@ export const fr = {
     latestVideoSwitchLabel: "Proposer automatiquement ma dernière vidéo dans Spotter",
     latestVideoOn: "Activé : Spotter vous propose la dernière vidéo de votre galerie, prête à être analysée.",
     latestVideoOnNoAccess:
-      `Activé, mais ${BRAND} n'a pas l'accès complet à vos photos : la dernière vidéo ne peut pas être repérée. Vous la choisissez avec « Ajouter une vidéo ».`,
-    latestVideoOff: `Désactivé : vous choisissez la vidéo avec « Ajouter une vidéo », sans que ${BRAND} lise votre galerie.`,
+      `Activé, mais ${BRAND} n'a pas l'accès complet à vos photos : la dernière vidéo ne peut pas être repérée. Vous la choisissez avec « Vidéo » sur Spotter.`,
+    latestVideoOff: `Désactivé : vous choisissez la vidéo avec « Vidéo » sur Spotter, sans que ${BRAND} lise votre galerie.`,
     latestVideoAccessLeft: `${BRAND} a encore accès à vos photos, sans s'en servir : vous pouvez le lui retirer dans les Réglages de l'iPhone.`,
     latestVideoOpenSettings: "Ouvrir les Réglages de l'iPhone",
     latestVideoFailed: "Votre choix n'a pas pu être enregistré. Réessayez.",
