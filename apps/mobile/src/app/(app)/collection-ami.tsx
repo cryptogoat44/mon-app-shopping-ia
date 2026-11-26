@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import type { PostAuthor, SharedCollectionItem, SharedCollectionPage } from "@monapp/shared-types";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { getActiveLocale, t } from "@/i18n";
 import { ApiError, fetchSharedCollection, keepSharedItem } from "@/lib/api";
 import { canReportCollection, sharedItemImage, sharedItemPrice } from "@/lib/collections";
@@ -234,14 +235,14 @@ const styles = themedStyles(() => ({
   centered: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl },
   message: { fontSize: font.secondary, textAlign: "center", marginTop: space.xs },
   retry: { marginTop: space.md, minHeight: 44, justifyContent: "center" },
-  retryLabel: { fontSize: font.body, color: color.vert, fontWeight: "600" },
+  retryLabel: { ...lienSouligne, fontSize: font.body, color: color.vert, fontWeight: "600" },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 640, alignSelf: "center", width: "100%" },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre },
   ownerLine: { flexDirection: "row", alignItems: "center", gap: space.sm, marginTop: 4, marginBottom: space.md },
   owner: { flexShrink: 1, fontSize: font.secondary, color: color.acier },
   empty: { fontSize: font.secondary, color: color.acier, lineHeight: 20 },
   row: { flexDirection: "row", gap: space.md, paddingVertical: space.md, borderTopWidth: 1, borderTopColor: color.filet },
-  thumb: { width: 96, height: 96, borderRadius: radius.sm, overflow: "hidden", backgroundColor: color.plinthe },
+  thumb: { width: 96, height: 96, borderRadius: radius.pieceThumb, borderCurve: "continuous", overflow: "hidden", backgroundColor: color.plinthe },
   fill: { width: "100%", height: "100%" },
   rowText: { flex: 1, gap: 4 },
   itemTitle: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
@@ -252,5 +253,5 @@ const styles = themedStyles(() => ({
   actionLabel: { fontSize: font.secondary, fontWeight: "600", color: color.vert },
   actionDoneLabel: { color: color.acier },
   more: { minHeight: 44, alignItems: "center", justifyContent: "center", marginTop: space.md },
-  moreLabel: { fontSize: font.secondary, fontWeight: "600", color: color.vert },
+  moreLabel: { ...lienSouligne, fontSize: font.secondary, fontWeight: "600", color: color.vert },
 }));

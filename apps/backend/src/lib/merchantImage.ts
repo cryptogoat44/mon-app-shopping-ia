@@ -1,16 +1,35 @@
 // Une grande image pour les pièces qui n'en ont qu'une petite (retours du
 // build 2, 24 novembre 2026 : « la qualité des images quand elles sont
-// grossies est nulle »). Les résultats de Google Shopping n'ont qu'une petite
-// vignette de Google (image_hd_url vide). Pour une pièce GARDÉE (envie) ou
-// ACHETÉE (Vault) sans image HD, notre serveur lit UNE fois la page publique
-// de la boutique, comme le robot d'aperçu d'un lien, pour y trouver l'adresse
-// de la grande image (og:image, puis twitter:image, puis l'image du produit
-// décrite en JSON-LD). Gratuit : aucun service payant, seulement la bande
-// passante du serveur.
+// grossies est nulle » ; retours du build 3, 25 novembre : « ce n'est
+// toujours pas net »). Les résultats de Google Shopping n'ont qu'une petite
+// vignette de Google (image_hd_url vide). Notre serveur lit la page publique
+// de la boutique, comme le robot d'aperçu d'un lien, pour y trouver
+// l'adresse de la grande image (og:image, puis twitter:image, puis l'image
+// du produit décrite en JSON-LD). Gratuit : aucun service payant, seulement
+// la bande passante du serveur.
 //
-// INTERRUPTEUR : MERCHANT_IMAGE_UPGRADE_ENABLED, ÉTEINT par défaut (seule la
-// valeur exacte "true" l'allume, src/env.ts). Éteint : rien n'est lu, rien
-// n'est écrit, aucune requête ne part.
+// DEUX INTERRUPTEURS indépendants, ÉTEINTS par défaut (seule la valeur exacte
+// "true" les allume, src/env.ts). Éteints : rien n'est lu, rien n'est écrit,
+// aucune requête ne part.
+// - MERCHANT_IMAGE_UPGRADE_ENABLED : pièces GARDÉES (Envies) ou ACHETÉES
+//   (Vault) sans image HD. Une FILE en mémoire, remplie à la création, à
+//   l'ouverture d'une fiche et à l'ouverture des listes des Envies et du
+//   Vault : une lecture à la fois, 12 par minute au plus (minute pleine : la
+//   file attend la suivante), 100 demandes en attente au plus (au-delà,
+//   ignorées : elles reviendront à la prochaine ouverture), jamais deux fois
+//   le même résultat.
+// - MERCHANT_IMAGE_RESULTS_ENABLED : RÉSULTATS d'une recherche (décision du
+//   fondateur, 26 novembre 2026), à n'allumer qu'avec la politique de
+//   confidentialité mise à jour. Juste après le rangement d'une section
+//   « boutiques » ou « vos mots » (routes/searches.ts), ses 8 premières
+//   cartes telles qu'elles sont affichées (l'ordre de la relecture,
+//   displayedSection dans lib/searchRows.ts : aucune règle d'ordre nouvelle),
+//   jamais les propositions Lens (elles ont déjà leur image) ni une page de
+//   Google.
+//   Un POOL à part de la file : 3 lectures à la fois, une seule à la fois par
+//   boutique (nom d'hôte), 16 s au total par section (ce qui n'a pas commencé
+//   est abandonné), 30 lectures par minute pour tout le serveur (au-delà, le
+//   reste est abandonné).
 //
 // Vie privée : la boutique ne reçoit RIEN du membre — ni identité, ni adresse
 // IP (c'est notre serveur qui appelle), ni cookie, ni « referer » : seulement
@@ -18,18 +37,20 @@
 // honnête de notre robot (la même que pour la copie des images).
 // Garde-fous : tous ceux de lib/publicImage.ts (https, adresses publiques
 // revérifiées à chaque redirection, DNS épinglé, 3 redirections au plus), et
-// ici : 6 s au total, page text/html seulement, 512 Ko lus au plus. L'image
-// trouvée passe les contrôles existants (adresse https vérifiée, téléchargée
-// avec les mêmes garde-fous, vraie image JPEG/PNG/WebP/GIF/HEIF lisible), et
-// doit être assez grande (400 px au moins de chaque côté) et de forme
-// raisonnable (pas une bannière) : sinon rien n'est écrit.
+// ici : 6 s au total par page, page text/html seulement, 512 Ko lus au plus.
+// L'image trouvée passe les contrôles existants (adresse https vérifiée,
+// téléchargée avec les mêmes garde-fous, vraie image JPEG/PNG/WebP/GIF/HEIF
+// lisible), et doit être assez grande (400 px au moins de chaque côté) et de
+// forme raisonnable (pas une bannière) : sinon rien n'est écrit.
 // Écrit seulement dans la colonne existante product_matches.image_hd_url, et
-// seulement si elle est encore vide (aucune migration). fetchHdImageUrls
-// (lib/pieceImages.ts) la sert ensuite partout ; l'app ne la montre que si
-// elle est vraiment plus grande que la vignette.
-// Jamais d'échec visible : tout se passe après la réponse, toute erreur est
-// avalée (journal sans adresse). Une tentative par résultat et par jour au
-// plus (mémoire du processus), une lecture à la fois, 6 par minute au plus.
+// seulement si elle est encore vide (aucune migration, aucun index).
+// fetchHdImageUrls (lib/pieceImages.ts) et GET /api/searches/:id la servent
+// ensuite ; l'app ne la montre que si elle est vraiment plus grande que la
+// vignette.
+// Jamais d'échec ni d'attente visible : tout se passe après la réponse, toute
+// erreur est avalée (journal : compteurs seulement, jamais d'adresse ni
+// d'identifiant). Une tentative par résultat et par jour au plus (mémoire du
+// processus, commune aux deux, effacée au redémarrage).
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import sharp from "sharp";
 import { env } from "../env.js";
@@ -48,7 +69,12 @@ export const MERCHANT_IMAGE_MAX_RATIO = 2.5;
 const MAX_URL_LENGTH = 2048;
 const ATTEMPT_MEMORY_MS = 24 * 60 * 60 * 1000;
 const ATTEMPT_MEMORY_MAX = 5_000;
-const ATTEMPTS_PER_MINUTE = 6;
+/** File des pièces gardées ou achetées : lectures par minute au plus (une
+ * toutes les 5 s environ), une à la fois. */
+const ATTEMPTS_PER_MINUTE = 12;
+/** Demandes en attente dans la file au plus : au-delà, la demande est
+ * ignorée (elle reviendra à la prochaine ouverture). */
+export const MERCHANT_QUEUE_MAX = 100;
 
 /** Même robot que pour les images (lib/publicImage.ts), qui demande une page. */
 export const PAGE_REQUEST_HEADERS = {
@@ -257,20 +283,10 @@ export async function findMerchantImage(pageUrl: string, resolver?: Resolver): P
 }
 
 // ---------------------------------------------------------------------------
-// Mémoire et rythme (dans le processus : aucune colonne nouvelle)
+// Mémoire (dans le processus : aucune colonne nouvelle), commune à la file et
+// au pool des résultats : une tentative par résultat et par jour au plus.
 
 const attempted = new Map<string, number>();
-let running = false;
-let windowStart = 0;
-let windowCount = 0;
-
-/** Pour les tests seulement. */
-export function resetMerchantImageMemory(): void {
-  attempted.clear();
-  running = false;
-  windowStart = 0;
-  windowCount = 0;
-}
 
 function recentlyAttempted(matchId: string, now: number): boolean {
   const at = attempted.get(matchId);
@@ -289,16 +305,50 @@ function remember(matchId: string, now: number): void {
   }
 }
 
-function takeSlot(now: number): boolean {
-  if (running) return false;
+// ---------------------------------------------------------------------------
+// La file des pièces gardées ou achetées (MERCHANT_IMAGE_UPGRADE_ENABLED) :
+// une lecture à la fois, ATTEMPTS_PER_MINUTE au plus ; une demande qui arrive
+// pendant une lecture, ou quand la minute est pleine, attend son tour au lieu
+// d'être abandonnée (retours du build 3).
+
+interface QueuedPiece {
+  fastify: FastifyInstance;
+  log: FastifyBaseLogger;
+  piece: { product_match_id: string; image_url: string };
+  resolver?: Resolver;
+}
+
+const queue: QueuedPiece[] = [];
+/** Résultats en file ou en cours de lecture : jamais deux fois. */
+const pendingIds = new Set<string>();
+let running = false;
+let windowStart = 0;
+let windowCount = 0;
+let wakeTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Pour les tests seulement : vide la mémoire, la file, le pool et les minuteurs. */
+export function resetMerchantImageMemory(): void {
+  attempted.clear();
+  queue.length = 0;
+  pendingIds.clear();
+  running = false;
+  windowStart = 0;
+  windowCount = 0;
+  if (wakeTimer) clearTimeout(wakeTimer);
+  wakeTimer = null;
+  resultJobs.length = 0;
+  resultHosts.clear();
+  resultActive = 0;
+  resultWindowStart = 0;
+  resultWindowCount = 0;
+}
+
+function minuteFull(now: number): boolean {
   if (now - windowStart >= 60_000) {
     windowStart = now;
     windowCount = 0;
   }
-  if (windowCount >= ATTEMPTS_PER_MINUTE) return false;
-  windowCount += 1;
-  running = true;
-  return true;
+  return windowCount >= ATTEMPTS_PER_MINUTE;
 }
 
 interface MatchRow {
@@ -308,24 +358,10 @@ interface MatchRow {
   merchant_url: string | null;
 }
 
-/** Cherche et range la grande image du résultat d'une pièce gardée ou
- * achetée, si elle manque. `servedHdUrl` : l'image HD déjà servie pour cette
- * pièce (fetchHdImageUrls) ; rien à faire si elle existe. Ne rejette jamais. */
-export async function upgradeMerchantImage(
-  fastify: FastifyInstance,
-  log: FastifyBaseLogger,
-  piece: { product_match_id: string | null; image_url: string },
-  servedHdUrl: string | null,
-  resolver?: Resolver
-): Promise<"off" | "skipped" | "busy" | "none" | "written"> {
-  if (!merchantImageUpgradeEnabled()) return "off";
+async function readAndStore({ fastify, log, piece, resolver }: QueuedPiece): Promise<"skipped" | "none" | "written"> {
   const matchId = piece.product_match_id;
-  if (!matchId || servedHdUrl) return "skipped";
-  const now = Date.now();
-  if (recentlyAttempted(matchId, now)) return "skipped";
-  if (!takeSlot(now)) return "busy";
   try {
-    remember(matchId, now);
+    remember(matchId, Date.now());
     const { data, error } = await fastify.supabaseAdmin
       .from("product_matches")
       .select("id, image_url, image_hd_url, merchant_url")
@@ -353,9 +389,83 @@ export async function upgradeMerchantImage(
     // Jamais l'adresse dans le journal : seulement le code de la réponse.
     log.info({ status: error instanceof PublicImageError ? (error.status ?? null) : null }, "Grande image de la boutique : non trouvée");
     return "none";
+  }
+}
+
+/** Lit une pièce maintenant (créneau pris), puis passe à la suivante de la file. */
+async function runNow(item: QueuedPiece): Promise<"skipped" | "none" | "written"> {
+  windowCount += 1;
+  running = true;
+  try {
+    return await readAndStore(item);
   } finally {
     running = false;
+    pendingIds.delete(item.piece.product_match_id);
+    drainQueue();
   }
+}
+
+/** La suivante de la file, si rien ne tourne ; minute pleine : un minuteur
+ * (unref : il ne retient jamais l'arrêt du serveur) la réveille à la minute
+ * suivante. Interrupteur coupé entre-temps : la file est vidée sans rien lire. */
+function drainQueue(): void {
+  while (!running && queue.length > 0) {
+    if (!merchantImageUpgradeEnabled()) {
+      queue.length = 0;
+      pendingIds.clear();
+      return;
+    }
+    const now = Date.now();
+    if (minuteFull(now)) {
+      if (!wakeTimer) {
+        wakeTimer = setTimeout(
+          () => {
+            wakeTimer = null;
+            drainQueue();
+          },
+          Math.max(0, windowStart + 60_000 - now)
+        );
+        wakeTimer.unref?.();
+      }
+      return;
+    }
+    const next = queue.shift()!;
+    if (recentlyAttempted(next.piece.product_match_id, now)) {
+      pendingIds.delete(next.piece.product_match_id);
+      continue;
+    }
+    void runNow(next).catch(() => undefined);
+  }
+}
+
+/** Cherche et range la grande image du résultat d'une pièce gardée ou
+ * achetée, si elle manque. `servedHdUrl` : l'image HD déjà servie pour cette
+ * pièce (fetchHdImageUrls) ; rien à faire si elle existe. Lue tout de suite si
+ * rien ne tourne (résultat de la lecture), sinon mise en file ("queued" ; au
+ * plus MERCHANT_QUEUE_MAX demandes, au-delà ignorée : "skipped"). Ne rejette
+ * jamais. */
+export async function upgradeMerchantImage(
+  fastify: FastifyInstance,
+  log: FastifyBaseLogger,
+  piece: { product_match_id: string | null; image_url: string },
+  servedHdUrl: string | null,
+  resolver?: Resolver
+): Promise<"off" | "skipped" | "queued" | "none" | "written"> {
+  if (!merchantImageUpgradeEnabled()) return "off";
+  const matchId = piece.product_match_id;
+  if (!matchId || servedHdUrl) return "skipped";
+  const now = Date.now();
+  if (recentlyAttempted(matchId, now) || pendingIds.has(matchId)) return "skipped";
+  const item: QueuedPiece = { fastify, log, piece: { product_match_id: matchId, image_url: piece.image_url }, resolver };
+  if (running || queue.length > 0 || minuteFull(now)) {
+    if (queue.length >= MERCHANT_QUEUE_MAX) return "skipped";
+    queue.push(item);
+    pendingIds.add(matchId);
+    drainQueue();
+    return "queued";
+  }
+  pendingIds.add(matchId);
+  return runNow(item);
 }
 
 /** Lance la recherche sans l'attendre (après la réponse) : jamais un échec ni
@@ -370,4 +480,212 @@ export function upgradeMerchantImageLater(
   setImmediate(() => {
     upgradeMerchantImage(fastify, log, piece, servedHdUrl).catch(() => undefined);
   });
+}
+
+/** Listes des Envies et du Vault : met en file les pièces de la page sans
+ * grande image, rattachées à un résultat. Après la réponse ; ne rejette
+ * jamais ; rien si l'interrupteur est éteint. Une seule lecture de la base
+ * pour toute la page, qui écarte les photos personnelles (la pièce ne montre
+ * plus l'image du résultat), les résultats déjà en HD et les pages qui ne
+ * sont pas celles d'une boutique : seules les autres entrent dans la file. */
+export function queueMerchantImages(
+  fastify: FastifyInstance,
+  log: FastifyBaseLogger,
+  pieces: readonly { product_match_id: string | null; image_url: string }[],
+  hdUrls: readonly (string | null | undefined)[],
+  resolver?: Resolver
+): void {
+  try {
+    if (!merchantImageUpgradeEnabled()) return;
+    const now = Date.now();
+    const candidates = new Map<string, string>();
+    pieces.forEach((piece, index) => {
+      const matchId = piece.product_match_id;
+      if (!matchId || hdUrls[index] || candidates.has(matchId) || pendingIds.has(matchId) || recentlyAttempted(matchId, now)) return;
+      candidates.set(matchId, piece.image_url);
+    });
+    if (candidates.size === 0) return;
+    setImmediate(() => {
+      enqueueKeptPieces(fastify, log, candidates, resolver).catch(() => undefined);
+    });
+  } catch {
+    // Jamais un échec de la liste.
+  }
+}
+
+async function enqueueKeptPieces(fastify: FastifyInstance, log: FastifyBaseLogger, candidates: ReadonlyMap<string, string>, resolver?: Resolver): Promise<void> {
+  const { data, error } = await fastify.supabaseAdmin
+    .from("product_matches")
+    .select("id, image_url, image_hd_url, merchant_url")
+    .in("id", [...candidates.keys()]);
+  if (error || !Array.isArray(data)) return;
+  for (const match of data as MatchRow[]) {
+    const imageUrl = candidates.get(match.id);
+    if (imageUrl === undefined || match.image_hd_url || match.image_url !== imageUrl || !isMerchantPage(match.merchant_url)) continue;
+    void upgradeMerchantImage(fastify, log, { product_match_id: match.id, image_url: imageUrl }, null, resolver).catch(() => undefined);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Le pool des résultats d'une recherche (MERCHANT_IMAGE_RESULTS_ENABLED,
+// retours du build 3, décision du fondateur) : à part de la file ci-dessus,
+// un seul pour tout le serveur.
+
+/** Les premières cartes d'une section, dans l'ordre affiché (reçu tel quel de routes/searches.ts). */
+export const RESULT_IMAGES_PER_SECTION = 8;
+/** Lectures en même temps au plus (toutes recherches confondues). */
+export const RESULT_IMAGE_CONCURRENCY = 3;
+/** Ce qui n'a pas commencé 16 s après le rangement est abandonné. */
+export const RESULT_IMAGES_BUDGET_MS = 16_000;
+/** Plafond de tout le serveur : au-delà, le reste est abandonné. */
+export const RESULT_IMAGES_PER_MINUTE = 30;
+
+/** L'interrupteur des résultats : seule la valeur exacte "true" l'allume (src/env.ts). */
+export function merchantImageResultsEnabled(): boolean {
+  return env.MERCHANT_IMAGE_RESULTS_ENABLED;
+}
+
+type ResultOutcome = "written" | "none" | "abandoned";
+
+interface ResultJob {
+  id: string;
+  pageUrl: string;
+  host: string;
+  deadline: number;
+  fastify: FastifyInstance;
+  log: FastifyBaseLogger;
+  resolver?: Resolver;
+  done: (outcome: ResultOutcome) => void;
+}
+
+const resultJobs: ResultJob[] = [];
+/** Boutiques (noms d'hôte) en cours de lecture : une seule lecture à la fois par boutique. */
+const resultHosts = new Set<string>();
+let resultActive = 0;
+let resultWindowStart = 0;
+let resultWindowCount = 0;
+
+function takeResultSlot(now: number): boolean {
+  if (now - resultWindowStart >= 60_000) {
+    resultWindowStart = now;
+    resultWindowCount = 0;
+  }
+  if (resultWindowCount >= RESULT_IMAGES_PER_MINUTE) return false;
+  resultWindowCount += 1;
+  return true;
+}
+
+async function readResult({ id, pageUrl, fastify, log, resolver }: ResultJob): Promise<ResultOutcome> {
+  try {
+    const found = await findMerchantImage(pageUrl, resolver);
+    if (!found) {
+      log.info({ status: null }, "Grande image des résultats : non trouvée");
+      return "none";
+    }
+    // Seulement si la colonne est encore vide, et jamais la vignette elle-même.
+    const { data, error } = await fastify.supabaseAdmin
+      .from("product_matches")
+      .update({ image_hd_url: found })
+      .eq("id", id)
+      .is("image_hd_url", null)
+      .neq("image_url", found)
+      .select("id");
+    if (error) {
+      log.warn({ code: error.code ?? null }, "Grande image des résultats : écriture impossible");
+      return "none";
+    }
+    if (!Array.isArray(data) || data.length === 0) return "none";
+    // Compteur seulement : ni adresse, ni identifiant.
+    log.info("Grande image des résultats : trouvée et rangée");
+    return "written";
+  } catch (error) {
+    log.info({ status: error instanceof PublicImageError ? (error.status ?? null) : null }, "Grande image des résultats : non trouvée");
+    return "none";
+  }
+}
+
+/** Démarre ce qui peut l'être : RESULT_IMAGE_CONCURRENCY lectures au plus,
+ * une par boutique, avant la date limite de sa recherche, dans le plafond de
+ * la minute (plein : tout ce qui attend est abandonné). */
+function launchResultJobs(): void {
+  while (resultActive < RESULT_IMAGE_CONCURRENCY && resultJobs.length > 0) {
+    const now = Date.now();
+    for (let index = resultJobs.length - 1; index >= 0; index--) {
+      if (resultJobs[index]!.deadline <= now) resultJobs.splice(index, 1)[0]!.done("abandoned");
+    }
+    const index = resultJobs.findIndex((job) => !resultHosts.has(job.host));
+    if (index < 0) return;
+    if (!takeResultSlot(now)) {
+      for (const job of resultJobs.splice(0)) job.done("abandoned");
+      return;
+    }
+    const job = resultJobs.splice(index, 1)[0]!;
+    resultActive += 1;
+    resultHosts.add(job.host);
+    remember(job.id, now);
+    void readResult(job).then((outcome) => {
+      resultActive = Math.max(0, resultActive - 1);
+      resultHosts.delete(job.host);
+      job.done(outcome);
+      launchResultJobs();
+    });
+  }
+}
+
+/** Lit les pages des premières propositions et range leurs grandes images ;
+ * rend les compteurs une fois tout fini ou abandonné. Ne rejette jamais. */
+export function upgradeResultMerchantImages(
+  fastify: FastifyInstance,
+  log: FastifyBaseLogger,
+  rows: readonly { id: string; merchant_url: string | null }[],
+  resolver?: Resolver
+): Promise<Record<ResultOutcome, number>> {
+  const counts: Record<ResultOutcome, number> = { written: 0, none: 0, abandoned: 0 };
+  if (!merchantImageResultsEnabled()) return Promise.resolve(counts);
+  const now = Date.now();
+  const deadline = now + RESULT_IMAGES_BUDGET_MS;
+  const picked: { id: string; pageUrl: string; host: string }[] = [];
+  for (const row of rows.slice(0, RESULT_IMAGES_PER_SECTION)) {
+    if (!isMerchantPage(row.merchant_url) || recentlyAttempted(row.id, now)) continue;
+    picked.push({ id: row.id, pageUrl: row.merchant_url, host: new URL(row.merchant_url).hostname.toLowerCase() });
+  }
+  if (picked.length === 0) return Promise.resolve(counts);
+  return new Promise((resolve) => {
+    let left = picked.length;
+    const done = (outcome: ResultOutcome) => {
+      counts[outcome] += 1;
+      left -= 1;
+      if (left === 0) resolve(counts);
+    };
+    for (const row of picked) resultJobs.push({ ...row, deadline, fastify, log, resolver, done });
+    launchResultJobs();
+  });
+}
+
+/** Résultats d'une recherche (MERCHANT_IMAGE_RESULTS_ENABLED) : les 8
+ * premières cartes affichées d'une section "shopping" ou "words" qui vient
+ * d'être rangée (`rows` dans l'ordre affiché ; une fonction : calculé
+ * seulement interrupteur allumé, et jamais un échec du rangement). Après la
+ * réponse ; ne rejette jamais. */
+export function queueResultMerchantImages(
+  fastify: FastifyInstance,
+  log: FastifyBaseLogger,
+  rows: readonly { id: string; merchant_url: string | null }[] | (() => readonly { id: string; merchant_url: string | null }[]),
+  resolver?: Resolver
+): void {
+  try {
+    if (!merchantImageResultsEnabled()) return;
+    const first = (typeof rows === "function" ? rows() : rows)
+      .slice(0, RESULT_IMAGES_PER_SECTION).map((row) => ({ id: row.id, merchant_url: row.merchant_url }));
+    if (first.length === 0) return;
+    setImmediate(() => {
+      upgradeResultMerchantImages(fastify, log, first, resolver)
+        .then((counts) => {
+          if (counts.abandoned > 0) log.info({ abandoned: counts.abandoned }, "Grande image des résultats : abandonnées (temps ou plafond)");
+        })
+        .catch(() => undefined);
+    });
+  } catch {
+    // Jamais un échec du rangement.
+  }
 }

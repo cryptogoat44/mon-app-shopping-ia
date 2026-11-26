@@ -225,6 +225,11 @@ beforeEach(() => {
   shortLinkFetches = [];
   env.ANTHROPIC_API_KEY = "cle-factice-des-tests";
   env.VIDEO_PIECES_ENABLED = false;
+  // Retours du build 3 : des réglages prêts ne disent plus à eux seuls que
+  // l'analyse est allumée (ils le sont aussi pour la seule image du moment,
+  // tests/videoLinkFrame.test.ts) : l'interrupteur de l'analyse est relu.
+  env.VIDEO_LINK_ANALYSIS_ENABLED = true;
+  env.VIDEO_LINK_FRAME_ENABLED = false;
   defaultAsk();
   defaultPieces();
   vi.mocked(optimizePhotoWithSize).mockClear();

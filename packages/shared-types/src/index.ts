@@ -265,6 +265,10 @@ export interface ProductMatch {
    * vignette) si elle ne se charge pas : certains marchands bloquent
    * l'affichage de leurs images hors de leur site. */
   imageHdUrl: string | null;
+  /** Couleur unie des bords de la vignette ("#rrggbb"), mesurée par le
+   * serveur (lot couleur des bords) ; absente : bords non uniformes, pas
+   * encore mesurée, ou fonction coupée. */
+  edgeColor?: string;
   /** Lien à ouvrir au clic — affilié si un programme d'affiliation est
    * rejoint pour ce marchand, sinon identique à `merchantUrl`. Renvoyé dès
    * les résultats de recherche pour que l'app puisse l'ouvrir immédiatement,
@@ -376,6 +380,12 @@ export interface ProductSearch {
    * à chaque relecture. Absent : aucune entrée (dans le doute, historique,
    * ancien serveur). Une app plus ancienne l'ignore. */
   luxuryResale?: LuxuryResale;
+  /** Couleur des bords (lot « couleur des bords ») : présent (true)
+   * seulement quand cette réponse vient de mettre en file la mesure d'au
+   * moins une vignette ; l'app relit alors la recherche à +6 s et +16 s pour
+   * recevoir les couleurs. Absent : rien en file, fonction coupée, ancien
+   * serveur. Une app plus ancienne l'ignore. */
+  edgeColorsPending?: boolean;
 }
 
 /** Seconde main de luxe : la maison retenue et les liens vers la recherche
@@ -681,6 +691,10 @@ export interface VaultItem {
    * garde son image d'origine — à afficher en priorité, avec repli sur
    * `imageUrl`. Null pour une photo personnelle. */
   imageHdUrl: string | null;
+  /** Couleur unie des bords de la vignette ("#rrggbb"), mesurée par le
+   * serveur (lot couleur des bords) ; absente : bords non uniformes, pas
+   * encore mesurée, ou fonction coupée. */
+  edgeColor?: string;
   category: VaultCategory;
   verified: boolean;
   productMatchId: string | null;
@@ -733,6 +747,10 @@ export interface WishlistItem {
   /** Image haute définition du marchand (pièce venue du Spotter), avec
    * repli sur `imageUrl`. */
   imageHdUrl: string | null;
+  /** Couleur unie des bords de la vignette ("#rrggbb"), mesurée par le
+   * serveur (lot couleur des bords) ; absente : bords non uniformes, pas
+   * encore mesurée, ou fonction coupée. */
+  edgeColor?: string;
   reference: string | null;
   priceMin: number | null;
   currency: string | null;
@@ -2489,7 +2507,46 @@ export interface VideoLinkAnalysisResponse {
 export interface VideoLinkAnalysisStatus {
   enabled: boolean;
   pieces?: true;
+  /** Image du moment (retours du build 3, champ additif) : présent, et
+   * seulement à `true`, quand l'interrupteur VIDEO_LINK_FRAME_ENABLED est
+   * allumé et le service vidéo bien réglé (POST /api/video-links/frame
+   * possible, TikTok seulement). Indépendant de `enabled` (l'analyse par l'IA). */
+  frame?: true;
 }
+
+/** POST /api/video-links/frame (retours du build 3) : l'image nette d'un
+ * moment exact d'une vidéo TikTok publique, tirée de la vidéo elle-même par
+ * le service vidéo, sans IA. Instagram est refusé (le lecteur ne donne pas
+ * son temps). Rien n'est gardé. */
+export interface VideoLinkFrameRequest {
+  /** Lien de la vidéo TikTok (ou lien court TikTok), comme pour l'analyse. */
+  url: string;
+  /** Instant affiché par le lecteur, en secondes (0 à 90, décimales permises). */
+  atSeconds: number;
+}
+
+/** Réponse : UNE image, « data:image/jpeg;base64,… », 1 280 px au plus sur le grand côté. */
+export interface VideoLinkFrameResponse {
+  image: string;
+  width: number;
+  height: number;
+  /** Instant de l'image rendue dans la vidéo, en secondes (à une image près du moment demandé). */
+  timeSeconds: number;
+}
+
+/** Codes d'erreur de l'image du moment (champ « error ») ; aucun code d'IA.
+ * L'app retombe alors sur l'image prise sur l'appareil, ou le secours. */
+export type VideoLinkFrameErrorCode =
+  | "video_frame_disabled"
+  | "invalid_moment"
+  | "invalid_link"
+  | "video_unavailable"
+  | "video_private"
+  | "video_too_long"
+  | "video_busy"
+  | "video_timeout"
+  | "rate_limited"
+  | "internal_error";
 
 /** Codes d'erreur de l'analyse d'un lien (champ « error »). Toute erreur
  * « vidéo indisponible » ramène le membre à la capture d'écran. */

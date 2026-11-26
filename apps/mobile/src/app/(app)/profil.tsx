@@ -6,6 +6,7 @@ import * as Haptics from "expo-haptics";
 import type { Post, UserProfile } from "@monapp/shared-types";
 import { ApiError, fetchUserPosts, fetchUserProfile, followUser, unfollowUser } from "@/lib/api";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { LockIcon, MoreIcon, PhotosIcon, PinIcon } from "@/components/icons";
 import { hasSeveralPhotos } from "@/lib/post-extras";
@@ -320,7 +321,7 @@ const styles = themedStyles(() => ({
   centered: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl },
   message: { fontSize: font.secondary, textAlign: "center" },
   retry: { marginTop: space.md, minHeight: 44, justifyContent: "center" },
-  retryLabel: { fontSize: font.body, color: color.vert, fontWeight: "600" },
+  retryLabel: { ...lienSouligne, fontSize: font.body, color: color.vert, fontWeight: "600" },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 640, alignSelf: "center", width: "100%" },
   header: { alignItems: "center", paddingBottom: space.md },
   fill: { width: "100%", height: "100%" },
@@ -340,7 +341,7 @@ const styles = themedStyles(() => ({
   shell: { alignItems: "center", gap: space.sm, marginTop: space.xl, paddingHorizontal: space.lg },
   shellText: { fontSize: font.secondary, color: color.acier, textAlign: "center", lineHeight: 20 },
   gridRow: { flexDirection: "row", gap: space.sm, marginBottom: space.sm },
-  cell: { width: "32%", aspectRatio: 1, borderRadius: radius.sm, overflow: "hidden", backgroundColor: color.plinthe },
+  cell: { width: "32%", aspectRatio: 1, borderRadius: radius.pieceGrid, borderCurve: "continuous", overflow: "hidden", backgroundColor: color.plinthe },
   photosMark: { position: "absolute", top: 6, right: 6, width: 22, height: 22, borderRadius: radius.full, backgroundColor: color.voileImage, alignItems: "center", justifyContent: "center" },
   pinMark: { position: "absolute", top: 6, left: 6, width: 22, height: 22, borderRadius: radius.full, backgroundColor: color.voileImage, alignItems: "center", justifyContent: "center" },
   empty: { fontSize: font.secondary, color: color.acier, textAlign: "center", marginTop: space.md },

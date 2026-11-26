@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
 import { fetchHdImageUrls } from "../lib/pieceImages.js";
-import { upgradeMerchantImageLater } from "../lib/merchantImage.js";
+import { queueMerchantImages, upgradeMerchantImageLater } from "../lib/merchantImage.js";
+import { edgeColorField, queueKeptEdgeColors } from "../lib/edgeColor.js";
 import { z } from "zod";
 import { WISHLIST_ITEMS_MAX, type WishlistItem, type WishlistItemDetail } from "@monapp/shared-types";
 import { findOwnMatch } from "../lib/ownMatches.js";
@@ -143,7 +144,15 @@ export default async function wishlistRoutes(fastify: FastifyInstance) {
       pageRows.map((row) => row.product_match_id).filter((id): id is string => id !== null)
     );
     const hdUrls = await fetchHdImageUrls(fastify, pageRows);
-    return reply.send({ items: pageRows.map((row, index) => toWishlistItem(row, affiliateUrls, hdUrls[index])), nextCursor });
+    // Couleur des bords de la vignette, si elle est déjà mesurée (lib/edgeColor.ts, éteint par défaut).
+    const items = pageRows.map((row, index) => ({ ...toWishlistItem(row, affiliateUrls, hdUrls[index]), ...edgeColorField(row.image_url) }));
+    // Grandes images des pièces de la page qui n'en ont pas, mises en file
+    // après la réponse (lib/merchantImage.ts, éteint par défaut ; jamais
+    // d'attente ni d'échec de la liste).
+    queueMerchantImages(fastify, request.log, pageRows, hdUrls);
+    // Couleur des bords des vignettes pas encore mesurées, après la réponse (même règle).
+    queueKeptEdgeColors(fastify, request.log, pageRows);
+    return reply.send({ items, nextCursor });
   });
 
   fastify.post("/api/wishlist", { preHandler: fastify.requireAuth }, async (request, reply) => {
@@ -263,12 +272,14 @@ export default async function wishlistRoutes(fastify: FastifyInstance) {
     ]);
     const detail: WishlistItemDetail = {
       ...toWishlistItem(row, affiliateUrls, hdUrls[0] ?? null),
+      ...edgeColorField(row.image_url),
       sharedPost:
         wishPost && !wishPost.hidden_at ? { id: wishPost.id, privacy: wishPost.privacy, createdAt: wishPost.created_at } : null,
       inVault: inVault.length > 0,
     };
     // Envie plus ancienne sans image HD : même recherche, après la réponse.
     upgradeMerchantImageLater(fastify, request.log, row, hdUrls[0] ?? null);
+    queueKeptEdgeColors(fastify, request.log, [row]);
     return reply.send(detail);
   });
 

@@ -8,6 +8,7 @@ import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { VideoProduct } from "@monapp/shared-types";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { getActiveLocale, t } from "@/i18n";
 import { confirmVideoProduct } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
@@ -80,14 +81,14 @@ const styles = themedStyles(() => ({
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, lineHeight: serifLineHeight.body, color: color.encre },
   card: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md, gap: space.sm },
   row: { flexDirection: "row", gap: space.md, alignItems: "center" },
-  thumb: { width: 72, height: 72, borderRadius: radius.sm, backgroundColor: color.plinthe, overflow: "hidden" },
+  thumb: { width: 72, height: 72, borderRadius: radius.pieceThumb, borderCurve: "continuous", backgroundColor: color.plinthe, overflow: "hidden" },
   fill: { width: "100%", height: "100%" },
   text: { flex: 1, gap: 4 },
   name: { fontSize: font.secondary, color: color.encre, fontWeight: "600", lineHeight: 19 },
   details: { fontSize: font.caption, color: color.acier, lineHeight: 17 },
   confirm: { minHeight: 44, alignItems: "center", justifyContent: "center" },
   confirmDone: { opacity: 0.7 },
-  confirmLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600", textDecorationLine: "underline" },
+  confirmLabel: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   confirmDoneLabel: { color: color.acier, textDecorationLine: "none" },
   error: { fontSize: font.caption, lineHeight: 18 },
   empty: { fontSize: font.caption, color: color.acier, lineHeight: 18, textAlign: "center", marginTop: space.lg, alignSelf: "stretch" },

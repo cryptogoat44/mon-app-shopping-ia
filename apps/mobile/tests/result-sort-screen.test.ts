@@ -31,8 +31,20 @@ describe("le contrôle de tri, en haut de la liste", () => {
     ]) {
       expect(bar).toContain(`{ value: "${value}", label: ${label} }`);
     }
-    // Toucher un choix change le tri, rien d'autre ; le choix en cours ne fait rien.
-    expect(bar).toContain("onPress={() => (selected ? undefined : onChange({ ...view, sort: option.value }))}");
+    // Toucher un choix change le tri ; le choix en cours ne change rien. Lot « fidélité aux maquettes » : les trois
+    // choix sont dans la feuille de la pastille, et tout toucher sur une ligne la ferme.
+    expect(bar).toContain("onPress={() => { if (!selected) onChange({ ...view, sort: option.value }); close(); }}");
+    expect(bar).not.toContain("onPress={() => onChange({ ...view, sort: option.value })}");
+    const sheet = bar.slice(bar.indexOf("<Modal"), bar.indexOf("</Modal>"));
+    expect(sheet).toContain('accessibilityRole="radiogroup" accessibilityLabel={t.result.sortLabel}');
+    expect(sheet).toContain("testID={`sort-${option.value}`}");
+    expect(sheet).toContain("onRequestClose={close}");
+    // La pastille : un bouton qui dit le tri choisi ; refusé : la feuille d'iOS (absente du site), un hitSlop.
+    expect(bar).toContain('testID="sort-menu"');
+    // Lot « finitions de l'œil » : avec le verdict à l'œil, le résumé des prix est lu dans le nom de la pastille du tri.
+    expect(bar).toContain("accessibilityLabel={hiddenSummary ? `${t.result.sortMenuLabel(current.label)}. ${hiddenSummary}` : t.result.sortMenuLabel(current.label)}");
+    expect(bar).not.toContain("ActionSheetIOS");
+    expect(bar).not.toContain("hitSlop");
   });
 
   it("« Avec prix seulement » : un interrupteur, avec son libellé et ce qu'il fait", () => {
@@ -48,7 +60,7 @@ describe("le contrôle de tri, en haut de la liste", () => {
   });
 
   it("l'écran le place en haut, avant « Votre pièce » et la grande carte ; le choix vient de l'appareil", () => {
-    const sortBar = screen.indexOf("<ResultSortBar view={view} onChange={changeView} summary={summaryText} />");
+    const sortBar = screen.indexOf("<ResultSortBar\n          view={view}\n          onChange={changeView}\n          summary={summaryText}\n          stockShown={stockFilterShown(result, view)}\n          verdict={verdictLineShown(result.verdict) ? <VerdictLine verdict={result.verdict} /> : null}\n        />");
     expect(sortBar).toBeGreaterThan(-1);
     expect(sortBar).toBeLessThan(screen.indexOf("<YourPiece image={yourPiece} />"));
     expect(sortBar).toBeLessThan(screen.indexOf("onLayout={heroReveal.onHeroLayout}"));
@@ -82,7 +94,8 @@ describe("« Pertinence » : l'écran d'avant, dans le même ordre", () => {
   });
 
   it("« Le moins cher » sur la carte concernée, grande carte comprise", () => {
-    expect(screen).toContain("{selectedIndex === cheapest ? <CheapestBadge /> : null}");
+    // Grande carte : sur la rangée des mentions (correctif du lot « finitions de l'œil »).
+    expect(screen).toContain("{selectedIndex === cheapest ? <CheapestBadge inline /> : null}");
     expect(screen).toContain("cheapest={index === cheapest}");
     expect(screen.match(/cheapestIndex=\{cheapest\}/g)?.length).toBe(3);
     expect(complement).toContain("cheapest={index === cheapestIndex}");
@@ -107,7 +120,7 @@ describe("tri par prix : une seule liste, sans grande carte ni titre de section"
     const returned = list.slice(list.indexOf("  return (\n    <>"));
     expect(returned).toMatch(/^ {2}return \(\n {4}<>\n {6}\{visible\.map/);
     // Ligne : la zone touchable (image, nom, prix) puis le lien vers la boutique, jamais l'un dans l'autre.
-    const row = card.slice(card.indexOf('if (variant === "row")'), card.indexOf("return (\n    <View style={styles.card}>"));
+    const row = card.slice(card.indexOf('if (variant === "row")'), card.indexOf("return (\n    <View style={column === undefined ? styles.card"));
     expect(row.indexOf("</Pressable>")).toBeLessThan(row.indexOf("<ShopLink piece={piece} placement={placement} />"));
   });
 

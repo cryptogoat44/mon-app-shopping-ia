@@ -1,13 +1,14 @@
 import { useRef, useState } from "react";
-import { ActivityIndicator, Platform, Pressable, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, Text, TextInput, useWindowDimensions, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
-import { color, font, radius, space } from "@/theme/tokens";
+import { color, font, getActiveScheme, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
-import { ClipboardIcon } from "@/components/icons";
+import { ClipboardIcon, LinkIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
 import { detectLink, type LinkDetection } from "@/lib/link-detection";
 import { linkRefusal, linkStep } from "@/lib/link-step";
 import { useLinkEntry } from "@/lib/use-link-entry";
+import { placeholderFor } from "@/lib/text-fit";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Champ de lien du Spotter (mission « liens vidéo »), sur l'app iPhone comme
@@ -40,6 +41,8 @@ function DetectionCard({ detection }: { detection: LinkDetection }) {
 /** `onHelp` : le lien ne peut pas être lu — le Spotter montre l'aide « capture d'écran d'abord ». */
 export function LinkEntry({ onHelp }: { onHelp: () => void }) {
   const label = t.player.linkLabel;
+  const { fontScale } = useWindowDimensions();
+  const [inputWidth, setInputWidth] = useState(0);
   const openLink = useLinkEntry();
   const [link, setLink] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -106,9 +109,12 @@ export function LinkEntry({ onHelp }: { onHelp: () => void }) {
 
   return (
     <>
-      <Text style={styles.label}>{label}</Text>
-      {Platform.OS === "web" ? <Text style={styles.hint}>{t.player.linkHintWeb}</Text> : null}
+      {/* Lot « fidélité aux maquettes » : un bloc plein ; le libellé devient le texte d'attente et reste le nom lu (VoiceOver, aria-label du site).
+          Lot « finitions de l'œil » : champ étroit ou texte agrandi, un texte d'attente court (le nom lu reste le libellé entier). */}
       <View style={styles.field}>
+        <View accessible={false}>
+          <LinkIcon size={18} tint={color.acier} />
+        </View>
         <TextInput
           style={styles.input}
           value={link}
@@ -116,7 +122,8 @@ export function LinkEntry({ onHelp }: { onHelp: () => void }) {
             setLink(text);
             setMessage(null);
           }}
-          placeholder={t.spotter.linkPlaceholder}
+          placeholder={placeholderFor(label, t.player.linkPlaceholderShort, inputWidth, INPUT_FONT_SIZE, fontScale)}
+          onLayout={(event) => setInputWidth(event.nativeEvent.layout.width)}
           placeholderTextColor={color.acier}
           autoCapitalize="none"
           autoCorrect={false}
@@ -130,11 +137,12 @@ export function LinkEntry({ onHelp }: { onHelp: () => void }) {
             <Text style={styles.clearLabel}>×</Text>
           </Pressable>
         ) : null}
-        <Pressable onPress={handlePaste} hitSlop={10} style={styles.pasteButton} accessibilityRole="button">
-          <ClipboardIcon size={16} tint={color.vert} />
+        <Pressable onPress={handlePaste} style={styles.pasteButton} accessibilityRole="button">
+          <ClipboardIcon size={15} tint={color.encre} />
           <Text style={styles.pasteLabel}>{t.spotter.paste}</Text>
         </Pressable>
       </View>
+      {Platform.OS === "web" ? <Text style={styles.hint}>{t.player.linkHintWeb}</Text> : null}
       {link.length > 0 ? <DetectionCard detection={detection} /> : null}
       {message ? <ErrorMessage style={styles.feedback}>{message}</ErrorMessage> : null}
       {link.length > 0 ? (
@@ -155,15 +163,44 @@ export function LinkEntry({ onHelp }: { onHelp: () => void }) {
   );
 }
 
+/** Taille du texte du champ (16 sur le site : en dessous, Safari agrandit la page au toucher). */
+const INPUT_FONT_SIZE = Platform.OS === "web" ? 16 : font.secondary;
+
 const styles = themedStyles(() => ({
-  label: { fontSize: font.caption, color: color.acier, marginTop: space.lg },
-  hint: { fontSize: font.caption, color: color.acier, marginTop: space.xs, lineHeight: 18 },
-  field: { flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: color.filet, gap: space.sm },
-  input: { flex: 1, fontSize: font.body, color: color.encre, paddingVertical: 12 },
+  hint: { fontSize: font.caption, lineHeight: 18, color: color.acier, marginTop: space.sm },
+  field: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 52,
+    borderRadius: radius.md,
+    borderCurve: "continuous",
+    backgroundColor: color.surface,
+    // Thème clair seulement : un filet (même façon que la tuile de pièce).
+    borderWidth: getActiveScheme() === "light" ? 1 : 0,
+    borderColor: color.filet,
+    paddingLeft: 14,
+    paddingRight: 6,
+    gap: 10,
+    marginTop: space.md,
+  },
+  // 16 sur le site : Safari sur iPhone zoome toute la page quand un champ de moins de 16 px prend le curseur.
+  input: { flex: 1, minWidth: 0, fontSize: INPUT_FONT_SIZE, color: color.encre, paddingVertical: 12 },
   clearButton: { minWidth: 32, minHeight: 44, alignItems: "center", justifyContent: "center" },
   clearLabel: { fontSize: 22, lineHeight: 24, color: color.acier },
-  pasteButton: { flexDirection: "row", alignItems: "center", gap: 5, minHeight: 44, minWidth: 44 },
-  pasteLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  // Un bouton encadré (plus un lien) : la maquette dit 40 de haut, on garde la cible de 44, qui tient dans 52.
+  pasteButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    minHeight: 44,
+    paddingHorizontal: 14,
+    borderRadius: radius.md,
+    borderCurve: "continuous",
+    backgroundColor: color.porcelaine,
+    borderWidth: 1,
+    borderColor: color.filet,
+  },
+  pasteLabel: { fontSize: font.secondary, fontWeight: "500", color: color.encre },
   detected: { flexDirection: "row", alignItems: "center", gap: space.sm, marginTop: space.md },
   platformChip: { backgroundColor: color.encre, borderRadius: radius.full, paddingHorizontal: 11, height: 26, justifyContent: "center" },
   platformChipLabel: { color: color.blanc, fontSize: font.caption, fontWeight: "600" },

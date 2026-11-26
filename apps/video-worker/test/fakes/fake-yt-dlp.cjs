@@ -109,6 +109,10 @@ switch (scenario) {
   case "static":
     out(video(20, "static&d=20"));
     break;
+  case "black8":
+    // Image du moment : vidéo toute noire (fondu, écran noir).
+    out(video(8, "black&d=8"));
+    break;
   case "toolong":
     out(video(120, "varied&d=120"));
     break;

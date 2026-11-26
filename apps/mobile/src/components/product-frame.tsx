@@ -1,23 +1,29 @@
-import { View } from "react-native";
-import { SpotImage } from "@/components/spot-image";
-import { EnlargeableImage } from "@/components/image-viewer";
-import { color, radius } from "@/theme/tokens";
+import { PieceTile } from "@/components/piece-tile";
+import type { ZoomState } from "@/components/image-viewer";
+import { size } from "@/theme/tokens";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Cadre de l'image d'une pièce (décision du fondateur, lot 5 : « image
-// entière, cadre 4:5 ») : l'image entière, « contenue » (jamais rognée ni
-// déformée), centrée sur le fond plinthe, 360 px de large au plus. Partagé
-// par l'écran d'une envie et les publications qui montrent une pièce (envie
-// republiée, « achat » venu du Spotter : lib/post-media.ts), pour qu'ils
-// restent identiques. `enlargeable` (fiche d'une envie seulement, retours du
-// build 2) : toucher l'image l'ouvre en plein écran (components/image-viewer.tsx) ;
-// jamais dans le fil.
+// entière, cadre 4:5 ») : depuis les retours du build 3 (« Écrin »), une
+// simple grande tuile de pièce (components/piece-tile.tsx : coins doux,
+// photo entière entourée de ses bords prolongés, plus aucune bande), aussi
+// large que le texte (size.contentMaxWidth). Partagé par l'écran d'une envie
+// et les publications qui montrent une pièce (envie republiée, « achat »
+// venu du Spotter : lib/post-media.ts), pour qu'ils restent identiques.
+// `enlargeable` (fiche d'une envie seulement) : depuis les retours du
+// build 3, on pince l'image sur place à deux doigts sur iPhone, elle revient
+// au relâché ; plein écran au clic sur le site et par VoiceOver
+// (components/image-viewer.tsx) ; jamais dans le fil. `onZoomStateChange` et
+// `fullResolution` sont seulement transmis à la tuile.
 export function ProductFrame({
   hdUri,
   fallbackUri,
   accessibilityLabel,
   recyclingKey,
   enlargeable = false,
+  onZoomStateChange,
+  fullResolution = false,
+  edgeColor,
 }: {
   hdUri?: string | null;
   fallbackUri: string;
@@ -25,24 +31,29 @@ export function ProductFrame({
   /** Dans une liste (fil) : voir SpotImage. */
   recyclingKey?: string;
   enlargeable?: boolean;
+  /** Agrandissable seulement : l'écran bloque son défilement pendant « zooming ». */
+  onZoomStateChange?: (state: ZoomState) => void;
+  /** La grande image de la fiche d'une envie seulement : décodée en entier, nette au zoom. */
+  fullResolution?: boolean;
+  /** Couleur des bords mesurée par le serveur (lot « couleur des bords ») : voir PieceTile. */
+  edgeColor?: string | null;
 }) {
-  const image = (
-    <SpotImage hdUri={hdUri} fallbackUri={fallbackUri} style={styles.fill} fit="contain" accessibilityLabel={accessibilityLabel} recyclingKey={recyclingKey} />
-  );
   return (
-    <View style={styles.frame}>
-      {enlargeable ? (
-        <EnlargeableImage hdUri={hdUri} fallbackUri={fallbackUri} label={accessibilityLabel ?? ""} style={styles.fill}>
-          {image}
-        </EnlargeableImage>
-      ) : (
-        image
-      )}
-    </View>
+    <PieceTile
+      variant="hero"
+      hdUri={hdUri}
+      fallbackUri={fallbackUri}
+      accessibilityLabel={accessibilityLabel}
+      recyclingKey={recyclingKey}
+      enlargeable={enlargeable}
+      onZoomStateChange={onZoomStateChange}
+      fullResolution={fullResolution}
+      edgeColor={edgeColor}
+      style={styles.frame}
+    />
   );
 }
 
 const styles = themedStyles(() => ({
-  frame: { width: "100%", maxWidth: 360, aspectRatio: 4 / 5, alignSelf: "center", borderRadius: radius.sm, backgroundColor: color.plinthe, overflow: "hidden" },
-  fill: { width: "100%", height: "100%" },
+  frame: { maxWidth: size.contentMaxWidth, alignSelf: "center" },
 }));

@@ -5,6 +5,7 @@ import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import type { FollowState, MemberPage, MemberRow } from "@monapp/shared-types";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { ApiError, acceptFollowRequest, declineFollowRequest, fetchFollowRequests, fetchFollowers, fetchFollowing, fetchPostLikes, followUser, unfollowUser } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -435,7 +436,7 @@ const styles = themedStyles(() => ({
   acceptLabel: { color: color.blanc },
   busy: { opacity: 0.6 },
   findPeople: { alignSelf: "center", minHeight: 44, marginTop: space.sm, paddingHorizontal: space.lg, justifyContent: "center" },
-  findPeopleLabel: { fontSize: font.secondary, fontWeight: "600", color: color.vert },
+  findPeopleLabel: { ...lienSouligne, fontSize: font.secondary, fontWeight: "600", color: color.vert },
   gone: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.lg },
   goneMessage: { fontSize: font.secondary, textAlign: "center" },
 }));

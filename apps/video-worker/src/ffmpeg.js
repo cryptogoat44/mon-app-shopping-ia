@@ -70,6 +70,46 @@ export function ffmpegArgs({ input, mode, stepSeconds }) {
   return args;
 }
 
+/** Mode « moment » (image du moment, retours du build 3) : fenêtre décodée
+ * autour du moment demandé, et images rendues au plus par ffmpeg (≈ 1 s à
+ * 30 images/s ; à 60 images/s, la fenêtre s'arrête un peu après le moment). */
+export const MOMENT_LEAD_SECONDS = 0.5;
+export const MOMENT_WINDOW_SECONDS = 1;
+export const MOMENT_MAX_FRAMES = 32;
+
+/** Point de départ de la fenêtre « moment » (0,5 s avant, jamais avant 0), en secondes. */
+export function momentStart(/** @type {number} */ atSeconds) {
+  return Math.round(Math.max(0, atSeconds - MOMENT_LEAD_SECONDS) * 1000) / 1000;
+}
+
+/**
+ * Arguments de ffmpeg en mode « moment » : recherche (-ss AVANT -i : rapide
+ * jusqu'à l'image clé, puis exacte), puis TOUTES les images d'une fenêtre
+ * d'une seconde, décodées entièrement (jamais -skip_frame) et sans filtre
+ * select. Même graphe, mêmes sorties et mêmes protections que ffmpegArgs.
+ * Les instants lus par showinfo repartent de 0 au point de départ : voir
+ * extractCandidates (le point de départ leur est ajouté).
+ * @param {{ input: FfmpegInput, atSeconds: number }} plan
+ * @returns {string[]}
+ */
+export function momentArgs({ input, atSeconds }) {
+  const maxFrames = String(MOMENT_MAX_FRAMES);
+  const edge = LIMITS.maxFrameEdge;
+  const args = ["-hide_banner", "-nostdin", "-nostats", "-loglevel", "info", "-filter_complex_threads", "1"];
+  args.push("-protocol_whitelist", input.protocolWhitelist);
+  if (input.url.startsWith("http://")) args.push("-rw_timeout", String(LIMITS.networkTimeoutSeconds * 1_000_000));
+  args.push("-threads", "1", "-ss", String(momentStart(atSeconds)), "-t", String(MOMENT_WINDOW_SECONDS), "-f", "mp4", "-i", input.url);
+  const graph = [
+    `[0:v:0]showinfo,split=2[big][small]`,
+    `[big]scale=w='min(${edge},iw)':h='min(${edge},ih)':force_original_aspect_ratio=decrease:force_divisible_by=2[bigout]`,
+    `[small]scale=${SCORING_EDGE}:${SCORING_EDGE}:flags=area,format=rgb24[smallout]`,
+  ].join(";");
+  args.push("-filter_complex", graph);
+  args.push("-map", "[bigout]", "-an", "-sn", "-dn", "-fps_mode", "passthrough", "-frames:v", maxFrames, "-c:v", "mjpeg", "-q:v", String(LIMITS.jpegQscale), "-f", "image2pipe", "pipe:1");
+  args.push("-map", "[smallout]", "-an", "-sn", "-dn", "-fps_mode", "passthrough", "-frames:v", maxFrames, "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:3");
+  return args;
+}
+
 const SHOWINFO = /\bn:\s*\d+\s+pts:\s*-?\d+\s+pts_time:\s*(-?[0-9.]+(?:e[-+]?\d+)?)/;
 const DURATION = /^\s*Duration:\s*(\d+):(\d{2}):(\d{2}(?:\.\d+)?)/;
 
@@ -113,8 +153,10 @@ export function classifyFfmpegError(stderr) {
 
 /**
  * Lance ffmpeg et rend les images candidates. `release()` efface toutes les
- * images (à appeler dès qu'elles ne servent plus).
- * @param {{ input: FfmpegInput, mode: DecodeMode, stepSeconds: number }} plan
+ * images (à appeler dès qu'elles ne servent plus). Plan « moment » : les
+ * images de la fenêtre autour de `atSeconds` (momentArgs), avec leurs
+ * instants dans le temps de la vidéo (point de départ ajouté).
+ * @param {{ input: FfmpegInput, mode: DecodeMode, stepSeconds: number } | { input: FfmpegInput, mode: "moment", atSeconds: number }} plan
  * @param {{ env: Record<string, string>, signal: AbortSignal, timeoutMs: number, command?: string }} options
  * @returns {Promise<{ candidates: Candidate[], durationSeconds: number | null, release: () => void }>}
  */
@@ -123,7 +165,10 @@ export async function extractCandidates(plan, { env, signal, timeoutMs, command 
   const times = [];
   /** @type {number | null} */
   let durationSeconds = null;
-  const result = await runProgram(command, ffmpegArgs(plan), {
+  const moment = plan.mode === "moment";
+  const start = plan.mode === "moment" ? momentStart(plan.atSeconds) : 0;
+  const args = plan.mode === "moment" ? momentArgs(plan) : ffmpegArgs(plan);
+  const result = await runProgram(command, args, {
     env,
     signal,
     timeoutMs,
@@ -167,8 +212,10 @@ export async function extractCandidates(plan, { env, signal, timeoutMs, command 
     for (let index = 0; index < count; index += 1) {
       const small = result.extra.subarray(index * SCORING_BYTES, (index + 1) * SCORING_BYTES);
       const image = images[index];
-      // Instant lu par showinfo ; à défaut, déduit de l'écart demandé.
-      const timeSeconds = times[index] ?? index * plan.stepSeconds;
+      // Instant lu par showinfo ; à défaut, déduit de l'écart demandé (en
+      // mode « moment », d'une image toutes les 1/30 s). Après un -ss placé
+      // avant l'entrée, showinfo compte depuis le point de départ : on l'ajoute.
+      const timeSeconds = moment ? start + (times[index] ?? index / 30) : (times[index] ?? index * /** @type {{ stepSeconds: number }} */ (plan).stepSeconds);
       candidates.push({ timeSeconds, jpeg: image.data, width: image.width, height: image.height, ...scoreFrame(small) });
     }
     return { candidates, durationSeconds, release };

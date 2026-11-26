@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
-import { Switch, Text, View } from "react-native";
-import { color, font, space } from "@/theme/tokens";
+import { Text, View } from "react-native";
+import { Switch } from "@/components/switch";
+import { space } from "@/theme/tokens";
+import { couleursInterrupteur } from "@/theme/accent";
 import { t } from "@/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { updateReadReceipts } from "@/lib/api";
 import { changeReadReceipts, readReceiptsOffered } from "@/lib/read-receipts";
 import { useMessagesStatus } from "@/lib/use-messages-status";
 import { ErrorMessage } from "@/components/error-message";
+import { settingsGroupValues } from "@/components/settings-group";
 import { themedStyles } from "@/theme/themed-styles";
 
 // « Confirmations de lecture » (lot « messages vus »), sous « Qui peut
@@ -44,7 +47,7 @@ export function ReadReceiptsSetting() {
           value={value}
           disabled={saving}
           onValueChange={(next) => void choose(next)}
-          trackColor={{ true: color.vert, false: color.filet }}
+          {...couleursInterrupteur(value)}
         />
       </View>
       <Text style={styles.body}>{t.settings.readReceiptsHint}</Text>
@@ -53,9 +56,9 @@ export function ReadReceiptsSetting() {
   );
 }
 
-const styles = themedStyles(() => ({
-  section: { marginBottom: space.lg },
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44, gap: space.sm },
-  title: { flex: 1, fontSize: font.secondary, color: color.encre, fontWeight: "600" },
-  body: { fontSize: font.secondary, color: color.acier, marginBottom: space.sm, lineHeight: 19 },
-}));
+// Carte de Réglages sans surtitre (components/settings-group.tsx) : la vue extérieure EST la carte
+// (marge du haut : suite du groupe au-dessus) ; jamais de marge du bas (40 pt entre deux cartes sinon).
+const styles = themedStyles(() => {
+  const g = settingsGroupValues();
+  return { section: { ...g.card, marginTop: space.sm }, row: g.row, title: g.rowTitle, body: g.hint };
+});

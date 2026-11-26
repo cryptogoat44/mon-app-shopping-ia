@@ -90,7 +90,8 @@ describe("l'accueil de Spotter : une liste, l'historique en descendant", () => {
     expect(home).not.toContain("SeeAllRecentLink");
     expect(home).not.toContain("<ScrollView");
     expect(home).toContain("<FlatList");
-    expect(home).toContain("renderItem={({ item }) => <RecentSearchRow entry={item} onOpen={() => openEntry(item)} />}");
+    // Retours du build 3, point 7 : deux colonnes (voir « grille de deux colonnes » plus bas).
+    expect(home).toContain('renderItem={({ item, index }) => <RecentSearchTile entry={item} column={index % 2 === 0 ? "left" : "right"} onOpen={() => openEntry(item)} />}');
     expect(home).toContain("onEndReached={history.loadMore}");
     expect(home).toContain("onEndReachedThreshold={0.5}");
     expect(home).toContain('keyboardShouldPersistTaps="handled"');
@@ -144,6 +145,17 @@ describe("l'accueil de Spotter : une liste, l'historique en descendant", () => {
     expect(field).toContain("minWidth: size.touchTarget, minHeight: size.touchTarget");
   });
 
+  it("le champ à 320 pt sur le site : refusé, un champ qui ne peut pas rétrécir (croix poussée hors de l'écran) ; permis, minWidth 0 et loupe et croix fixes", () => {
+    const field = code("components/recent-searches.tsx");
+    const styleOf = (name: string) => field.match(new RegExp(`\\n  ${name}: \\{([^}]*)\\}`))?.[1] ?? "";
+    expect(styleOf("searchInput")).toContain("flex: 1");
+    expect(styleOf("searchInput")).toContain("minWidth: 0");
+    expect(styleOf("searchInput")).not.toMatch(/minWidth: [1-9]/);
+    expect(styleOf("searchIcon")).toContain("flexShrink: 0");
+    expect(styleOf("clearButton")).toContain("flexShrink: 0");
+    expect(field).toMatch(/<View style=\{styles\.searchIcon\}>\s*<SearchIcon /);
+  });
+
   it("chaque état sous la liste : chargement (dit à VoiceOver), aucune correspondance, échec avec « Réessayer », fin de l'historique, recherche indisponible", () => {
     const footer = home.slice(home.indexOf("function HistoryFooter("), home.indexOf("export default function SpotterScreen"));
     expect(footer).toContain("accessibilityLabel={t.retrouverPieces.historyLoading}");
@@ -165,6 +177,62 @@ describe("l'accueil de Spotter : une liste, l'historique en descendant", () => {
       expect(lang.retrouverPieces).not.toHaveProperty("seeAll");
     }
     expect(code("components/recent-searches.tsx")).not.toContain("/recentes");
+  });
+});
+
+// Retours du build 3, point 7 (« deux et deux côte à côte qui se suivent en
+// descendant pas une liste, avec les coins arrondis également sur chaque
+// photo ») : la même FlatList, en deux colonnes, des tuiles de pièce.
+describe("l'historique en grille de deux colonnes (retours du build 3, point 7)", () => {
+  const home = code("app/(app)/(tabs)/index.tsx");
+  const tiles = code("components/recent-searches.tsx");
+  const list = home.slice(home.indexOf("<FlatList"), home.indexOf("</SafeAreaView>"));
+  const tile = tiles.slice(tiles.indexOf("export function RecentSearchTile("), tiles.indexOf("export function HistorySearchField("));
+
+  it("refusé : une liste recréée (`key`), `columnWrapperStyle` (une case seule s'étirerait), une ScrollView ; permis : `numColumns={2}` sur la même FlatList", () => {
+    expect(list).toContain("numColumns={2}");
+    expect(list).not.toContain("columnWrapperStyle");
+    expect(list).not.toMatch(/\bkey=/);
+    expect(home).not.toContain("<ScrollView");
+    expect(home.match(/^\s*<FlatList$/gm)).toHaveLength(1);
+    // Le champ de recherche ne colle pas à la première rangée de photos.
+    // Lot « fidélité aux maquettes » : 12 pt, la maquette (jamais 0).
+    expect(home).toContain("recentSection: { marginTop: space.lg, marginBottom: 12, gap: space.xs }");
+    expect(home).not.toMatch(/recentSection: \{[^}]*marginBottom: 0/);
+  });
+
+  it("refusé : la ligne et ses filets ; permis : la tuile de pièce de la grille, en deux temps (vignette puis originale)", () => {
+    expect(tiles).not.toContain("RecentSearchRow");
+    expect(tiles).not.toContain("borderBottomColor");
+    expect(tile).toContain('<PieceTile variant="grid" size="card" hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} edgeColor={piece.edgeColor} recyclingKey={entry.searchId} />');
+    // Sans image : une case 4:5 aux mêmes coins, avec l'horloge.
+    expect(tiles).toContain("tileEmpty: { width: \"100%\", aspectRatio: 4 / 5, backgroundColor: color.plinthe, borderRadius: radius.pieceGrid, borderCurve: \"continuous\",");
+    expect(tile).toContain("<ClockIcon size={22} tint={color.acier} />");
+  });
+
+  // Lot « fidélité aux maquettes » : 8 pt entre les colonnes (4 + 4), le nom sur une ligne.
+  it("deux cases de 50 %, 8 pt entre les colonnes, 16 entre les rangées ; même hauteur : nom sur une ligne, méta sur une", () => {
+    expect(tiles).toContain('cell: { width: "50%", marginBottom: space.md }');
+    expect(tiles).toContain("cellLeft: { paddingRight: 4 }");
+    expect(tiles).toContain("cellRight: { paddingLeft: 4 }");
+    expect(tiles).not.toContain("cellLeft: { paddingRight: 6 }");
+    expect(tile).toContain('column === "left" ? styles.cellLeft : styles.cellRight');
+    expect(tiles).toMatch(/name: \{[^}]*lineHeight: 20,/);
+    expect(tiles).not.toMatch(/name: \{[^}]*minHeight: 40/);
+    expect(tile).toMatch(/<Text style=\{styles\.name\} numberOfLines=\{1\}>/);
+    expect(tile).not.toMatch(/<Text style=\{styles\.name\} numberOfLines=\{2\}>/);
+    // Lot « finitions de l'œil » : la méta sur une ligne, en deux textes (la date courte, puis la boutique qui se raccourcit).
+    expect(tile).toMatch(/<Text style=\{\[styles\.meta, styles\.metaDay\]\} numberOfLines=\{1\}>/);
+    expect(tile).toMatch(/<Text style=\{\[styles\.meta, styles\.metaShop\]\} numberOfLines=\{1\}>/);
+  });
+
+  it("VoiceOver : refusé, une étiquette sur la tuile (l'image lue en plus) ; permis, une seule étiquette par case, « nom, jour, boutique »", () => {
+    expect(tile.match(/accessibilityLabel=/g)).toHaveLength(1);
+    // Lot « finitions de l'œil » : la date entière lue (la case écrit la date courte).
+    expect(tile).toContain("accessibilityLabel={`${piece.name}, ${spoken}`}");
+    expect(tile).toContain('accessibilityRole="button"');
+    const pieceTile = tile.slice(tile.indexOf("<PieceTile"), tile.indexOf("/>", tile.indexOf("<PieceTile")));
+    expect(pieceTile).not.toContain("accessibilityLabel");
   });
 });
 

@@ -1,7 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { imageAfterErrors, imageSources, keepHdImage, twoStepLayers, twoStepSources, type TwoStepState } from "../src/lib/piece-image";
+import {
+  edgeBackground,
+  edgeColorApplies,
+  FILL_TOLERANCE,
+  fillsTile,
+  GRID_TALL_FILL_TOLERANCE,
+  GRID_WIDE_FILL_TOLERANCE,
+  HERO_MAX_POINTS_PER_PIXEL,
+  honestSize,
+  imageAfterErrors,
+  imageSources,
+  keepHdImage,
+  TILE_RATIO,
+  twoStepLayers,
+  HD_FADE_MS,
+  twoStepSources,
+  type TwoStepState,
+} from "../src/lib/piece-image";
 
 // Lot résultats lisibles : la vignette légère de Google d'abord dans une
 // petite case, l'image d'origine du marchand d'abord sur la grande carte ;
@@ -54,9 +71,10 @@ describe("carte des résultats : chargement en deux temps", () => {
     expect(card).not.toContain('size="small"');
     const image = readFileSync(join(__dirname, "../src/components/spot-image.tsx"), "utf8");
     // L'originale arrivée remplace la vignette ; bloquée par le marchand, la vignette reste.
-    expect(image).toContain('onLoad={(event) => update({ hd: "loaded", hdWidth: event.source?.width ?? null })}');
+    // (Lot « vitrine » : la taille naturelle est gardée en plus, pour la tuile de pièce.)
+    expect(image).toContain('onLoad={(event) => update({ hd: "loaded", hdWidth: event.source?.width ?? null, hdSize: naturalSize(event.source) })}');
     expect(image).toContain('onError={() => update({ hd: "failed" })}');
-    expect(image).toContain("onLoad={(event) => update({ thumbLoaded: true, thumbWidth: event.source?.width ?? null })}");
+    expect(image).toContain("onLoad={(event) => update({ thumbLoaded: true, thumbWidth: event.source?.width ?? null, thumbSize: naturalSize(event.source) })}");
     expect(image).toContain("const { showThumb, showHd } = twoStepLayers(current);");
     // Les images déjà vues restent en mémoire et sur le disque.
     expect(image.match(/cachePolicy="memory-disk"/g)?.length).toBeGreaterThanOrEqual(3);
@@ -118,21 +136,49 @@ describe("la plus nette des deux images, jamais la plus petite", () => {
   });
 });
 
+// Lot « vitrine » : la tuile a un fond opaque (plinthe) ; la vignette reste
+// sous l'originale pendant son fondu, pour que ce fond ne clignote jamais.
+describe("pas de flash quand l'originale remplace la vignette", () => {
+  it("refusé : la vignette n'est pas retirée pendant le fondu de l'originale", () => {
+    expect(twoStepLayers(state({ hd: "loaded", hdWidth: 1200, thumbLoaded: true, thumbWidth: 280, hdFaded: false }))).toEqual({ showThumb: true, showHd: true });
+  });
+
+  it("permis : le fondu fini, la vignette est retirée", () => {
+    expect(twoStepLayers(state({ hd: "loaded", hdWidth: 1200, thumbLoaded: true, thumbWidth: 280, hdFaded: true }))).toEqual({ showThumb: false, showHd: true });
+    // Vignette en échec : rien à garder dessous, même pendant le fondu.
+    expect(twoStepLayers(state({ hd: "loaded", hdWidth: 1200, thumbFailed: true, hdFaded: false }))).toEqual({ showThumb: false, showHd: true });
+  });
+
+  it("le fondu et le minuteur ont la même durée ; minuteur arrêté si la carte change ou disparaît", () => {
+    expect(HD_FADE_MS).toBe(180);
+    const image = readFileSync(join(__dirname, "../src/components/spot-image.tsx"), "utf8");
+    expect(image).toContain("transition={HD_FADE_MS}");
+    expect(image).not.toMatch(/transition=\{\d+\}/);
+    expect(image).toContain("hdFaded: false, hdSize: null");
+    expect(image).toContain("const timer = setTimeout(() => update({ hdFaded: true }), HD_FADE_MS);");
+    expect(image).toContain("return () => clearTimeout(timer);");
+    expect(image).toContain("}, [key, fading]);");
+  });
+});
+
 describe("grilles des Envies et du Vault en deux temps ; la grille des résultats ne change pas", () => {
   const src = (path: string) => readFileSync(join(__dirname, "../src", path), "utf8");
 
   it("les vignettes des Envies et du Vault du profil : « card » (vignette, puis l'originale si plus nette)", () => {
+    // Lot « vitrine » : la tuile « Écrin » des grilles (4:5, la pièce entière), toujours en « card ».
     const panel = src("components/wishlist-panel.tsx");
-    expect(panel).toContain('fit="cover" size="card" accessibilityLabel={item.name}');
+    expect(panel).toContain('<PieceTile variant="grid" size="card" hdUri={item.imageHdUrl} fallbackUri={item.imageUrl}');
     expect(panel).not.toContain('size="small"');
     const profile = src("app/(app)/(tabs)/profile/index.tsx");
-    expect(profile).toContain('fit="cover" size="card" accessibilityLabel={item.title}');
+    expect(profile).toContain('<PieceTile variant="grid" size="card" hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} accessibilityLabel={item.title}');
   });
 
   it("la fiche d'une envie : le cadre de la pièce charge en « large » (deux temps), sans taille imposée", () => {
+    // Lot « vitrine » : le cadre est une grande tuile de pièce, qui passe par SpotImage sans taille imposée.
     const frame = src("components/product-frame.tsx");
-    expect(frame).toContain("<SpotImage");
+    expect(frame).toContain("<PieceTile");
     expect(frame).not.toMatch(/size="(small|card)"/);
+    expect(src("components/piece-tile.tsx")).toContain("<SpotImage");
   });
 });
 
@@ -166,5 +212,128 @@ describe("grilles de publications : la miniature d'abord, jamais la photo entiè
       expect(code, path).toContain(`<SpotImage size="small" hdUri={post.mediaUrl} ${fallback}`);
       expect(code, path).not.toContain("fallbackUri={post.mediaUrl}");
     }
+  });
+});
+
+// Lot « vitrine » (retours du build 3, 26 novembre 2026) : la tuile « Écrin »
+// (components/piece-tile.tsx). Une photo presque 4:5 remplit la tuile ;
+// grille : la pièce remplit toujours sa tuile ; grande image : jamais plus
+// d'un point par pixel de l'image.
+describe("tuile de pièce : remplir, taille honnête, couleur des bords", () => {
+  const HERO = { width: 358, height: 447.5 };
+  const GRID = { width: 170, height: 212.5 };
+  const CELL_4_5 = { width: 175, height: 219 };
+
+  it("constantes : 4:5, 12 %, un point par pixel", () => {
+    expect(TILE_RATIO).toBe(4 / 5);
+    expect(FILL_TOLERANCE).toBe(0.12);
+    expect(HERO_MAX_POINTS_PER_PIXEL).toBe(1);
+  });
+
+  it("permis : une grande photo 4:5 remplit la tuile, grande comme petite", () => {
+    expect(fillsTile({ width: 1200, height: 1500 }, HERO, "hero")).toBe(true);
+    expect(fillsTile({ width: 1200, height: 1500 }, GRID, "grid")).toBe(true);
+  });
+
+  it("refusé : une grande photo carrée (écart de 25 %) ne remplit pas, elle se pose sur son fond", () => {
+    expect(fillsTile({ width: 1000, height: 1000 }, HERO, "hero")).toBe(false);
+  });
+
+  it("photo presque 4:5 (0,85, écart 6 %) mais petite (200 px) : refusé en grand, permis en grille", () => {
+    const small = { width: 200, height: 200 / 0.85 };
+    expect(fillsTile(small, HERO, "hero")).toBe(false);
+    expect(fillsTile(small, GRID, "grid")).toBe(true);
+  });
+
+  it("dimensions inconnues ou nulles : ne remplit pas", () => {
+    expect(fillsTile(null, HERO, "hero")).toBe(false);
+    expect(fillsTile({ width: 0, height: 0 }, GRID, "grid")).toBe(false);
+    expect(fillsTile(null, CELL_4_5, "grid")).toBe(false);
+  });
+
+  // Lot « fidélité aux maquettes » (décision 9), corrigée à la relecture : en grille, une photo plus large que la
+  // tuile, jusqu'au carré, la remplit ; une photo plus haute n'est rognée que de 12 % au plus ; selon le ratio seul.
+  describe("grilles : règle « recadrée » des maquettes, tolérance asymétrique (26 % en largeur, 12 % en hauteur)", () => {
+    const CELL = CELL_4_5;
+    it("constantes : 26 % pour une photo plus large, 12 % pour une photo plus haute", () => {
+      expect(GRID_WIDE_FILL_TOLERANCE).toBe(0.26);
+      expect(GRID_TALL_FILL_TOLERANCE).toBe(0.12);
+    });
+    it("permis : une photo carrée remplit la case (rognée de 10 % au plus de chaque côté)", () => {
+      expect(fillsTile({ width: 1000, height: 1000 }, CELL, "grid")).toBe(true);
+      expect(fillsTile({ width: 1000, height: 1000 }, GRID, "grid")).toBe(true);
+    });
+    it("permis : une photo 3:4 (un peu plus haute que la case, écart 6 %) la remplit", () => {
+      expect(fillsTile({ width: 1500, height: 2000 }, CELL, "grid")).toBe(true);
+    });
+    it("refusé : une photo en pied 2:3 (écart 17 %) n'est pas rognée : ni tête ni pieds coupés", () => {
+      expect(fillsTile({ width: 1000, height: 1500 }, CELL, "grid")).toBe(false);
+      // Ratio 0,6 (écart 25 %, sous les 26 % du côté large) : toujours entière.
+      expect(fillsTile({ width: 600, height: 1000 }, CELL, "grid")).toBe(false);
+    });
+    it("refusé : une photo 16:9 (au-delà de 26 %) n'est jamais recadrée, même en grille", () => {
+      expect(fillsTile({ width: 1600, height: 900 }, CELL, "grid")).toBe(false);
+    });
+    it("refusé : une grande image carrée dans une tuile 4:5 (358 × 448) n'est pas recadrée", () => {
+      expect(fillsTile({ width: 1000, height: 1000 }, { width: 358, height: 448 }, "hero")).toBe(false);
+    });
+    it("permis : une grande image carrée dans le cadre carré du Résultat (358 × 358), si la règle du point par pixel le permet", () => {
+      expect(fillsTile({ width: 1000, height: 1000 }, { width: 358, height: 358 }, "hero")).toBe(true);
+      // Une vignette de 260 px ne serait pas étirée sur 358 pt.
+      expect(fillsTile({ width: 260, height: 260 }, { width: 358, height: 358 }, "hero")).toBe(false);
+    });
+    it("l'écart se mesure au cadre réel ; cadre pas encore mesuré : 4:5", () => {
+      expect(fillsTile({ width: 1200, height: 1500 }, { width: 0, height: 0 }, "grid")).toBe(true);
+      expect(fillsTile({ width: 1200, height: 1500 }, { width: 358, height: 358 }, "hero")).toBe(false);
+    });
+  });
+
+  it("refusé : une vignette de 260 px n'est jamais étirée sur 358 pt dans une grande tuile", () => {
+    const shown = honestSize({ width: 260, height: 260 }, HERO, "hero");
+    expect(shown.width).toBeLessThanOrEqual(260);
+    expect(shown.width).not.toBe(358);
+    expect(shown).toEqual({ width: 260, height: 260 });
+  });
+
+  it("permis : une grande image prend toute la place du cadre (comme contain)", () => {
+    expect(honestSize({ width: 1200, height: 1500 }, HERO, "hero")).toEqual(HERO);
+    // Paysage : toute la largeur, hauteur au ratio.
+    const wide = honestSize({ width: 2000, height: 1000 }, HERO, "hero");
+    expect(wide.width).toBe(358);
+    expect(wide.height).toBe(179);
+  });
+
+  it("grille : une vignette carrée de 200 px touche les deux bords (170 × 170), jamais rapetissée", () => {
+    expect(honestSize({ width: 200, height: 200 }, GRID, "grid")).toEqual({ width: 170, height: 170 });
+    // Même une très petite image remplit la largeur dans une grille.
+    expect(honestSize({ width: 100, height: 100 }, GRID, "grid")).toEqual({ width: 170, height: 170 });
+  });
+
+  it("le ratio est conservé ; dimensions inconnues : le cadre", () => {
+    const shown = honestSize({ width: 300, height: 450 }, HERO, "hero");
+    expect(shown.width / shown.height).toBeCloseTo(300 / 450);
+    expect(honestSize(null, HERO, "hero")).toEqual(HERO);
+    expect(honestSize({ width: 0, height: 10 }, GRID, "grid")).toEqual(GRID);
+  });
+
+  it("couleur des bords : « #RRGGBB » seulement", () => {
+    expect(edgeBackground("#F2F1EE")).toBe("#F2F1EE");
+    for (const refused of ["red", "#FFF", "rgba(0,0,0,1)", "#F2F1EEAA", "", null, undefined]) {
+      expect(edgeBackground(refused)).toBeNull();
+    }
+  });
+
+  it("couleur des bords : refusé, une petite photo en grande image (bandes sur les quatre côtés : copie floue) ; permis, une photo qui touche le cadre", () => {
+    // 200 × 300 px dans une grande image de 358 pt : 200 × 300 pt au centre, rien ne touche le cadre.
+    expect(edgeColorApplies({ width: 200, height: 300 }, HERO, "hero")).toBe(false);
+    expect(edgeColorApplies({ width: 300, height: 300 }, HERO, "hero")).toBe(false);
+    // Assez grande : elle touche le cadre sur un axe.
+    expect(edgeColorApplies({ width: 1000, height: 1000 }, HERO, "hero")).toBe(true);
+    expect(edgeColorApplies({ width: 600, height: 1200 }, HERO, "hero")).toBe(true);
+    // Grille : la photo touche toujours deux côtés ; taille ou cadre inconnus : oui.
+    expect(edgeColorApplies({ width: 100, height: 100 }, GRID, "grid")).toBe(true);
+    expect(edgeColorApplies(null, HERO, "hero")).toBe(true);
+    expect(edgeColorApplies({ width: 200, height: 300 }, { width: 0, height: 0 }, "hero")).toBe(true);
+    expect(readFileSync(join(__dirname, "../src/components/piece-tile.tsx"), "utf8")).toContain("const background = edgeColorApplies(naturalSize, frame, variant) ? edgeBackground(edgeColor) : null;");
   });
 });

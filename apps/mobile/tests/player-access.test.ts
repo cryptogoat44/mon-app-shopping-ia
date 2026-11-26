@@ -100,8 +100,13 @@ describe("module natif de l'instantané : takeSnapshot, et rien d'autre", () => 
 
   it("retours du build 2 : l'image noire est refusée par un CONTRÔLE en JS (pont), le module natif reste l'instantané seul", () => {
     const bridge = read(join(MOBILE, "src", "lib", "player-snapshot.ts"));
-    expect(bridge).toContain('if (await looksBlank(uri)) throw new Error("blank_frame");');
-    expect(bridge).toContain("isBlankFrame(decodePngSample(base64ToBytes(saved.base64)))");
+    // Retours du build 3 : le même contrôle, étendu à l'image floue (« blurry_frame »), sur la même petite copie.
+    expect(bridge).toContain("const unusable = await looksUnusable(uri, blurCheckApplies(platform));");
+    expect(bridge).toContain("if (!checkBlur) return null;");
+    expect(bridge).toContain("if (unusable) throw new Error(unusable);");
+    expect(bridge).toContain("const sample = decodePngSample(base64ToBytes(saved.base64));");
+    expect(bridge).toContain('if (isBlankFrame(sample)) return "blank_frame";');
+    expect(bridge).toContain('return isBlurryFrame(sample) ? "blurry_frame" : null;');
     // Le pont n'appelle toujours que `snapshot` ; aucun nouvel appel natif, aucun téléchargement.
     expect([...bridge.matchAll(/native\.([a-zA-Z]+)\(/g)].map((match) => match[1])).toEqual(["snapshot"]);
     // Le Swift ne change pas : toujours une seule fonction, sans lecture de pixels.

@@ -1,12 +1,12 @@
 // Une demande d'images, de bout en bout : yt-dlp (informations), contrôles
 // (direct, durée, format, adresse du fichier), yt-dlp (le fichier, en
 // mémoire), ffmpeg (images candidates, lues sur la boucle locale), choix des
-// images rendues. Rien n'est écrit sur le disque ; le fichier est effacé dès
+// images rendues (ou, avec `atSeconds`, l'image du moment). Rien n'est écrit sur le disque ; le fichier est effacé dès
 // l'extraction finie, les images par `release()` après la réponse.
 import { LIMITS, WorkerError } from "./contract.js";
 import { decodePlan, extractCandidates } from "./ffmpeg.js";
 import { serveInMemory } from "./memserve.js";
-import { selectFrames } from "./selection.js";
+import { pickMoment, selectFrames } from "./selection.js";
 import { isAcceptableMediaUrl } from "./urls.js";
 import { chooseFormat, downloadMedia, probeVideo } from "./ytdlp.js";
 
@@ -51,12 +51,17 @@ const RESPONSE_MARGIN_MS = 300;
  * @property {{ timeSeconds: number, width: number, height: number, jpegBase64: string }[]} frames
  */
 
+/** Mode « moment » : un temps au-delà de la durée connue prend la dernière
+ * image (0,05 s avant la fin, jamais avant 0). */
+const MOMENT_END_MARGIN_SECONDS = 0.05;
+
 /**
- * @param {{ url: string, platform: string }} request
+ * @param {{ url: string, platform: string, atSeconds?: number }} request
+ *   `atSeconds` (facultatif) : mode « moment », UNE image de cet instant.
  * @param {{ env: Record<string, string>, signal: AbortSignal, deadlineAt: number, tools: { ytDlp: string, ffmpeg: string }, stats: JobStats }} context
  * @returns {Promise<{ body: FramesBody, release: () => void }>}
  */
-export async function extractFrames({ url }, { env, signal, deadlineAt, tools, stats }) {
+export async function extractFrames({ url, atSeconds }, { env, signal, deadlineAt, tools, stats }) {
   const remaining = () => deadlineAt - Date.now();
 
   // 1. Informations de la vidéo (yt-dlp), un second essai sur une erreur passagère.
@@ -117,16 +122,20 @@ export async function extractFrames({ url }, { env, signal, deadlineAt, tools, s
   }
   stats.mediaKb = Math.round(media.length / 1024);
 
-  // 4. Images candidates (ffmpeg lit le fichier sur la boucle locale).
-  const plan = decodePlan(info.durationSeconds, format.fps);
-  stats.mode = plan.mode;
+  // 4. Images candidates (ffmpeg lit le fichier sur la boucle locale) :
+  //    réparties sur toute la vidéo, ou, en mode « moment », toutes celles
+  //    de la seconde autour du moment demandé (décodage complet).
+  const at = atSeconds === undefined ? undefined : momentTime(atSeconds, info.durationSeconds);
+  const plan = at === undefined ? decodePlan(info.durationSeconds, format.fps) : null;
+  stats.mode = plan ? plan.mode : "moment";
   let extracted;
   try {
     const served = await serveInMemory(media);
     try {
       const startedAt = Date.now();
+      const input = { url: served.url, protocolWhitelist: "http,tcp" };
       extracted = await extractCandidates(
-        { input: { url: served.url, protocolWhitelist: "http,tcp" }, mode: plan.mode, stepSeconds: plan.stepSeconds },
+        plan ? { input, mode: plan.mode, stepSeconds: plan.stepSeconds } : { input, mode: "moment", atSeconds: /** @type {number} */ (at) },
         { env, signal, timeoutMs: Math.max(1, remaining() - RESPONSE_MARGIN_MS), command: tools.ffmpeg }
       );
       stats.ffmpegMs = Date.now() - startedAt;
@@ -138,7 +147,7 @@ export async function extractFrames({ url }, { env, signal, deadlineAt, tools, s
     media = Buffer.alloc(0);
   }
   try {
-    return { body: buildBody(info.durationSeconds, extracted, stats), release: extracted.release };
+    return { body: buildBody(info.durationSeconds, extracted, stats, at), release: extracted.release };
   } catch (error) {
     extracted.release();
     throw error;
@@ -146,13 +155,27 @@ export async function extractFrames({ url }, { env, signal, deadlineAt, tools, s
 }
 
 /**
- * Choix des images et corps de la réponse.
+ * Instant demandé, borné à la vidéo : un temps au-delà de la durée connue
+ * prend la dernière image.
+ * @param {number} atSeconds
+ * @param {number | null} durationSeconds
+ */
+export function momentTime(atSeconds, durationSeconds) {
+  if (durationSeconds === null) return round3(Math.max(0, atSeconds));
+  const end = Math.max(0, durationSeconds - MOMENT_END_MARGIN_SECONDS);
+  return round3(Math.max(0, Math.min(atSeconds, end)));
+}
+
+/**
+ * Choix des images et corps de la réponse. Avec `atSeconds` (mode
+ * « moment ») : le même contrat, avec UNE seule image (pickMoment).
  * @param {number | null} metadataDuration
  * @param {{ candidates: import("./ffmpeg.js").Candidate[], durationSeconds: number | null }} extracted
  * @param {JobStats} stats
+ * @param {number} [atSeconds]
  * @returns {FramesBody}
  */
-export function buildBody(metadataDuration, extracted, stats) {
+export function buildBody(metadataDuration, extracted, stats, atSeconds) {
   const usable = extracted.candidates.filter(
     (candidate) => candidate.jpeg.length > 0 && candidate.jpeg.length <= LIMITS.maxFrameBytes && candidate.width >= 1 && candidate.height >= 1 && Math.max(candidate.width, candidate.height) <= LIMITS.maxFrameEdge
   );
@@ -164,7 +187,7 @@ export function buildBody(metadataDuration, extracted, stats) {
   if (usable.length === 0) throw new WorkerError("unavailable", "no_frames");
 
   const maxFrames = duration > LIMITS.longVideoSeconds ? LIMITS.maxFrames : LIMITS.maxFramesShort;
-  const selected = selectFrames(usable, { minFrames: LIMITS.minFrames, maxFrames });
+  const selected = atSeconds === undefined ? selectFrames(usable, { minFrames: LIMITS.minFrames, maxFrames }) : [pickMoment(usable, atSeconds)];
   // Taille totale bornée (le client lit 12 Mio au plus, 16 Mio depuis les retours du build 2) : les plus lourdes partent d'abord.
   let total = selected.reduce((sum, candidate) => sum + candidate.jpeg.length, 0);
   while (total > LIMITS.maxTotalFrameBytes && selected.length > 1) {

@@ -2,7 +2,9 @@ import { useEffect } from "react";
 import { AccessibilityInfo, Platform, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { color, font, radius, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { themedStyles } from "@/theme/themed-styles";
+import { FLOATING_BAR, tabBarSpace } from "@/lib/tab-bar-metrics";
 
 // Bandeau discret en bas de l'écran, au-dessus de la barre d'onglets (en
 // haut, il masquerait le bouton « Retour »). Conteneur pleine largeur +
@@ -19,8 +21,6 @@ export interface NoticeAction {
   onPress: () => void;
 }
 
-const TAB_BAR_CLEARANCE = 72;
-
 export function NoticeBanner({ message, actions, error }: { message: string; actions: NoticeAction[]; error?: string | null }) {
   const insets = useSafeAreaInsets();
 
@@ -29,7 +29,9 @@ export function NoticeBanner({ message, actions, error }: { message: string; act
   }, [message]);
 
   return (
-    <View style={[styles.wrapper, { bottom: insets.bottom + TAB_BAR_CLEARANCE }]} pointerEvents="box-none">
+    // Retours du build 3 (point 5) : 16 points au-dessus de la barre flottante, quelle que
+    // soit la zone du bas (avant : 72 fixes, qui touchaient la pilule sur iPhone SE et le site).
+    <View style={[styles.wrapper, { bottom: tabBarSpace(insets.bottom, Platform.OS === "web" ? FLOATING_BAR.webHeight : FLOATING_BAR.height) }]} pointerEvents="box-none">
       <View style={styles.banner} accessibilityRole="alert" accessibilityLiveRegion="polite">
         <Text style={styles.text}>{message}</Text>
         {error ? (
@@ -78,6 +80,6 @@ const styles = themedStyles(() => ({
   error: { fontSize: font.caption, color: color.erreur, marginTop: space.xs },
   actions: { flexDirection: "row", justifyContent: "flex-end", gap: space.lg, marginTop: space.sm },
   action: { minHeight: 44, justifyContent: "center" },
-  emphasis: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  emphasis: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   plain: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
 }));

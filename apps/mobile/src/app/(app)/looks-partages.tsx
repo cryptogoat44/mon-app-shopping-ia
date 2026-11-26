@@ -5,6 +5,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import type { SharedLookSummary } from "@monapp/shared-types";
 import { color, font, serifFont, serifLineHeight, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { getActiveLocale, t } from "@/i18n";
 import { ApiError } from "@/lib/api-error";
 import { formatLongDate } from "@/lib/format";
@@ -131,6 +132,6 @@ const styles = themedStyles(() => ({
   dates: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
   confirm: { fontSize: font.secondary, color: color.encre, lineHeight: 21 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: space.lg, marginTop: space.xs },
-  link: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  link: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   danger: { fontSize: font.secondary, color: color.encre, fontWeight: "600", textDecorationLine: "underline" },
 }));

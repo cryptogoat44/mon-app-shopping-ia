@@ -644,3 +644,154 @@ describe("politique de confidentialité : propositions de l'IA (lot du 2026-11-2
     expect(VIDEO_LINK_CONSENT_VERSIONS).toEqual([CONSENT_VERSIONS.analyse_video_ia]);
   });
 });
+
+// Retours du build 3 (2026-11-26, branche lot-textes-juridiques) : lecteur
+// (le bouton Lecture vaut accord), image du moment par notre service vidéo
+// (VIDEO_LINK_FRAME_ENABLED), grandes images des résultats
+// (MERCHANT_IMAGE_RESULTS_ENABLED), couleur des bords (EDGE_COLOR_ENABLED),
+// dernière vidéo de la galerie, ce que l'app garde sur l'appareil. Toujours
+// sans nouvelle version ; une fonction derrière un interrupteur éteint est
+// une possibilité (« peut » / "may").
+describe("politique de confidentialité : retours du build 3 (lot du 2026-11-26)", () => {
+  const section = (doc: LegalDocument, title: string) => {
+    const found = doc.sections.find((s) => s.title === title);
+    expect(found, title).toBeDefined();
+    return found!.blocks.flat().join("\n");
+  };
+  const all = (doc: LegalDocument) => doc.sections.flatMap((s) => [s.title, ...s.blocks.flat()]).join("\n");
+  const frText = all(privacyPolicy);
+  const enText = all(privacyPolicyEn);
+  const VIDEOS = "Vidéos de votre téléphone, de TikTok et d'Instagram";
+  const VIDEOS_EN = "Videos from your phone, TikTok and Instagram";
+  const PROVIDERS = "Nos prestataires et les services tiers";
+  const PROVIDERS_EN = "Our providers and third-party services";
+  const serverEnv = readFileSync(join(__dirname, "../../backend/src/env.ts"), "utf8");
+
+  it("ni nouvelle version ni nouvelle acceptation ; l'en-tête des deux fichiers dit le lot", () => {
+    expect(LEGAL_DOCUMENT_VERSIONS.privacy_policy).toBe("projet-2026-11-05");
+    expect(ACCEPTED_CONSENT_VERSIONS.privacy_policy.at(-1)).toBe("projet-2026-11-05");
+    const read = (path: string) => readFileSync(join(__dirname, "../src/legal", path), "utf8");
+    expect(read("confidentialite.ts")).toContain("// Retours du build 3 (2026-11-26, branche lot-textes-juridiques), toujours\n// SANS changer LEGAL_DOCUMENT_VERSIONS");
+    expect(read("confidentialite.en.ts")).toContain("// Build 3 feedback (2026-11-26, branch lot-textes-juridiques), still WITHOUT\n// changing LEGAL_DOCUMENT_VERSIONS");
+  });
+
+  it("refusé : « l'image recadrée est envoyée » (l'app envoie l'image entière et le rectangle, le serveur recadre) ; permis : l'image entière et le rectangle", () => {
+    expect(frText).not.toContain("l'image recadrée est envoyée");
+    expect(enText).not.toContain("the cropped image is sent");
+    expect(section(privacyPolicy, VIDEOS)).toContain("l'image entière est envoyée pour la recherche, comme une photo, avec, le cas échéant, le rectangle autour de la zone choisie, que notre serveur recadre");
+    expect(section(privacyPolicyEn, VIDEOS_EN)).toContain("the whole image is sent for the search, like a photo, with, where applicable, the rectangle around the chosen area, which our server crops");
+    // Le code : l'image et le rectangle partent séparément ; le serveur recadre.
+    const api = readFileSync(join(__dirname, "../src/lib/api.ts"), "utf8");
+    expect(api).toContain('formData.append("crop", JSON.stringify(params.crop))');
+    expect(readFileSync(join(__dirname, "../../backend/src/lib/imageProcessing.ts"), "utf8")).toContain("export async function prepareImageForAnalysis(input: Buffer, crop: CropRect | null)");
+    // Le cache, lui, est bien rangé sous l'empreinte de l'image recadrée (côté serveur) : gardé.
+    expect(section(privacyPolicy, "Combien de temps")).toContain("une empreinte de l'image recadrée");
+  });
+
+  it("lecteur : le premier appui sur le bouton de lecture vaut accord, rien n'est chargé avant ; vrai avec les deux écrans (PLAYER_CONSENT_BY_PLAY_BUTTON)", () => {
+    expect(section(privacyPolicy, VIDEOS)).toContain("Tant que vous ne l'avez pas donné pour une plateforme, l'app ne charge rien chez elle (ni image de la vidéo, ni lecteur) et, pour Instagram, notre serveur ne demande pas non plus le code d'affichage : l'app vous présente un bouton de lecture, avec une phrase qui dit ce qu'il implique, et votre premier appui sur ce bouton vaut accord.");
+    expect(section(privacyPolicyEn, VIDEOS_EN)).toContain("Until you have given it for a platform, the app loads nothing from it (neither an image of the video nor a player) and, for Instagram, our server does not ask for the embed code either: the app shows you a play button, with a sentence saying what it implies, and your first press on that button counts as agreement.");
+    expect(section(privacyPolicy, "Pourquoi, et sur quelle base")).toContain("(votre premier appui sur le bouton de lecture que l'app vous présente vaut accord)");
+    expect(section(privacyPolicyEn, "Why, and on what basis")).toContain("(your first press on the play button the app shows you counts as agreement)");
+    // Les deux écrans présentent un bouton de lecture et une phrase : le nouveau (firstPlay) et l'ancien (gate).
+    expect(fr.player.firstPlay.play("TikTok")).toMatch(/^Lire/);
+    expect(fr.player.gate.play).toMatch(/^Lire/);
+    expect(en.player.firstPlay.play("TikTok")).toMatch(/^Play/);
+    expect(en.player.gate.play).toMatch(/^Play/);
+    // Refusé : un détail propre à un seul des deux écrans (le fond sobre, « Non merci »).
+    for (const onlyOne of ["fond sobre", "Non merci", "plain background", "No thanks"]) expect(frText + enText).not.toContain(onlyOne);
+  });
+
+  it("image du moment : une possibilité (« peut »), tant que VIDEO_LINK_FRAME_ENABLED n'est allumé que par \"true\" ; rien de gardé ; 30 par heure", () => {
+    expect(serverEnv).toMatch(/VIDEO_LINK_FRAME_ENABLED: z\s*\.string\(\)\s*\.optional\(\)\s*\.transform\(\(value\) => value === "true"\)/);
+    const fr = section(privacyPolicy, VIDEOS);
+    const en = section(privacyPolicyEn, VIDEOS_EN);
+    expect(fr).toContain("Pour une vidéo TikTok, notre serveur peut aussi préparer lui-même l'image de ce moment : l'app lui envoie alors l'adresse publique de la vidéo et le moment choisi (à la milliseconde près)");
+    expect(en).toContain("For a TikTok video, our server may also prepare the image of this moment itself: the app then sends it the public address of the video and the chosen moment (to the millisecond)");
+    expect(fr).toContain("TikTok reçoit l'adresse de la vidéo, jamais votre identité ni votre adresse IP), en extrait une seule image de ce moment, sans IA");
+    expect(fr).toContain("Ni cette vidéo ni cette image ne sont conservées par Spotto");
+    expect(fr).toContain("Chaque membre peut demander au plus 30 de ces images par heure.");
+    expect(en).toContain("Each member can request at most 30 of these images per hour.");
+    // Le refus pour flou ne vaut que pour TikTok (blurCheckApplies) : écrit une fois, à sa place.
+    const playerState = readFileSync(join(__dirname, "../src/lib/player-state.ts"), "utf8");
+    expect(playerState).toMatch(/export function blurCheckApplies\(platform: PlayerPlatform\): boolean \{\s*return platform === "tiktok";\s*\}/);
+    expect(fr).toContain("sauf si l'app la juge noire ou blanche (ou, pour une vidéo TikTok, floue) : elle est alors effacée sans être envoyée");
+    expect(en).toContain("unless the app judges it black or white (or, for a TikTok video, blurred): it is then deleted without being sent");
+    expect(frText).not.toContain("juge noire, blanche ou floue");
+    expect(enText).not.toContain("judges it black, white or blurred");
+    const buildDoc = readFileSync(join(__dirname, "../BUILD-IPHONE.md"), "utf8").replace(/\s+/g, " ");
+    expect(buildDoc).toContain("une image que l'app juge noire ou blanche est effacée et refusée, et pour TikTok seulement une image floue aussi");
+    expect(buildDoc).not.toContain("juge noire, blanche ou floue");
+    // Refusé : la promesse absolue d'une image « nette », et l'indicatif qui dirait la fonction toujours active.
+    expect(frText).not.toContain("notre serveur prépare lui-même l'image");
+    expect(enText).not.toContain("our server prepares the image");
+    expect(frText).not.toContain("seulement si elle est nette");
+    // Le reste de la politique suit : Render, TikTok et Meta, base, transferts, durées.
+    expect(section(privacyPolicy, PROVIDERS)).toContain("le service vidéo ne reçoit, de notre serveur, que les adresses des vidéos à analyser ou dont vous demandez l'image d'un moment, et ce moment.");
+    expect(section(privacyPolicyEn, PROVIDERS_EN)).toContain("the video service only receives, from our server, the addresses of the videos to analyze or whose image of a moment you request, and that moment.");
+    expect(frText).not.toContain("le service vidéo ne reçoit que les adresses des vidéos à analyser, de notre serveur.");
+    expect(section(privacyPolicy, PROVIDERS)).toContain("Il peut aussi demander à TikTok la vidéo publique dont vous demandez l'image d'un moment");
+    expect(section(privacyPolicy, "Pourquoi, et sur quelle base")).toContain("Préparer, pour une vidéo TikTok, l'image du moment que vous choisissez avec « Spotter ce moment »");
+    expect(section(privacyPolicy, "Transferts hors de l'Union européenne")).toContain("et les vidéos analysées ou dont une image est extraite)");
+    expect(section(privacyPolicyEn, "Transfers outside the European Union")).toContain("and the videos analyzed or from which an image is extracted)");
+    expect(section(privacyPolicy, "Combien de temps")).toContain("L'image d'un moment d'une vidéo TikTok préparée par notre service vidéo, et cette vidéo : jamais enregistrées par Spotto");
+    expect(section(privacyPolicyEn, "How long")).toContain("The image of a moment of a TikTok video prepared by our video service, and that video: never saved by Spotto");
+  });
+
+  it("grandes images : étendues aux résultats (8 au plus par liste, jamais une page de Google), une possibilité tant que MERCHANT_IMAGE_RESULTS_ENABLED n'est allumé que par \"true\"", () => {
+    for (const name of ["MERCHANT_IMAGE_UPGRADE_ENABLED", "MERCHANT_IMAGE_RESULTS_ENABLED"]) {
+      expect(serverEnv, name).toMatch(new RegExp(`${name}: z\\s*\\.string\\(\\)\\s*\\.optional\\(\\)\\s*\\.transform\\(\\(value\\) => value === "true"\\)`));
+    }
+    const fr = section(privacyPolicy, PROVIDERS);
+    const en = section(privacyPolicyEn, PROVIDERS_EN);
+    expect(fr).toContain("Pour une pièce proposée dans vos résultats parmi celles trouvées dans d'autres boutiques ou avec vos mots, ou que vous gardez dans vos Envies ou ajoutez à votre Vault, et qui n'a qu'une petite image, notre serveur peut consulter la page publique de la boutique");
+    expect(en).toContain("For a piece suggested in your results among those found at other retailers or with your words, or that you keep in your Wishlist or add to your Vault, and that only has a small image, our server may visit the shop's public page");
+    expect(fr).toContain("pour 8 pièces au plus de chacune de ces deux listes (les premières dans l'ordre où l'app les montre par défaut), et jamais pour une page de Google");
+    expect(en).toContain("for at most 8 pieces of each of these two lists (the first ones in the order the app shows them by default), and never for a Google page");
+    // Refusé : l'ancienne phrase, limitée aux pièces gardées.
+    expect(frText).not.toContain("Pour une pièce que vous gardez dans vos Envies ou ajoutez à votre Vault et qui n'a qu'une petite image");
+    expect(enText).not.toContain("For a piece you keep in your Wishlist or add to your Vault that only has a small image");
+  });
+
+  it("couleur des bords : une possibilité tant que EDGE_COLOR_ENABLED n'est allumé que par \"true\" ; une empreinte et la couleur, en mémoire, 7 jours au plus", () => {
+    expect(serverEnv).toMatch(/EDGE_COLOR_ENABLED: z\s*\.string\(\)\s*\.optional\(\)\s*\.transform\(\(value\) => value === "true"\)/);
+    const fr = section(privacyPolicy, PROVIDERS);
+    const en = section(privacyPolicyEn, PROVIDERS_EN);
+    expect(fr).toContain("Notre serveur peut aussi télécharger, de la même façon, la petite image d'une pièce proposée, chez Google ou chez la boutique, pour mesurer la couleur de ses bords");
+    expect(en).toContain("Our server may also download, in the same way, the small image of a suggested piece, from Google or from the shop, to measure the colour of its edges");
+    expect(fr).toContain("qu'une empreinte de l'adresse de cette petite image avec la couleur mesurée (ou la mention « non mesurable »), 7 jours au plus (1 jour pour « non mesurable »)");
+    expect(fr).toContain("Une petite image hébergée par un réseau social, ou qui y renvoie, n'est jamais téléchargée.");
+    expect(en).toContain("A small image hosted by a social network, or redirecting to one, is never downloaded.");
+    // Refusé : « ne garde que la couleur » (une empreinte de l'adresse est gardée avec elle).
+    expect(frText).not.toContain("ne garde que la couleur");
+    expect(enText).not.toContain("keeps only the colour");
+  });
+
+  it("galerie et appareil : « Proposer ma dernière vidéo » lue sur l'appareil ; carte repliée et aide du zoom gardées sur l'appareil", () => {
+    expect(section(privacyPolicy, VIDEOS)).toContain("si vous acceptez « Proposer ma dernière vidéo », l'app repère sur votre appareil la vidéo la plus récente de votre galerie, avec l'accès complet à vos photos que vous demande iOS");
+    expect(section(privacyPolicyEn, VIDEOS_EN)).toContain("if you accept “Suggest my latest video”, the app finds on your device the most recent video in your gallery, with the full access to your photos that iOS asks you for");
+    expect(fr.settings.latestVideoTitle).toBe("Proposer ma dernière vidéo");
+    expect(en.settings.latestVideoTitle).toBe("Suggest my latest video");
+    const device = section(privacyPolicy, "Sur votre téléphone ou dans votre navigateur");
+    // Relecture du lot « fidélité aux maquettes » : l'app garde « 1 » (repliée) OU « 0 » (dépliée), FR et EN.
+    expect(device).toContain("le fait que vous avez replié ou déplié la carte « Votre dernière vidéo »");
+    expect(section(privacyPolicyEn, "On your phone or in your browser")).toContain("the fact that you collapsed or expanded the “Your latest video” card");
+    expect(readFileSync(join(__dirname, "../src/lib/latest-video.ts"), "utf8")).toContain('reduced ? "1" : "0"');
+    // Refusé : la phrase qui ne parlait que de la carte repliée.
+    expect(frText).not.toContain("le fait que vous avez replié la carte");
+    expect(enText).not.toContain("the fact that you collapsed the “Your latest video” card");
+    expect(device).toContain("le fait que l'aide « Pincez pour zoomer » vous a déjà été montrée");
+    expect(fr.common.zoomHint).toBe("Pincez pour zoomer");
+    expect(en.common.zoomHint).toBe("Pinch to zoom");
+    // Refusé : plus aucune politique muette sur la galerie.
+    expect(frText).toMatch(/galerie/);
+    expect(enText).toMatch(/gallery/);
+  });
+
+  it("phrases d'écran du lecteur relues : gardées mot pour mot, vraies avec la politique", () => {
+    expect(fr.player.privacy("TikTok")).toBe("Vidéo lue par TikTok, sans téléchargement. Seule l'image de ce moment est envoyée, puis effacée de votre téléphone.");
+    expect(fr.player.privacyFrame("TikTok")).toBe("Vidéo lue par TikTok. Pour l'image de ce moment, notre serveur demande la vidéo publique à TikTok, sans votre identité, et ne la garde pas. À défaut, seule l'image prise sur votre téléphone est envoyée, puis effacée de votre téléphone.");
+    expect(en.player.privacyFrame("TikTok")).toBe("Video played by TikTok. For the image of this moment, our server requests the public video from TikTok, without your identity, and does not keep it. Failing that, only the frame taken on your phone is sent, then deleted from your phone.");
+    expect(fr.player.firstPlay.lineLead("TikTok")).toBe("En touchant Lecture, la vidéo est chargée chez TikTok, qui reçoit votre adresse IP et peut utiliser ses propres traceurs. Modifiable dans ");
+  });
+});

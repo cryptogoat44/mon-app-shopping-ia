@@ -314,7 +314,9 @@ describe("les textes et l'accessibilité", () => {
 
   it("sur la grande carte, les cartes des sections et la liste triée, juste après la mention de la boutique", () => {
     const card = read("src/components/proposal-card.tsx");
-    expect(card.match(/<OfferMarkNote piece=\{piece\} \/>\n\s*\{\/\*[^\n]*\*\/\}\n\s*<StockNote piece=\{piece\} \/>/g)).toHaveLength(2);
+    // Lot « fidélité aux maquettes » : sur la carte de la grille, un « · » (non lu) sépare les deux mentions quand les deux sont là.
+    const dot = String.raw`(\s*\{piece\.offerMark && typeof piece\.inStock === "boolean" \? \(\n\s*<Text style=\{styles\.markDot\} accessible=\{false\}>\n\s*·\n\s*<\/Text>\n\s*\) : null\}\n)?`;
+    expect(card.match(new RegExp(String.raw`<OfferMarkNote piece=\{piece\} \/>\n` + dot + String.raw`\s*\{\/\*[^\n]*\*\/\}\n\s*<StockNote piece=\{piece\} \/>`, "g"))).toHaveLength(2);
     const screen = read("src/app/(app)/spot/result.tsx");
     expect(screen.indexOf("<StockNote piece={piece} />")).toBeGreaterThan(screen.indexOf("<OfferMarkNote piece={piece} />"));
     expect(screen).toContain("bigCardLabel(selectedIndex, bestIndex, firstAvailableIndex(result), allPieces(result)[selectedIndex])");
@@ -326,11 +328,16 @@ describe("les textes et l'accessibilité", () => {
     expect(bar).toContain("accessibilityLabel={t.result.inStockOnly}");
     expect(bar).toContain("accessibilityHint={t.result.inStockOnlyHint}");
     expect(bar).toContain("onChange({ ...view, inStockOnly: !checked })");
+    // Lot « vitrine » (retours du build 3) : à côté de « Avec prix seulement », dans la même ligne de pastilles de la barre.
+    const filters = bar.slice(bar.indexOf("contentContainerStyle={styles.filters}"), bar.indexOf("export function InStockOnlyToggle"));
+    expect(filters.indexOf('testID="with-price-only"')).toBeGreaterThan(-1);
+    expect(filters.indexOf("{stockShown ? <InStockOnlyToggle view={view} onChange={onChange} /> : null}")).toBeGreaterThan(filters.indexOf('testID="with-price-only"'));
     const screen = read("src/app/(app)/spot/result.tsx");
-    const sortBar = screen.indexOf("<ResultSortBar view={view} onChange={changeView} summary={summaryText} />");
-    const toggle = screen.indexOf("<InStockOnlyToggle view={view} onChange={changeView} />");
-    expect(toggle).toBeGreaterThan(sortBar);
-    expect(toggle).toBeLessThan(screen.indexOf("<YourPiece image={yourPiece} />"));
+    const sortBar = screen.indexOf("<ResultSortBar\n          view={view}\n          onChange={changeView}\n          summary={summaryText}\n          stockShown={stockFilterShown(result, view)}\n          verdict={verdictLineShown(result.verdict) ? <VerdictLine verdict={result.verdict} /> : null}\n        />");
+    expect(sortBar).toBeGreaterThan(-1);
+    expect(sortBar).toBeLessThan(screen.indexOf("<YourPiece image={yourPiece} />"));
+    // Refusé : plus de rendu séparé sous la barre.
+    expect(screen).not.toContain("<InStockOnlyToggle");
     expect(screen).toContain("changeView({ ...view, withPriceOnly: false, inStockOnly: false })");
   });
 });

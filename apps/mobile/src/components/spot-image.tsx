@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { StyleSheet, View, type ImageStyle, type StyleProp, type ViewStyle } from "react-native";
 import { Image } from "expo-image";
-import { imageAfterErrors, imageSources, twoStepLayers, twoStepSources, type PieceImageSize, type TwoStepState } from "@/lib/piece-image";
+import { HD_FADE_MS, imageAfterErrors, imageSources, twoStepLayers, twoStepSources, type PieceImageSize, type TwoStepState } from "@/lib/piece-image";
 
 // Image d'une proposition. Grande carte et fiches (« large », par défaut) :
 // l'originale du marchand (haute définition) en priorité, et la petite
@@ -26,6 +26,7 @@ export function SpotImage({
   recyclingKey,
   size = "large",
   fullResolution = false,
+  onImageSize,
 }: {
   hdUri?: string | null;
   /** Vignette légère (Google, ou image déjà réduite) : en premier dans une
@@ -43,14 +44,36 @@ export function SpotImage({
    * pour que le zoom montre les vrais détails. Les fiches et grilles gardent
    * la réduction (mémoire). */
   fullResolution?: boolean;
+  /** Taille naturelle (pixels) de l'image réellement affichée : la vignette,
+   * puis l'originale si elle la remplace (tuile de pièce, piece-tile.tsx), avec son adresse
+   * (copiée dans les bords prolongés de la tuile). */
+  onImageSize?: (size: ImageNaturalSize, uri: string) => void;
 }) {
   const twoStep = twoStepSources(size, hdUri, fallbackUri);
-  if (twoStep) return <TwoStepImage {...twoStep} style={style} fit={fit} accessibilityLabel={accessibilityLabel} recyclingKey={recyclingKey} fullResolution={fullResolution} />;
-  return <OneImage hdUri={hdUri} fallbackUri={fallbackUri} style={style} fit={fit} accessibilityLabel={accessibilityLabel} recyclingKey={recyclingKey} size={size} fullResolution={fullResolution} />;
+  if (twoStep) return <TwoStepImage {...twoStep} style={style} fit={fit} accessibilityLabel={accessibilityLabel} recyclingKey={recyclingKey} fullResolution={fullResolution} onImageSize={onImageSize} />;
+  return <OneImage hdUri={hdUri} fallbackUri={fallbackUri} style={style} fit={fit} accessibilityLabel={accessibilityLabel} recyclingKey={recyclingKey} size={size} fullResolution={fullResolution} onImageSize={onImageSize} />;
+}
+
+export type ImageNaturalSize = { width: number; height: number };
+
+/** Taille naturelle lue dans l'événement onLoad d'expo-image (null si absente). */
+function naturalSize(source: { width?: number; height?: number } | undefined): ImageNaturalSize | null {
+  return source && source.width && source.height ? { width: source.width, height: source.height } : null;
+}
+
+/** Appelle `onImageSize` quand la taille ou l'adresse affichées changent (une fois par image). */
+function useReportSize(displayed: ImageNaturalSize | null, uri: string | null, onImageSize: ((size: ImageNaturalSize, uri: string) => void) | undefined) {
+  const report = useRef(onImageSize);
+  report.current = onImageSize;
+  const width = displayed?.width ?? 0;
+  const height = displayed?.height ?? 0;
+  useEffect(() => {
+    if (width > 0 && height > 0 && uri) report.current?.({ width, height }, uri);
+  }, [width, height, uri]);
 }
 
 /** Deux temps : la vignette tout de suite, l'originale par-dessus, en fondu,
- * dès qu'elle est arrivée (la vignette est alors retirée) ; originale bloquée
+ * dès qu'elle est arrivée (la vignette est retirée à la fin du fondu) ; originale bloquée
  * par le marchand, ou plus étroite que la vignette (retours du build 2) : la
  * vignette reste (lib/piece-image.ts, twoStepLayers). Deux images empilées
  * plutôt que la « placeholder » d'expo-image, restée superposée à l'image
@@ -64,6 +87,7 @@ function TwoStepImage({
   accessibilityLabel,
   recyclingKey,
   fullResolution,
+  onImageSize,
 }: {
   thumb: string;
   hd: string;
@@ -72,14 +96,28 @@ function TwoStepImage({
   accessibilityLabel?: string;
   recyclingKey?: string;
   fullResolution: boolean;
+  onImageSize?: (size: ImageNaturalSize, uri: string) => void;
 }) {
   const key = `${thumb}\n${hd}`;
-  const fresh: TwoStepState & { key: string } = { key, hd: "loading", hdWidth: null, thumbLoaded: false, thumbWidth: null, thumbFailed: false };
+  type Local = TwoStepState & { key: string; hdSize: ImageNaturalSize | null; thumbSize: ImageNaturalSize | null };
+  const fresh: Local = { key, hd: "loading", hdWidth: null, thumbLoaded: false, thumbWidth: null, thumbFailed: false, hdFaded: false, hdSize: null, thumbSize: null };
   const [state, setState] = useState(fresh);
   // Une autre carte (liste qui réutilise ses éléments) repart de zéro.
   const current = state.key === key ? state : fresh;
-  const update = (patch: Partial<TwoStepState>) => setState((previous) => ({ ...(previous.key === key ? previous : fresh), ...patch }));
+  const update = (patch: Partial<Local>) => setState((previous) => ({ ...(previous.key === key ? previous : fresh), ...patch }));
   const { showThumb, showHd } = twoStepLayers(current);
+  // La vignette reste sous l'originale le temps de son fondu : le fond opaque
+  // de la tuile (plinthe) ne se voit jamais seul au changement d'image.
+  const fading = current.hd === "loaded" && !current.hdFaded;
+  useEffect(() => {
+    if (!fading) return;
+    const timer = setTimeout(() => update({ hdFaded: true }), HD_FADE_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, fading]);
+  // L'image du dessus : l'originale arrivée et gardée, sinon la vignette.
+  const hdOnTop = showHd && current.hd === "loaded";
+  useReportSize(hdOnTop ? current.hdSize : showThumb ? current.thumbSize : null, hdOnTop ? hd : showThumb ? thumb : null, onImageSize);
   return (
     <View style={style as StyleProp<ViewStyle>} accessible={Boolean(accessibilityLabel)} accessibilityRole={accessibilityLabel ? "image" : undefined} accessibilityLabel={accessibilityLabel}>
       {showThumb ? (
@@ -90,7 +128,7 @@ function TwoStepImage({
           cachePolicy="memory-disk"
           recyclingKey={recyclingKey}
           allowDownscaling={!fullResolution}
-          onLoad={(event) => update({ thumbLoaded: true, thumbWidth: event.source?.width ?? null })}
+          onLoad={(event) => update({ thumbLoaded: true, thumbWidth: event.source?.width ?? null, thumbSize: naturalSize(event.source) })}
           onError={() => update({ thumbFailed: true })}
         />
       ) : null}
@@ -101,9 +139,9 @@ function TwoStepImage({
           contentFit={fit}
           cachePolicy="memory-disk"
           recyclingKey={recyclingKey}
-          transition={180}
+          transition={HD_FADE_MS}
           allowDownscaling={!fullResolution}
-          onLoad={(event) => update({ hd: "loaded", hdWidth: event.source?.width ?? null })}
+          onLoad={(event) => update({ hd: "loaded", hdWidth: event.source?.width ?? null, hdSize: naturalSize(event.source) })}
           onError={() => update({ hd: "failed" })}
         />
       ) : null}
@@ -121,6 +159,7 @@ function OneImage({
   recyclingKey,
   size,
   fullResolution,
+  onImageSize,
 }: {
   hdUri?: string | null;
   fallbackUri: string;
@@ -130,6 +169,7 @@ function OneImage({
   recyclingKey?: string;
   size: PieceImageSize;
   fullResolution: boolean;
+  onImageSize?: (size: ImageNaturalSize, uri: string) => void;
 }) {
   const sources = imageSources(size, hdUri, fallbackUri);
   const key = sources.join("\n");
@@ -137,6 +177,8 @@ function OneImage({
   // première dès son premier affichage, sans repasser par l'ancien repli.
   const [errors, setErrors] = useState({ key, count: 0 });
   const uri = imageAfterErrors(sources, errors.key === key ? errors.count : 0);
+  const [loaded, setLoaded] = useState<{ uri: string | null; size: ImageNaturalSize | null }>({ uri: null, size: null });
+  useReportSize(loaded.uri === uri ? loaded.size : null, uri, onImageSize);
 
   return (
     <Image
@@ -148,6 +190,8 @@ function OneImage({
       cachePolicy="memory-disk"
       recyclingKey={recyclingKey}
       allowDownscaling={!fullResolution}
+      // Seulement quand on demande la taille : les autres cases ne se redessinent pas.
+      onLoad={onImageSize ? (event) => setLoaded({ uri, size: naturalSize(event.source) }) : undefined}
       onError={() => setErrors((previous) => ({ key, count: (previous.key === key ? previous.count : 0) + 1 }))}
       accessibilityLabel={accessibilityLabel}
     />

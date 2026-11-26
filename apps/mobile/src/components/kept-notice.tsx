@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Platform, Pressable, Text, View } from "react-native";
 import { color, font, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import type { KeptAlert } from "@/lib/keep-alert";
 import { keptNoticeAnnounces, TURN_OFF_IDLE, turnOffFinished, turnOffStarted, turnOffStateFor, type AnnouncedNotice } from "@/lib/kept-notice-state";
@@ -58,6 +59,6 @@ const styles = themedStyles(() => ({
   row: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: space.md, marginTop: space.xs },
   text: { fontSize: font.caption, color: color.acier },
   link: { minHeight: 44, justifyContent: "center" },
-  linkLabel: { fontSize: font.caption, color: color.vert, fontWeight: "600", textDecorationLine: "underline" },
+  linkLabel: { ...lienSouligne, fontSize: font.caption, color: color.vert, fontWeight: "600" },
   error: { fontSize: font.caption },
 }));

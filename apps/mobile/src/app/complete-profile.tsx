@@ -8,6 +8,7 @@ import { forgetSignupConsents, hasSignupConsents, signupAnalyticsChoice } from "
 import { setAnalyticsUser, track } from "@/lib/analytics";
 import { getActiveLocale, t } from "@/i18n";
 import { color, font, radius, serifDisplayLetterSpacing, serifFont, serifLineHeight, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { ErrorMessage } from "@/components/error-message";
 import { CHECKBOX_SIZE, CheckboxRow } from "@/components/checkbox-row";
 import { themedStyles } from "@/theme/themed-styles";
@@ -174,7 +175,7 @@ const styles = themedStyles(() => ({
   consents: { marginTop: space.sm },
   consentRow: { marginTop: space.sm },
   legalLinks: { marginLeft: CHECKBOX_SIZE + space.sm, marginTop: space.xs, gap: space.sm },
-  legalLink: { fontSize: font.caption, color: color.vert, fontWeight: "600", minHeight: 20 },
+  legalLink: { ...lienSouligne, fontSize: font.caption, color: color.vert, fontWeight: "600", minHeight: 20 },
   input: { borderBottomWidth: 1, borderBottomColor: color.filet, paddingVertical: 10, fontSize: font.body, color: color.encre },
   cta: { backgroundColor: color.vert, borderRadius: radius.md, paddingVertical: 16, alignItems: "center", marginTop: space.lg },
   ctaDisabled: { backgroundColor: color.inactif, borderColor: color.inactif },

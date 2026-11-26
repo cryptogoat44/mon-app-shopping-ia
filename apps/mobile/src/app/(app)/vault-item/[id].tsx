@@ -5,12 +5,13 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import type { PrivacyLevel, VaultCategory, VaultItemDetail } from "@monapp/shared-types";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { ApiError, changeVaultItemPhoto, deleteVaultItem, fetchVaultItem, sharePurchasePost, updateVaultItem } from "@/lib/api";
 import { importPhotoForSpotter } from "@/lib/image-import";
 import { PrivateAccountNote } from "@/components/private-account-note";
-import { SpotImage } from "@/components/spot-image";
-import { EnlargeableImage } from "@/components/image-viewer";
+import { PieceTile } from "@/components/piece-tile";
+import type { ZoomState } from "@/components/image-viewer";
 import { PRIVACY_LEVELS } from "@/lib/vault-labels";
 import { VerifiedIcon } from "@/components/icons";
 import { useToast } from "@/lib/toast-context";
@@ -50,7 +51,12 @@ export default function VaultItemDetailScreen() {
     setChangingPhoto(true);
     try {
       const updated = await changeVaultItemPhoto(item.id, picked.uri);
-      setItem((current) => (current ? { ...current, ...updated } : current));
+      setItem((current) => {
+        if (!current) return current;
+        // Nouvelle photo : la couleur des bords de l'ancienne vignette ne vaut plus (lot « couleur des bords ») ; les bords prolongés de la nouvelle photo reprennent.
+        const { edgeColor: _oldEdgeColor, ...rest } = current;
+        return { ...rest, ...updated };
+      });
       showToast(t.vaultItem.photoChanged);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : t.vaultItem.changePhotoError);
@@ -68,6 +74,8 @@ export default function VaultItemDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Zoom à deux doigts sur place (retours du build 3) : la page ne défile pas pendant le pincement.
+  const [zoomState, setZoomState] = useState<ZoomState>("idle");
   const [changingPhoto, setChangingPhoto] = useState(false);
   const { profile } = useAuth();
   const [sharePrivacy, setSharePrivacy] = useState<PrivacyLevel>(profile?.defaultPrivacy ?? "followers");
@@ -219,7 +227,12 @@ export default function VaultItemDetailScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        scrollEnabled={zoomState !== "zooming"}
+      >
         <Pressable
           onPress={safeBack}
           hitSlop={12}
@@ -232,12 +245,17 @@ export default function VaultItemDetailScreen() {
 
         {error ? <ErrorMessage style={styles.banner}>{error}</ErrorMessage> : null}
 
-        {/* Image entière (jamais rognée), en haute définition quand elle existe. */}
-        <View style={styles.image}>
-          <EnlargeableImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} label={item.title} style={styles.fill}>
-            <SpotImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} style={styles.fill} accessibilityLabel={item.title} />
-          </EnlargeableImage>
-        </View>
+        {/* Image entière, en haute définition quand elle existe, dans la grande tuile « Écrin » (components/piece-tile.tsx). */}
+        <PieceTile
+          variant="hero"
+          enlargeable
+          hdUri={item.imageHdUrl}
+          fallbackUri={item.imageUrl}
+          edgeColor={item.edgeColor}
+          accessibilityLabel={item.title}
+          fullResolution
+          onZoomStateChange={setZoomState}
+        />
         <Pressable
           onPress={handleChangePhoto}
           disabled={changingPhoto || busy}
@@ -421,23 +439,15 @@ const styles = themedStyles(() => ({
   backLabel: { color: color.encre, fontSize: font.secondary },
   errorText: { color: color.danger, fontSize: font.body, textAlign: "center" },
   banner: { fontSize: font.secondary, color: color.danger, marginBottom: space.md },
-  image: {
-    width: "100%",
-    maxWidth: 360,
-    aspectRatio: 4 / 5,
-    alignSelf: "center",
-    borderRadius: radius.sm,
-    backgroundColor: color.plinthe,
-    overflow: "hidden",
-  },
-  fill: { width: "100%", height: "100%" },
+  // Squelette de chargement : la forme de la grande tuile (components/piece-tile.tsx).
+  image: { width: "100%", aspectRatio: 4 / 5, borderRadius: radius.piece, borderCurve: "continuous" },
   changePhoto: { alignSelf: "center", minHeight: 40, justifyContent: "center", marginBottom: space.sm },
   changePhotoLabel: { fontSize: font.caption, color: color.acier, fontWeight: "600" },
   titleRow: { flexDirection: "row", alignItems: "center", gap: space.sm, marginBottom: space.xs },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre, flexShrink: 1 },
   metaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.md, marginBottom: space.lg },
   subtitle: { fontSize: font.secondary, color: color.acier, flexShrink: 1 },
-  editLinkLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  editLinkLabel: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   editBox: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md, marginBottom: space.lg },
   input: { borderBottomWidth: 1, borderBottomColor: color.filet, paddingVertical: 10, fontSize: font.body, color: color.encre, marginBottom: space.md },
   editError: { fontSize: font.secondary, marginTop: space.md },
@@ -461,7 +471,7 @@ const styles = themedStyles(() => ({
   label: { fontSize: font.caption, color: color.acier, marginBottom: 10 },
   sharedBox: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md, marginBottom: space.lg, gap: 6 },
   sharedTitle: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
-  sharedLink: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  sharedLink: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   sharedHint: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
   privateNote: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginBottom: space.md },
   pillRow: { flexDirection: "row", flexWrap: "wrap", gap: space.xs, marginBottom: space.lg },

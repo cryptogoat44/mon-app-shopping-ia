@@ -1,14 +1,16 @@
 import { useCallback, useState } from "react";
-import { Linking, Platform, Pressable, Switch, Text, View } from "react-native";
+import { Linking, Platform, Pressable, Text, View } from "react-native";
+import { Switch } from "@/components/switch";
 import { useFocusEffect } from "expo-router";
 import { ACTIVITY_PUSH_KINDS, type ActivityPushKind } from "@monapp/shared-types";
-import { color, font, space } from "@/theme/tokens";
+import { couleursInterrupteur } from "@/theme/accent";
 import { t } from "@/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { disablePush, enablePush, loadActivityDecisions, pushPermission, pushSupported } from "@/lib/push";
 import { activityPushPossible, pushSwitchValue, switchRolledBack, type ActivityDecisions, type PushPermission } from "@/lib/push-state";
 import { useMessagesStatus } from "@/lib/use-messages-status";
 import { useToast } from "@/lib/toast-context";
+import { settingsGroup, settingsGroupValues } from "@/components/settings-group";
 import { themedStyles } from "@/theme/themed-styles";
 
 type Device = { supported: boolean; decisions: ActivityDecisions; permission: PushPermission };
@@ -77,41 +79,40 @@ export function ActivityPushSetting() {
       <Text style={styles.label} accessibilityRole="header">
         {t.activityPush.title}
       </Text>
-      <Text style={styles.body}>{t.activityPush.help}</Text>
-      {ACTIVITY_PUSH_KINDS.map((kind) => {
-        const value = pending?.kind === kind ? pending.on : device ? pushSwitchValue(device.decisions[kind], device.permission) : false;
-        return (
-          <View key={kind} style={styles.row}>
-            <Text style={styles.title}>{t.activityPush[kind]}</Text>
-            <Switch
-              accessibilityLabel={t.activityPush[kind]}
-              value={value}
-              disabled={!device || pending !== null || denied}
-              onValueChange={(next) => void toggle(kind, next)}
-              trackColor={{ true: color.vert, false: color.filet }}
-              testID={`interrupteur-activite-${kind}`}
-            />
-          </View>
-        );
-      })}
-      {denied ? (
-        <>
-          <Text style={styles.body}>{t.activityPush.denied}</Text>
-          <Pressable onPress={() => void Linking.openSettings().catch(() => showToast(t.push.openSettingsFailed))} accessibilityRole="link" style={styles.link}>
-            <Text style={styles.linkLabel}>{t.push.openSettings}</Text>
-          </Pressable>
-        </>
-      ) : null}
+      <View style={settingsGroup.card}>
+        <Text style={styles.body}>{t.activityPush.help}</Text>
+        {ACTIVITY_PUSH_KINDS.map((kind) => {
+          const value = pending?.kind === kind ? pending.on : device ? pushSwitchValue(device.decisions[kind], device.permission) : false;
+          return (
+            <View key={kind} style={styles.row}>
+              <Text style={styles.title}>{t.activityPush[kind]}</Text>
+              <Switch
+                accessibilityLabel={t.activityPush[kind]}
+                value={value}
+                disabled={!device || pending !== null || denied}
+                onValueChange={(next) => void toggle(kind, next)}
+                {...couleursInterrupteur(value)}
+                testID={`interrupteur-activite-${kind}`}
+              />
+            </View>
+          );
+        })}
+        {denied ? (
+          <>
+            <Text style={styles.body}>{t.activityPush.denied}</Text>
+            <Pressable onPress={() => void Linking.openSettings().catch(() => showToast(t.push.openSettingsFailed))} accessibilityRole="link" style={styles.link}>
+              <Text style={styles.linkLabel}>{t.push.openSettings}</Text>
+            </Pressable>
+          </>
+        ) : null}
+      </View>
     </View>
   );
 }
 
-const styles = themedStyles(() => ({
-  section: { marginBottom: space.lg },
-  label: { fontSize: font.secondary, color: color.encre, fontWeight: "600", marginBottom: space.xs },
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44, gap: space.sm },
-  title: { flex: 1, fontSize: font.secondary, color: color.encre },
-  body: { fontSize: font.secondary, color: color.acier, marginBottom: space.sm, lineHeight: 19 },
-  link: { minHeight: 44, justifyContent: "center", marginBottom: space.sm },
-  linkLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
-}));
+// Bloc groupé de Réglages (components/settings-group.tsx) : son propre surtitre, puis une carte qui
+// commence par la phrase d'aide.
+const styles = themedStyles(() => {
+  const g = settingsGroupValues();
+  return { section: g.section, label: g.label, row: g.row, title: g.rowTitle, body: { ...g.hint, paddingTop: 12 }, link: g.linkRow, linkLabel: g.link };
+});

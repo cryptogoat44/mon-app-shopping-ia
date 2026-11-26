@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { ActivityIndicator, FlatList, Modal, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { color, font, radius, size, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { acceptLanguage, getActiveLocale, t } from "@/i18n";
 import type { CollectionSummary, WishAlertState } from "@monapp/shared-types";
 import { getCollectionWishlist, getWishlist } from "@/api/client";
@@ -21,7 +22,7 @@ import { CollectionSettingsSheet } from "@/components/collection-settings-sheet"
 import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
-import { SpotImage } from "@/components/spot-image";
+import { PieceTile } from "@/components/piece-tile";
 import { SegmentedChoice } from "@/components/segmented-choice";
 import { ReceivedPieces } from "@/components/received-pieces";
 import { isAffiliateLink } from "@/lib/affiliate-link";
@@ -70,7 +71,9 @@ function chunk<T>(items: T[], size: number): T[][] {
 // la loupe et le tri (wishlist-tools.tsx).
 // Lot « navigation » : `header`, l'en-tête du profil (photo, compteurs,
 // onglets), posé tout en haut de la liste : il défile lui aussi.
-export function WishlistPanel({ news, header }: { news: WishAlertNewsState; header?: ReactNode }) {
+// Retours du build 3 (point 5) : `bottomSpace`, la place laissée en bas sous la barre
+// flottante (donnée par le Profil, lib/use-tab-bar-space.ts) ; sans elle, l'écart d'avant.
+export function WishlistPanel({ news, header, bottomSpace }: { news: WishAlertNewsState; header?: ReactNode; bottomSpace?: number }) {
   const [view, setView] = useState<"mine" | "received">("mine");
   const switcher = (
     <SegmentedChoice
@@ -84,9 +87,12 @@ export function WishlistPanel({ news, header }: { news: WishAlertNewsState; head
     />
   );
   return view === "mine" ? (
-    <MyWishlist news={news} switcher={switcher} profileHeader={header} />
+    <MyWishlist news={news} switcher={switcher} profileHeader={header} bottomSpace={bottomSpace} />
   ) : (
-    <ScrollView>
+    <ScrollView
+      contentContainerStyle={bottomSpace !== undefined ? { paddingBottom: bottomSpace } : null}
+      scrollIndicatorInsets={bottomSpace !== undefined ? { bottom: bottomSpace } : undefined}
+    >
       {header}
       <View style={styles.switcher}>{switcher}</View>
       <ReceivedPieces />
@@ -94,7 +100,7 @@ export function WishlistPanel({ news, header }: { news: WishAlertNewsState; head
   );
 }
 
-function MyWishlist({ news, switcher, profileHeader }: { news: WishAlertNewsState; switcher: ReactNode; profileHeader?: ReactNode }) {
+function MyWishlist({ news, switcher, profileHeader, bottomSpace }: { news: WishAlertNewsState; switcher: ReactNode; profileHeader?: ReactNode; bottomSpace?: number }) {
   const router = useRouter();
   const { showToast } = useToast();
   // Envies lues pour la puce choisie, dans l'ordre récent, et le curseur de
@@ -440,7 +446,8 @@ function MyWishlist({ news, switcher, profileHeader }: { news: WishAlertNewsStat
       <FlatList
           data={loading ? [] : chunk(view.visible, 3)}
           keyExtractor={(row) => row.map((item) => item.id).join("-")}
-          contentContainerStyle={[styles.gridContent, isEmpty || error ? styles.emptyContent : null]}
+          contentContainerStyle={[styles.gridContent, isEmpty || error ? styles.emptyContent : null, bottomSpace !== undefined ? { paddingBottom: bottomSpace } : null]}
+          scrollIndicatorInsets={bottomSpace !== undefined ? { bottom: bottomSpace } : undefined}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
@@ -453,13 +460,14 @@ function MyWishlist({ news, switcher, profileHeader }: { news: WishAlertNewsStat
                     accessibilityRole="button"
                     accessibilityLabel={[item.name, dropLabel(item.id)].filter(Boolean).join(", ")}
                   >
-                    <View style={styles.thumb}>
-                      {item.imageUrl ? (
-                        <SpotImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} style={styles.thumbImage} fit="cover" size="card" accessibilityLabel={item.name} />
-                      ) : (
+                    {/* La tuile « Écrin » des grilles (components/piece-tile.tsx) : 4:5, la pièce entière ; le libellé est celui du bouton. */}
+                    {item.imageUrl ? (
+                      <PieceTile variant="grid" size="card" hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} edgeColor={item.edgeColor} recyclingKey={item.id} style={styles.tile} />
+                    ) : (
+                      <View style={styles.thumb}>
                         <ClockIcon size={30} tint={color.encre} />
-                      )}
-                    </View>
+                      </View>
+                    )}
                     <Text style={styles.name} numberOfLines={1}>
                       {item.name}
                     </Text>
@@ -554,7 +562,7 @@ const styles = themedStyles(() => ({
   emptyContent: { flexGrow: 1 },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl },
   emptyText: { fontSize: font.secondary, color: color.acier, textAlign: "center", lineHeight: 20, marginBottom: space.md },
-  emptyCta: { fontSize: font.body, color: color.vert, fontWeight: "600" },
+  emptyCta: { ...lienSouligne, fontSize: font.body, color: color.vert, fontWeight: "600" },
   gridContent: {
     paddingHorizontal: space.lg,
     paddingTop: space.sm,
@@ -566,8 +574,9 @@ const styles = themedStyles(() => ({
   gridRow: { flexDirection: "row", gap: space.md, marginBottom: space.md },
   card: { width: "31%" },
   bell: { position: "absolute", top: space.xs, right: space.xs },
-  thumb: { backgroundColor: color.plinthe, borderRadius: radius.sm, aspectRatio: 1, alignItems: "center", justifyContent: "center", marginBottom: space.xs, overflow: "hidden" },
-  thumbImage: { width: "100%", height: "100%" },
+  tile: { marginBottom: space.xs },
+  // Sans image (et squelette) : la même forme que la tuile, sans photo donc sans bande.
+  thumb: { backgroundColor: color.plinthe, borderRadius: radius.pieceGrid, borderCurve: "continuous", aspectRatio: 4 / 5, alignItems: "center", justifyContent: "center", marginBottom: space.xs, overflow: "hidden" },
   name: { fontSize: font.caption, color: color.encre },
   price: { fontSize: 11, color: color.acier, marginTop: 2 },
   // Parcours 3 : « Baisse de prix · 89 € », en vert (le seul accent).

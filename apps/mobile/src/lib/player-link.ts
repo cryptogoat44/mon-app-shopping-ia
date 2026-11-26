@@ -28,11 +28,20 @@ export const TIKTOK_ORIGIN = "https://www.tiktok.com";
 /** Identifiant d'une vidéo TikTok : des chiffres seulement (comme normalizeVideoLink). */
 const TIKTOK_VIDEO_ID = /^\d{6,25}$/;
 
-/** Lecteur officiel (https://www.tiktok.com/player/v1/{id}), réglages par
- * défaut de TikTok sauf la lecture automatique : sans elle, le lecteur
- * ignore toute commande (pause comprise). null : identifiant refusé. */
-export function tiktokPlayerUrl(videoId: string): string | null {
-  return TIKTOK_VIDEO_ID.test(videoId) ? `${TIKTOK_ORIGIN}/player/v1/${videoId}?autoplay=1` : null;
+/** Commandes de TikTok cachées (retours du build 3) : notre barre de lecture est sous la vidéo. */
+export const TIKTOK_PLAYER_PARAMS = "autoplay=1&controls=0&progress_bar=0&rel=0";
+/** Repli : les commandes de TikTok, comme au build 3 (notre barre se retire). */
+export const TIKTOK_PLAYER_PARAMS_NATIVE = "autoplay=1";
+
+/** Lecteur officiel (https://www.tiktok.com/player/v1/{id}). Par défaut
+ * (retours du build 3) : ses commandes cachées par ses paramètres officiels
+ * (`controls=0` ET `progress_bar=0`, la documentation se contredit sur le
+ * second ; `rel=0` sans rien faire reposer dessus), notre barre de lecture
+ * étant sous la vidéo ; repli : TIKTOK_PLAYER_PARAMS_NATIVE, ses propres
+ * commandes. La lecture automatique reste dans les deux : sans elle, le
+ * lecteur ignore toute commande (pause comprise). null : identifiant refusé. */
+export function tiktokPlayerUrl(videoId: string, params: string = TIKTOK_PLAYER_PARAMS): string | null {
+  return TIKTOK_VIDEO_ID.test(videoId) ? `${TIKTOK_ORIGIN}/player/v1/${videoId}?${params}` : null;
 }
 
 /** Même site, ou un de ses sous-domaines : comparaison exacte sur le nom d'hôte lu par URL, jamais « contient ». */

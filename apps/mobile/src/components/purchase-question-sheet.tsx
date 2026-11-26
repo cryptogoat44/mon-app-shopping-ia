@@ -343,7 +343,7 @@ const styles = themedStyles(() => ({
   scroll: { flexGrow: 0, flexShrink: 1 },
   grab: { width: size.sheetHandle.width, height: size.sheetHandle.height, borderRadius: radius.full, backgroundColor: color.filet, alignSelf: "center", marginBottom: space.md },
   piece: { flexDirection: "row", alignItems: "center", gap: space.md, marginBottom: space.md },
-  thumb: { width: 56, aspectRatio: 4 / 5, backgroundColor: color.plinthe, borderRadius: radius.sm, overflow: "hidden" },
+  thumb: { width: 56, aspectRatio: 4 / 5, backgroundColor: color.plinthe, borderRadius: radius.pieceThumb, borderCurve: "continuous", overflow: "hidden" },
   fill: { width: "100%", height: "100%" },
   pieceName: { flex: 1, fontSize: font.secondary, color: color.encre, fontWeight: "600" },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre, marginBottom: space.sm },

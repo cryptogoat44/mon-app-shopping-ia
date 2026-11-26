@@ -64,8 +64,12 @@ describe("les appels de l'écran « vidéo partagée » et le mode d'emploi", ()
     const screen = read("src/app/(app)/spot/lecteur.tsx");
     const calls = screen.match(/track\("player_[a-z_]+", \{[^}]*\}\)/g) ?? [];
     // Retours du build 2 : + player_to_ai (« Trouver la pièce automatiquement » sous le lecteur).
-    expect(calls).toHaveLength(7);
-    for (const call of calls) expect(call).toMatch(/^track\("player_[a-z_]+", \{ platform, .*link_platform: platform \}\)$/);
+    // Retours du build 3 : + player_consent au premier appui sur Lecture (firstPlay), + player_frame_failed.
+    expect(calls).toHaveLength(9);
+    for (const call of calls) expect(call).toMatch(/link_platform: platform \}\)$/);
+    // Les événements d'avant gardent leur « platform » ; le nouveau player_frame_failed n'en a pas (règle du catalogue).
+    for (const call of calls.filter((c) => !c.startsWith('track("player_frame_failed"'))) expect(call).toMatch(/^track\("player_[a-z_]+", \{ platform, .*link_platform: platform \}\)$/);
+    expect(calls.filter((c) => c.startsWith('track("player_frame_failed"'))).toEqual(['track("player_frame_failed", { reason: frameFailureReason(serverResult.reason), link_platform: platform })']);
   });
 
   it("STATISTIQUES.md dit que l'ancienne « platform » de ces événements montre l'appareil, et de prendre link_platform", () => {

@@ -17,6 +17,15 @@ export function saveLatestVideoChoice(): Promise<void> {
   return Promise.reject(new Error("latest_video_unavailable"));
 }
 
+/** Le site n'affiche jamais la carte : rien à retenir. */
+export async function loadLatestVideoReduced(): Promise<boolean> {
+  return false;
+}
+
+export function saveLatestVideoReduced(): Promise<void> {
+  return Promise.resolve();
+}
+
 export function latestVideoUri(): Promise<string> {
   return Promise.reject(new Error("latest_video_unavailable"));
 }

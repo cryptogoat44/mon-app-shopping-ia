@@ -55,6 +55,8 @@ export function withShops(previous: SpotResult, search: ProductSearch): SpotResu
     ...rest,
     ...(next.verdict ? { verdict: next.verdict } : {}),
     ...(next.luxuryResale ? { luxuryResale: next.luxuryResale } : {}),
+    // Couleurs des bords des boutiques mises en file par cette réponse : l'écran relira (lib/spot-result.ts).
+    ...(next.edgeColorsPending ? { edgeColorsPending: true as const } : {}),
     complement: {
       shopping: shops.shopping,
       words: shops.words,

@@ -1,0 +1,240 @@
+import { useState } from "react";
+import { Platform, StyleSheet, View, type ImageStyle, type LayoutChangeEvent, type StyleProp, type ViewStyle } from "react-native";
+import { Image } from "expo-image";
+import { SpotImage, type ImageNaturalSize } from "@/components/spot-image";
+import { EnlargeableImage, type ZoomState } from "@/components/image-viewer";
+import { edgeBackground, edgeBands, edgeColorApplies, fillsTile, honestSize, type PieceImageSize, type PieceTileVariant } from "@/lib/piece-image";
+import { color, getActiveScheme, radius } from "@/theme/tokens";
+import { themedStyles } from "@/theme/themed-styles";
+
+export type { PieceTileVariant } from "@/lib/piece-image";
+
+// La tuile de pièce de toute l'app, direction « Écrin » (retours du build 3,
+// 26 novembre 2026 : « des arrondis très légers mais qui font la
+// différence », « partout où on affiche les pièces »). Une seule forme :
+// 4:5, coins doux en courbe continue, plus aucune bande. Une photo presque
+// 4:5 remplit simplement la tuile (lib/piece-image.ts, fillsTile) ; sinon,
+// la photo entière et, autour, les « bords prolongés » (lot « finitions de
+// l'œil ») : chaque bande libre prolonge le bord même de la photo (l'image
+// affichée, déjà en cache), étiré à partir du bord et légèrement flouté
+// (lib/piece-image.ts, edgeBands) — plus de copie floue agrandie, ni sa
+// couture ni son halo. Taille encore inconnue, ou image en erreur : la plinthe. Grande image (« hero ») : une petite image n'est jamais
+// étirée au-delà d'un point par pixel ; grille (« grid ») : la pièce remplit
+// toujours sa tuile. Thème clair seulement : un filet très fin, pour qu'une
+// photo sur fond blanc ne se fonde pas dans la page. `edgeColor` (lot
+// « couleur des bords ») : la couleur unie « #RRGGBB » des bords de la
+// photo, mesurée par le serveur (interrupteur EDGE_COLOR_ENABLED) et reçue
+// avec la pièce, à la place des bords prolongés quand la photo touche le
+// cadre (lib/piece-image.ts, edgeColorApplies).
+//
+// Plan B si les bandes sont trop lentes dans une longue grille (essai sur
+// l'iPhone) : ne pas les dessiner en grille (la plinthe reste) — une ligne.
+export function PieceTile({
+  hdUri,
+  fallbackUri,
+  variant,
+  size,
+  accessibilityLabel,
+  recyclingKey,
+  enlargeable = false,
+  onZoomStateChange,
+  fullResolution = false,
+  edgeColor,
+  style,
+  onLayout,
+  aspectRatio,
+}: {
+  hdUri?: string | null;
+  fallbackUri: string;
+  /** « hero » : grandes images (rayon 14) ; « grid » : grilles (rayon 10). */
+  variant: PieceTileVariant;
+  /** Passé à SpotImage (« card » dans les grilles). */
+  size?: PieceImageSize;
+  /** Absent : l'image n'est pas lue séparément (cases qui portent déjà leur libellé). */
+  accessibilityLabel?: string;
+  recyclingKey?: string;
+  /** Grandes images des fiches : zoom à deux doigts sur place (iPhone), plein écran au clic (site) ou par VoiceOver
+   * (EnlargeableImage, qui enveloppe alors la tuile entière). */
+  enlargeable?: boolean;
+  /** Agrandissable seulement : l'écran bloque son défilement pendant « zooming ». */
+  onZoomStateChange?: (state: ZoomState) => void;
+  /** L'unique grande image zoomable de l'écran seulement (envie, Vault, grande carte) : décodée en entier, nette au zoom.
+   * Jamais dans les grilles (mémoire). */
+  fullResolution?: boolean;
+  /** Couleur des bords mesurée par le serveur, « #RRGGBB » ; absente tant qu'elle n'est pas mesurée (ou interrupteur éteint). */
+  edgeColor?: string | null;
+  /** Largeur, maxWidth, marges propres à l'écran. */
+  style?: StyleProp<ViewStyle>;
+  onLayout?: (event: LayoutChangeEvent) => void;
+  /** Absent : 4:5, la forme de toutes les tuiles. Grande image du Résultat : 1 (carrée, maquette « Écrin » 4). */
+  aspectRatio?: number;
+}) {
+  const [frame, setFrame] = useState({ width: 0, height: 0 });
+  // `shown` : l'adresse de l'image réellement affichée (vignette, puis originale), copiée dans les bandes.
+  const [natural, setNatural] = useState<{ uri: string; size: ImageNaturalSize; shown: string } | null>(null);
+  // Une autre pièce (liste qui réutilise ses éléments) repart de zéro. Clé
+  // sur la vignette seule : quand la grande image arrive (relecture), la
+  // taille mesurée reste jusqu'à ce que l'original soit vraiment chargé.
+  const imageKey = fallbackUri;
+  const naturalSize = natural?.uri === imageKey ? natural.size : null;
+  const shownUri = natural?.uri === imageKey ? natural.shown : null;
+
+  const handleLayout = (event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    setFrame((previous) => (previous.width === width && previous.height === height ? previous : { width, height }));
+    onLayout?.(event);
+  };
+  // Agrandissable : la mesure de l'écran (onLayout) est celle de l'enveloppe, posée dans la page.
+  const handleTileLayout = (event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    setFrame((previous) => (previous.width === width && previous.height === height ? previous : { width, height }));
+  };
+
+  // Fond uni seulement si la photo touche le cadre sur l'axe que le serveur n'a pas mesuré (lib/piece-image.ts).
+  const background = edgeColorApplies(naturalSize, frame, variant) ? edgeBackground(edgeColor) : null;
+  // Sans couleur donnée : les bords prolongés, une bande par côté libre (aucune tant que la taille n'est pas connue).
+  // Site : le flou CSS rend transparents les bords de la copie (bande prise plus loin du bord, copie de dessous aux bouts).
+  const bands = background || !shownUri ? [] : edgeBands(naturalSize, frame, variant, Platform.OS === "web" ? "web" : "native");
+  // Taille inconnue : contenue sur toute la tuile ; sinon remplie, ou une
+  // boîte centrée à la taille honnête. Taille connue : un fond opaque juste
+  // sous la photo, pour qu'un détourage transparent ne laisse pas voir les
+  // bandes (elles passent d'un point sous la photo, sans fil à la jointure).
+  let foreground: { style: StyleProp<ImageStyle>; fit: "contain" | "cover" } = { style: StyleSheet.absoluteFill, fit: "contain" };
+  if (naturalSize && frame.width > 0 && frame.height > 0) {
+    // Remplir ou non dépend du ratio seul (grille : une photo carrée remplit, une photo en pied reste
+    // entière) ; la couleur de fond, même arrivée plus tard, ne peint que le fond d'une photo qui ne remplit pas.
+    if (fillsTile(naturalSize, frame, variant)) foreground = { style: [StyleSheet.absoluteFill, { backgroundColor: color.plinthe }], fit: "cover" };
+    else {
+      const shown = honestSize(naturalSize, frame, variant);
+      foreground = {
+        style: { position: "absolute", width: shown.width, height: shown.height, left: (frame.width - shown.width) / 2, top: (frame.height - shown.height) / 2, backgroundColor: color.plinthe },
+        fit: "contain",
+      };
+    }
+  }
+
+  const image = (
+    <SpotImage
+      hdUri={hdUri}
+      fallbackUri={fallbackUri}
+      size={size}
+      fullResolution={fullResolution}
+      fit={foreground.fit}
+      style={foreground.style}
+      // Agrandissable : le libellé est porté par le bouton qui l'entoure (lu une seule fois).
+      accessibilityLabel={enlargeable ? undefined : accessibilityLabel}
+      recyclingKey={recyclingKey}
+      onImageSize={(measured, shown) => setNatural({ uri: imageKey, size: measured, shown })}
+    />
+  );
+
+  const tileView = (
+    <View
+      style={[variant === "hero" ? styles.hero : styles.grid, enlargeable ? null : style, aspectRatio !== undefined ? { aspectRatio } : null]}
+      onLayout={enlargeable ? handleTileLayout : handleLayout}
+    >
+      {background ? (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: background }]} accessible={false} importantForAccessibility="no-hide-descendants" />
+      ) : (
+        bands.map((band) => (
+          <View
+            key={band.side}
+            pointerEvents="none"
+            accessible={false}
+            importantForAccessibility="no-hide-descendants"
+            style={[styles.band, band.box]}
+          >
+            {band.fill ? (
+              <Image
+                source={{ uri: shownUri! }}
+                contentFit="fill"
+                blurRadius={band.blur}
+                cachePolicy="memory-disk"
+                recyclingKey={recyclingKey}
+                accessible={false}
+                style={[styles.bandCopy, band.fill, { transform: band.transform }]}
+              />
+            ) : null}
+            {/* Petite image (quatre bandes) : chaque coin reprend la bande de côté voisine, étirée en plus le long de y. */}
+            {band.corners?.map((corner, index) => (
+              <View key={index} style={[styles.band, corner.box, { transform: band.transform }]}>
+                {corner.side.fill ? (
+                  <Image
+                    source={{ uri: shownUri! }}
+                    contentFit="fill"
+                    blurRadius={band.blur}
+                    cachePolicy="memory-disk"
+                    recyclingKey={recyclingKey}
+                    accessible={false}
+                    style={[styles.bandCopy, corner.side.fill, { transform: corner.side.transform }]}
+                  />
+                ) : null}
+                <Image
+                  source={{ uri: shownUri! }}
+                  contentFit="fill"
+                  blurRadius={band.blur}
+                  cachePolicy="memory-disk"
+                  recyclingKey={recyclingKey}
+                  accessible={false}
+                  style={[styles.bandCopy, corner.side.copy, { transform: corner.side.transform }]}
+                />
+              </View>
+            ))}
+            <Image
+              source={{ uri: shownUri! }}
+              contentFit="fill"
+              blurRadius={band.blur}
+              cachePolicy="memory-disk"
+              recyclingKey={recyclingKey}
+              accessible={false}
+              style={[styles.bandCopy, band.copy, { transform: band.transform }]}
+            />
+          </View>
+        ))
+      )}
+      {image}
+    </View>
+  );
+
+  if (!enlargeable) return tileView;
+  // Retours du build 3 (zoom à deux doigts sur place) : l'enveloppe de zoom
+  // entoure la tuile ENTIÈRE (fond, coins et coupe compris) : toute la carte
+  // arrondie grandit sous les doigts. Le style de l'écran et sa mesure vont
+  // à l'enveloppe, qui est le cadre posé dans la page.
+  return (
+    <EnlargeableImage
+      hdUri={hdUri}
+      fallbackUri={fallbackUri}
+      label={accessibilityLabel ?? ""}
+      style={[styles.zoomFrame, style]}
+      onLayout={onLayout}
+      onZoomStateChange={onZoomStateChange}
+    >
+      {tileView}
+    </EnlargeableImage>
+  );
+}
+
+const tile = (rounded: number): ViewStyle => ({
+  width: "100%",
+  aspectRatio: 4 / 5,
+  overflow: "hidden",
+  borderRadius: rounded,
+  borderCurve: "continuous",
+  // Pendant le chargement, et si les bords prolongés échouent : la plinthe.
+  backgroundColor: color.plinthe,
+  padding: 0,
+  // Thème clair seulement : un filet très fin (aucun en sombre).
+  borderWidth: getActiveScheme() === "light" ? StyleSheet.hairlineWidth : 0,
+  borderColor: color.filet,
+});
+
+const styles = themedStyles(() => ({
+  hero: tile(radius.piece),
+  grid: tile(radius.pieceGrid),
+  // Enveloppe de zoom (agrandissable) : aussi large que la tuile le serait seule.
+  zoomFrame: { width: "100%" },
+  // Une bande des bords prolongés : coupe ce qui dépasse de la copie étirée.
+  band: { position: "absolute", overflow: "hidden" },
+  bandCopy: { position: "absolute" },
+}));

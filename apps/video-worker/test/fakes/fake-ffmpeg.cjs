@@ -23,7 +23,12 @@ let scenario = "varied";
 let duration = 10;
 let announced = 10;
 const graph = args[args.indexOf("-filter_complex") + 1] ?? "";
-const step = Number(/gte\(t-prev_selected_t,([0-9.]+)\)/.exec(graph)?.[1] ?? "1");
+// Sans filtre select (image du moment) : toutes les images, une tous les 1/30 s.
+const step = graph.includes("select=") ? Number(/gte\(t-prev_selected_t,([0-9.]+)\)/.exec(graph)?.[1] ?? "1") : 0;
+// Image du moment : -ss avant -i, puis -t (fenêtre lue). Comme le vrai, les
+// instants de showinfo repartent de 0 au point de départ.
+const seek = args.indexOf("-ss") >= 0 && args.indexOf("-ss") < args.indexOf("-i") ? Number(args[args.indexOf("-ss") + 1]) : 0;
+const window = args.includes("-ss") ? Number(args[args.indexOf("-t") + 1]) : Infinity;
 const maxFrames = Number(args[args.indexOf("-frames:v") + 1] ?? "42");
 const keyframesOnly = args.includes("-skip_frame");
 
@@ -48,7 +53,7 @@ function run() {
   // Images clés seulement : une toutes les 2 s.
   const times = [];
   let last = -Infinity;
-  for (let t = 0; t < Math.min(duration, 91) && times.length < maxFrames; t += keyframesOnly ? 2 : 1 / 30) {
+  for (let t = 0; t < Math.min(duration - seek, 91, window) - 1e-9 && times.length < maxFrames; t += keyframesOnly ? 2 : 1 / 30) {
     const rounded = Math.round(t * 1000) / 1000;
     if (rounded - last >= step - 1e-9) {
       times.push(rounded);
@@ -111,6 +116,7 @@ function jpegFor(index) {
 function pixelsFor(index) {
   const pixels = Buffer.alloc(EDGE * EDGE * 3);
   if (scenario === "static") return paint(pixels, 0, false);
+  if (scenario === "black") return pixels;
   if (index === 0) return pixels;
   return paint(pixels, Math.floor(index / 3), index % 5 === 4);
 }

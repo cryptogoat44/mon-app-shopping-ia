@@ -105,6 +105,16 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((value) => value?.trim() || undefined),
+  // Image du moment (retours du build 3, accord du fondateur) : pour une
+  // vidéo TikTok, le service vidéo rend l'image exacte du moment choisi dans
+  // le lecteur, sans IA. COUPÉE par défaut : seule la valeur exacte "true"
+  // l'allume. Demande VIDEO_WORKER_URL et VIDEO_WORKER_SECRET, pas
+  // ANTHROPIC_API_KEY. Hors de la liste des variables modifiables par les
+  // outils (render-guard) : le fondateur seul la règle, à la main, dans Render.
+  VIDEO_LINK_FRAME_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value === "true"),
   // Propositions de l'IA (Parcours 2, lot « propositions », décision du
   // fondateur du 21 novembre 2026) : « Voir les propositions de l'IA » sur
   // l'écran d'un lien, l'IA nommant jusqu'à 3 pièces visibles sans les mots
@@ -139,6 +149,32 @@ const envSchema = z.object({
   // de la grande image si elle manque. Lu seulement par lib/merchantImage.ts ;
   // le fondateur seul le règle, à la main, dans Render.
   MERCHANT_IMAGE_UPGRADE_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value === "true"),
+  // Grande image lue sur la page de la boutique pour les RÉSULTATS d'une
+  // recherche (retours du build 3, décision du fondateur) : les 8 premières
+  // propositions "boutiques" et "vos mots" sans grande image. ÉTEINTE par
+  // défaut : seule la valeur exacte "true" l'allume ; à allumer seulement une
+  // fois la politique de confidentialité mise à jour. Indépendante de
+  // MERCHANT_IMAGE_UPGRADE_ENABLED. Lu seulement par lib/merchantImage.ts ; le
+  // fondateur seul la règle, à la main, dans Render.
+  MERCHANT_IMAGE_RESULTS_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value === "true"),
+  // Couleur des bords de la vignette des propositions (retours du build 3,
+  // lot « couleur des bords », lib/edgeColor.ts) : le serveur télécharge la
+  // petite image d'une proposition affichée, mesure la couleur unie de ses
+  // bords et ne garde, EN MÉMOIRE, qu'une empreinte de l'adresse de l'image
+  // et cette couleur (ou « non mesurable »), 7 jours au plus (1 jour pour
+  // « non mesurable »), rien dans la base ; l'app s'en sert comme fond derrière une photo qui ne remplit pas
+  // sa tuile. ÉTEINTE par défaut : seule la valeur exacte "true" l'allume ; à
+  // allumer seulement une fois la politique de confidentialité mise à jour
+  // (téléchargement nouveau, côté serveur). Hors de la liste des variables
+  // modifiables par les outils (render-guard) : le fondateur seul la règle, à
+  // la main, dans Render.
+  EDGE_COLOR_ENABLED: z
     .string()
     .optional()
     .transform((value) => value === "true"),

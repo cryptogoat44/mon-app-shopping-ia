@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View } from "react-native";
 import type { WishlistItem } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { fetchWishlist } from "@/lib/api";
 import type { AttachedKind } from "@/lib/conversations";
@@ -113,11 +114,11 @@ const styles = themedStyles(() => ({
   error: { fontSize: font.secondary, marginBottom: space.sm },
   empty: { fontSize: font.secondary, color: color.acier, lineHeight: 20 },
   row: { flexDirection: "row", alignItems: "center", gap: space.sm, paddingVertical: space.xs, minHeight: 56 },
-  thumb: { width: 52, height: 52, borderRadius: radius.sm, overflow: "hidden", backgroundColor: color.plinthe },
+  thumb: { width: 52, height: 52, borderRadius: radius.pieceThumb, borderCurve: "continuous", overflow: "hidden", backgroundColor: color.plinthe },
   fill: { width: "100%", height: "100%" },
   rowTitle: { flex: 1, fontSize: font.secondary, color: color.encre },
   more: { minHeight: 44, alignItems: "center", justifyContent: "center" },
-  moreLabel: { fontSize: font.secondary, fontWeight: "600", color: color.vert },
+  moreLabel: { ...lienSouligne, fontSize: font.secondary, fontWeight: "600", color: color.vert },
   cancel: { marginTop: space.sm, marginHorizontal: space.lg, paddingVertical: space.md, alignItems: "center", backgroundColor: color.plinthe, borderRadius: radius.md },
   cancelLabel: { fontSize: font.body, color: color.encre, fontWeight: "600" },
 }));

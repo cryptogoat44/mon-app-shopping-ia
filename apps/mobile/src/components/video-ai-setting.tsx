@@ -1,12 +1,14 @@
 import { useState } from "react";
-import { Switch, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { Switch } from "@/components/switch";
 import type { ConsentStatus } from "@monapp/shared-types";
-import { color, font, space } from "@/theme/tokens";
+import { couleursInterrupteur } from "@/theme/accent";
 import { t } from "@/i18n";
 import { fetchConsentStatus, recordVideoAiChoice } from "@/lib/api";
 import { track } from "@/lib/analytics";
 import { hasCurrentConsent } from "@/lib/policy-notice";
 import { ErrorMessage } from "@/components/error-message";
+import { settingsGroup, settingsGroupValues } from "@/components/settings-group";
 import { themedStyles } from "@/theme/themed-styles";
 
 /** Réglages → Vos données : consentement « analyse automatique de la vidéo »
@@ -41,6 +43,8 @@ export function VideoAiSetting({
 
   return (
     <>
+      {/* Lignes posées dans la carte « Vos données » de Réglages (components/settings-group.tsx) : un filet, jamais une carte à elles. */}
+      <View style={settingsGroup.divider} />
       <View style={styles.row}>
         <Text style={styles.title}>{t.settings.videoAiTitle}</Text>
         <Switch
@@ -48,7 +52,7 @@ export function VideoAiSetting({
           value={enabled}
           disabled={!consents || saving}
           onValueChange={(granted) => void toggle(granted)}
-          trackColor={{ true: color.vert, false: color.filet }}
+          {...couleursInterrupteur(enabled)}
         />
       </View>
       <Text style={styles.body}>
@@ -59,8 +63,11 @@ export function VideoAiSetting({
   );
 }
 
-const styles = themedStyles(() => ({
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44, gap: space.sm },
-  title: { flex: 1, fontSize: font.secondary, color: color.encre, fontWeight: "600" },
-  body: { fontSize: font.secondary, color: color.acier, marginBottom: space.sm, lineHeight: 19 },
-}));
+const styles = themedStyles(() => {
+  const g = settingsGroupValues();
+  return {
+    row: g.row,
+    title: g.rowTitle,
+    body: g.hint,
+  };
+});

@@ -4,13 +4,15 @@ import { dirname, join } from "node:path";
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { contourLettre } from "../scripts/lib/contour-police.js";
-import { DEMARRAGE, MARQUE, POLICE_DU_LOGO, S_DANS_ICONE, document, icone, lettre } from "../scripts/images-marque.js";
+import { DEMARRAGE, EMAIL, MARQUE, OR_POLI, POLICE_DU_LOGO, SERTISSAGE, S_ANDROID, S_DANS_ICONE, VERNIS, calquesApple, document, icone, sDemarrageSombre } from "../scripts/images-marque.js";
 
 // Lot « identité de marque » (décision du fondateur, 2026-11-17) : l'icône et
 // les écrans de démarrage montrent le « S » de Bodoni Moda Medium, lu dans le
 // fichier de police du dépôt par scripts/images-marque.ts. Ce fichier vérifie
 // la police, la lecture du contour, et que les images enregistrées dans
-// apps/mobile/assets sont bien celles que le script produit.
+// apps/mobile/assets sont bien celles que le script produit. Depuis le
+// 2026-11-25 (lot « couleurs et logo ») : le dessin « Émail de chevalière »,
+// « S » en or poli sur émail vert anglais verni.
 // Pas besoin de la base : il tourne aussi dans « Tests serveur hors base ».
 // Aucun module du serveur n'est importé ici : le serveur interdit à sharp de
 // lire les SVG (lib/imageSafety.ts), le script en a besoin.
@@ -131,28 +133,76 @@ describe("contour d'une lettre lu dans le fichier de police", () => {
   });
 });
 
-describe("images de la marque enregistrées (apps/mobile/assets) : celles que le script produit", () => {
-  const or = rgb(MARQUE.orPale);
-  const vert = rgb(MARQUE.vertAnglais);
-  const distance = (pixel: Buffer, couleur: readonly number[]) => Math.abs(pixel[0]! - couleur[0]!) + Math.abs(pixel[1]! - couleur[1]!) + Math.abs(pixel[2]! - couleur[2]!);
+describe("le dessin validé : « Émail de chevalière » (2026-11-25)", () => {
+  it("émail vert anglais en dégradé vertical, vernis très doux (15 % au plus), or poli à huit arrêts, sertissage à peine visible", () => {
+    expect(EMAIL).toEqual([[0, "#004225"], [0.55, "#003B21"], [1, "#00301B"]]);
+    expect(Math.max(...VERNIS.arrets.map(([, , opacite]) => opacite ?? 1))).toBeLessThanOrEqual(0.15);
+    expect(VERNIS.arrets.at(-1)).toEqual([1, "#7FCFA3", 0]);
+    expect(VERNIS.cy).toBeLessThan(1024 / 3);
+    expect(OR_POLI.arrets).toHaveLength(8);
+    expect(OR_POLI.arrets[0]).toEqual([0, "#F6E096"]);
+    expect(OR_POLI.arrets.at(-1)).toEqual([1, "#A8832A"]);
+    // Lumière venue du haut à gauche : le dégradé part du haut à gauche du « S » (repère de la police, axe vers le haut).
+    const { bornes: b } = contourLettre(police, "S");
+    expect(OR_POLI.x1).toBeLessThan(b.x0);
+    expect(OR_POLI.y1).toBeGreaterThan(b.y1);
+    expect(OR_POLI.x2).toBeGreaterThan(b.x1);
+    expect(OR_POLI.y2).toBeLessThan(b.y0);
+    expect(SERTISSAGE).toEqual({ couleur: "#001A0D", opacite: 0.12, decalage: 2 });
+  });
 
-  it("les deux dessins vectoriels (référence et icône iPhone) sont exactement ceux du script", () => {
+  it("aucun filtre, aucun texte, aucune image : seulement des formes et des dégradés (le garde-fou voit un filtre)", () => {
+    const interdit = /<(filter|text|image|feGaussianBlur)\b/;
+    for (const svg of [icone(), calquesApple().s, calquesApple().email, sDemarrageSombre()]) expect(svg).not.toMatch(interdit);
+    expect(`<filter id="flou"><feGaussianBlur stdDeviation="4"/></filter>`).toMatch(interdit);
+  });
+});
+
+describe("images de la marque enregistrées (apps/mobile/assets) : celles que le script produit", () => {
+  const vert = rgb(MARQUE.vertAnglais);
+  const basEmail = rgb(EMAIL.at(-1)![1]);
+  /** Un pixel doré : rouge et vert hauts, bleu nettement plus bas (l'émail vert n'a presque pas de rouge). */
+  const estOr = (pixel: Buffer) => pixel[0]! > 120 && pixel[1]! > 90 && pixel[0]! - pixel[2]! > 50;
+
+  it("les dessins vectoriels (référence, et les deux calques de l'icône iPhone) sont exactement ceux du script", () => {
     expect(readFileSync(join(ASSETS, "marque/icone.svg"), "utf8")).toBe(`${document(1024, 1024, icone())}\n`);
-    expect(readFileSync(join(ASSETS, "marque/Spotto.icon/Assets/S.svg"), "utf8")).toBe(`${document(1024, 1024, lettre(MARQUE.orPale, 512, 512, 1024 * S_DANS_ICONE))}\n`);
+    expect(readFileSync(join(ASSETS, "marque/Spotto.icon/Assets/S.svg"), "utf8")).toBe(`${calquesApple().s}\n`);
+    expect(readFileSync(join(ASSETS, "marque/Spotto.icon/Assets/Email.svg"), "utf8")).toBe(`${calquesApple().email}\n`);
     expect(icone()).toContain(contourLettre(police, "S").trace);
-    // Icône iPhone (Icon Composer) : fond uni vert anglais, « S » vectoriel, ni verre ni reflet.
+    expect(calquesApple().s).toContain(contourLettre(police, "S").trace);
+    // Icône iPhone (Icon Composer) : fond uni vert anglais, puis deux calques
+    // vectoriels — le « S » d'abord (dessus), l'émail plein cadre dessous —,
+    // ni verre ni reflet. Aucune autre clé que celles du fichier d'avant.
     const description = JSON.parse(readFileSync(join(ASSETS, "marque/Spotto.icon/icon.json"), "utf8"));
     expect(description.fill).toEqual({ solid: "srgb:0.00000,0.25882,0.14510,1.00000" });
     expect(description.groups).toEqual([
-      { layers: [{ glass: false, "image-name": "S.svg", name: "S" }], shadow: { kind: "none", opacity: 0 }, specular: false, translucency: { enabled: false, value: 0 } },
+      {
+        layers: [
+          { glass: false, "image-name": "S.svg", name: "S" },
+          { glass: false, "image-name": "Email.svg", name: "Email" },
+        ],
+        shadow: { kind: "none", opacity: 0 },
+        specular: false,
+        translucency: { enabled: false, value: 0 },
+      },
     ]);
+    expect(Object.keys(description).sort()).toEqual(["fill", "groups", "supported-platforms"]);
   });
 
-  it("icône de l'app : 1024 × 1024, opaque, « S » or pâle centré sur vert anglais, à 60 % de la hauteur", async () => {
+  it("les deux calques de l'icône iPhone, superposés, donnent exactement l'icône de l'app", async () => {
+    const { s, email } = calquesApple();
+    const superposes = await sharp(Buffer.from(email)).composite([{ input: await sharp(Buffer.from(s)).png().toBuffer() }]).removeAlpha().png().toBuffer();
+    expect(ecartMoyen(await pixels(superposes), await pixels(join(ASSETS, "images/icon.png")))).toBeLessThan(1);
+    // Le calque du « S » est transparent hors de la lettre.
+    const calque = await pixels(await sharp(Buffer.from(s)).ensureAlpha().png().toBuffer());
+    expect(calque.data[3]).toBe(0);
+  });
+
+  it("icône de l'app : 1024 × 1024, opaque, « S » or poli centré sur l'émail vert anglais, à 60 % de la hauteur", async () => {
     const fichier = join(ASSETS, "images/icon.png");
     expect(await sharp(fichier).metadata()).toMatchObject({ format: "png", width: 1024, height: 1024, hasAlpha: false });
     const image = await pixels(fichier);
-    const s = bornes(image, (pixel) => distance(pixel, or) < distance(pixel, vert));
+    const s = bornes(image, estOr);
     expect(S_DANS_ICONE).toBe(0.6);
     expect(Math.abs(s.hauteur - 1024 * S_DANS_ICONE)).toBeLessThanOrEqual(2);
     expect(Math.abs(s.centreX - 512)).toBeLessThanOrEqual(1);
@@ -162,10 +212,12 @@ describe("images de la marque enregistrées (apps/mobile/assets) : celles que le
     expect(1024 - s.y1).toBeGreaterThanOrEqual(1024 * 0.19);
     expect(s.x0).toBeGreaterThanOrEqual(1024 * 0.3);
     expect(1024 - s.x1).toBeGreaterThanOrEqual(1024 * 0.3);
-    // Les quatre coins : le vert anglais, exactement.
-    for (const [x, y] of [[0, 0], [1023, 0], [0, 1023], [1023, 1023]] as const) {
-      expect([...image.data.subarray((y * 1024 + x) * 3, (y * 1024 + x) * 3 + 3)]).toEqual(vert);
-    }
+    // Les coins : le vert anglais en haut, le bas de l'émail en bas, exactement (le vernis ne touche pas les bords).
+    const coin = (x: number, y: number) => [...image.data.subarray((y * 1024 + x) * 3, (y * 1024 + x) * 3 + 3)];
+    expect([coin(0, 0), coin(1023, 0)]).toEqual([vert, vert]);
+    expect([coin(0, 1023), coin(1023, 1023)]).toEqual([basEmail, basEmail]);
+    // Le vernis éclaire le tiers haut : au centre, plus clair en haut qu'en bas.
+    expect(coin(512, 120)[1]!).toBeGreaterThan(coin(512, 900)[1]! + 15);
     // … et c'est bien l'image que le script dessine aujourd'hui (au lissage près, d'une machine à l'autre).
     const attendu = await pixels(await sharp(Buffer.from(document(1024, 1024, icone()))).removeAlpha().png().toBuffer());
     expect(ecartMoyen(image, attendu)).toBeLessThan(1);
@@ -178,8 +230,9 @@ describe("images de la marque enregistrées (apps/mobile/assets) : celles que le
     expect(ecartMoyen(await pixels(fichier), attendu)).toBeLessThan(2);
   });
 
-  it("icônes Android : fond transparent, « S » centré dans la zone sûre (les deux tiers de la taille de l'icône)", async () => {
-    for (const [nom, couleur] of [["android-icon-foreground.png", or], ["android-icon-monochrome.png", rgb(MARQUE.blanc)]] as const) {
+  it("icônes Android : fond transparent, « S » centré dans la zone sûre (les deux tiers de la taille de l'icône), or poli ou blanc", async () => {
+    expect(S_ANDROID).toBeCloseTo(1024 * S_DANS_ICONE * (72 / 108), 6);
+    for (const [nom, couleur] of [["android-icon-foreground.png", null], ["android-icon-monochrome.png", rgb(MARQUE.blanc)]] as const) {
       const fichier = join(ASSETS, "images", nom);
       expect(await sharp(fichier).metadata(), nom).toMatchObject({ format: "png", width: 1024, height: 1024, hasAlpha: true });
       const image = await pixels(fichier);
@@ -188,14 +241,15 @@ describe("images de la marque enregistrées (apps/mobile/assets) : celles que le
       expect(Math.abs(s.centreX - 512), nom).toBeLessThanOrEqual(1);
       expect(Math.abs(s.centreY - 512), nom).toBeLessThanOrEqual(1);
       const centre = (512 * 1024 + 512) * 4;
-      expect([...image.data.subarray(centre, centre + 4)], nom).toEqual([...couleur, 255]);
+      if (couleur) expect([...image.data.subarray(centre, centre + 4)], nom).toEqual([...couleur, 255]);
+      else expect(estOr(image.data.subarray(centre, centre + 4)) && image.data[centre + 3] === 255, nom).toBe(true);
       expect(image.data[3], nom).toBe(0);
     }
   });
 
-  it("écrans de démarrage : carrés de 111 points en ×1, ×2 et ×3, « S » vert anglais (clair) ou or pâle (sombre) sur fond transparent", async () => {
+  it("écrans de démarrage : carrés de 111 points en ×1, ×2 et ×3, « S » vert anglais en aplat (clair) ou or poli (sombre) sur fond transparent", async () => {
     expect(DEMARRAGE.cotePoints).toBe(111);
-    for (const [nom, couleur] of [["image", vert], ["dark_image", or]] as const) {
+    for (const [nom, couleur] of [["image", vert], ["dark_image", null]] as const) {
       for (const [echelle, suffixe] of [[1, ""], [2, "@2x"], [3, "@3x"]] as const) {
         const fichier = join(ASSETS, "marque/demarrage", `${nom}${suffixe}.png`);
         const cote = DEMARRAGE.cotePoints * echelle;
@@ -206,16 +260,23 @@ describe("images de la marque enregistrées (apps/mobile/assets) : celles que le
         expect(Math.abs(s.hauteur - (DEMARRAGE.cotePoints - 2) * echelle), fichier).toBeLessThanOrEqual(2);
         expect(Math.abs(s.centreX - cote / 2), fichier).toBeLessThanOrEqual(1);
         expect(Math.abs(s.centreY - cote / 2), fichier).toBeLessThanOrEqual(1);
-        // Une seule couleur : chaque pixel plein est exactement celle de la marque.
+        // Clair : une seule couleur, exactement le vert anglais. Sombre : chaque
+        // pixel plein est doré, en dégradé (bien plus que quelques teintes).
         let pleins = 0;
         let autres = 0;
+        const teintes = new Set<number>();
         for (let i = 0; i < image.data.length; i += 4) {
           if (image.data[i + 3] !== 255) continue;
           pleins += 1;
-          if (image.data[i] !== couleur[0] || image.data[i + 1] !== couleur[1] || image.data[i + 2] !== couleur[2]) autres += 1;
+          const pixel = image.data.subarray(i, i + 4);
+          teintes.add(pixel.readUIntBE(0, 3));
+          const juste = couleur ? pixel[0] === couleur[0] && pixel[1] === couleur[1] && pixel[2] === couleur[2] : estOr(pixel);
+          if (!juste) autres += 1;
         }
         expect(pleins, fichier).toBeGreaterThan(cote * cote * 0.1);
         expect(autres, fichier).toBe(0);
+        if (couleur) expect(teintes.size, fichier).toBe(1);
+        else expect(teintes.size, fichier).toBeGreaterThan(20);
         expect(image.data[3], fichier).toBe(0);
       }
     }

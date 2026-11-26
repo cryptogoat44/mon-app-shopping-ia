@@ -3,6 +3,7 @@ import { Modal, Pressable, Text, View, type StyleProp, type ViewStyle } from "re
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import type { SpotResult } from "@/api/types";
 import { ActionButtons, type Action } from "@/components/spot-launch-views";
@@ -70,14 +71,20 @@ export function CorrectionButtons({ list, actions, onAddVideo, importing }: { li
   return <ActionButtons primary={first} secondary={rest} />;
 }
 
-/** Un seul lien discret, sous la proposition affichée ; il ouvre les corrections. */
-export function CorrectionsLink({ onPress, style }: { onPress: () => void; style?: StyleProp<ViewStyle> }) {
+/** Un seul lien discret, sous la proposition affichée ; il ouvre les corrections. `inline` : sur la ligne
+ * du prix de la grande carte, il ne prend que la hauteur de cette ligne (18 points) ; sa zone de 44 points
+ * déborde vers le HAUT, sur le nom de la pièce (rien de touchable), jamais vers le bas, où sont les
+ * mentions (une vraie boîte, pas une zone élargie : le site l'ignore). Correctif du lot « finitions de l'œil ». */
+export function CorrectionsLink({ onPress, style, inline = false }: { onPress: () => void; style?: StyleProp<ViewStyle>; inline?: boolean }) {
   return (
-    <Pressable onPress={onPress} style={[styles.link, style]} accessibilityRole="button" testID="corrections-link">
-      <Text style={styles.linkLabel}>{t.result.notRight}</Text>
+    <Pressable onPress={onPress} style={[styles.link, inline ? styles.linkInline : null, style]} accessibilityRole="button" testID="corrections-link">
+      <Text style={inline ? [styles.linkLabel, styles.linkLabelInline] : styles.linkLabel}>{t.result.notRight}</Text>
     </Pressable>
   );
 }
+
+/** Ce que la zone du lien `inline` déborde au-dessus de sa ligne : 44 - 18. */
+export const CORRECTIONS_LINK_OVERFLOW_UP = 26;
 
 /** `withoutPrice` (prix d'abord, lib/spot-corrections.ts successSheetActions) :
  * voir d'abord, gratuitement, les propositions repliées sans prix ; les
@@ -122,7 +129,10 @@ export function CorrectionsSheet({
 const styles = themedStyles(() => ({
   notice: { marginTop: space.lg },
   link: { minHeight: 44, alignItems: "center", justifyContent: "center", marginTop: space.sm },
-  linkLabel: { fontSize: font.secondary, color: color.acier, textDecorationLine: "underline" },
+  linkLabel: { ...lienSouligne, fontSize: font.caption, color: color.vert, fontWeight: "400" },
+  // Boîte de 44 points (et plus au grand texte) dont seuls les points du bas, ceux du texte, comptent dans la ligne.
+  linkInline: { minHeight: 44, marginTop: -CORRECTIONS_LINK_OVERFLOW_UP, paddingTop: CORRECTIONS_LINK_OVERFLOW_UP, justifyContent: "flex-start", alignItems: "flex-start" },
+  linkLabelInline: { lineHeight: 18 },
   backdrop: { flex: 1, backgroundColor: color.voile },
   sheet: { backgroundColor: color.porcelaine, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, paddingHorizontal: space.lg, paddingTop: 10 },
   grab: { width: 36, height: 5, borderRadius: 3, backgroundColor: color.filet, alignSelf: "center", marginBottom: space.md },

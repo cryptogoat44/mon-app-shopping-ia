@@ -1,12 +1,14 @@
 import { useState } from "react";
-import { Pressable, Text } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import type { MerchantLinkContext } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { openMerchantLink } from "@/lib/merchant-links";
 import { useShopWatch } from "@/lib/use-purchase-question";
 import { AffiliateMention } from "@/components/affiliate-mention";
+import { ExternalLinkIcon } from "@/components/icons";
 import { themedStyles } from "@/theme/themed-styles";
 
 // « Voir chez le marchand » pour une pièce déjà gardée (Vault, Envies).
@@ -24,6 +26,7 @@ export function MerchantLinkButton({
   isAffiliate,
   compact = false,
   primary = false,
+  externalIcon = false,
   explain = true,
 }: {
   url: string;
@@ -35,6 +38,8 @@ export function MerchantLinkButton({
   /** Bouton principal de l'écran (plein, vert) : la fiche d'une envie, où
    * acheter est le geste attendu (lot « Retrouver ses pièces »). */
   primary?: boolean;
+  /** Variante pleine seulement : la flèche « s'ouvre hors de l'app » après le libellé (lot « fidélité aux maquettes »). */
+  externalIcon?: boolean;
   /** false là où la place manque pour déplier l'explication (vignette de la
    * grille des envies) : la mention reste visible, seule. */
   explain?: boolean;
@@ -66,6 +71,11 @@ export function MerchantLinkButton({
           {label}
           {compact ? " ›" : ""}
         </Text>
+        {primary && externalIcon && !compact ? (
+          <View accessible={false}>
+            <ExternalLinkIcon size={18} tint={color.blanc} />
+          </View>
+        ) : null}
       </Pressable>
       <AffiliateMention isAffiliate={isAffiliate} explain={explain} centered={!compact} />
       {blockedUrl ? (
@@ -94,9 +104,11 @@ const styles = themedStyles(() => ({
     paddingHorizontal: space.md,
   },
   buttonLabel: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
-  primary: { backgroundColor: color.vert, borderColor: color.vert },
-  primaryLabel: { color: color.blanc },
+  // Variante pleine (maquette « Écrin » 6) : 52 pt, la flèche à côté du libellé.
+  primary: { backgroundColor: color.vert, borderColor: color.vert, minHeight: 52, flexDirection: "row", gap: 8 },
+  // Lot « finitions de l'œil » : la taille du bouton « Voir chez … » de la grande carte du Résultat (17 points).
+  primaryLabel: { color: color.blanc, flexShrink: 1, fontSize: font.body },
   compact: { minHeight: 32, justifyContent: "center" },
-  compactLabel: { fontSize: 11.5, color: color.vert, fontWeight: "600" },
-  blocked: { fontSize: font.caption, color: color.vert, marginTop: 6 },
+  compactLabel: { ...lienSouligne, fontSize: 11.5, color: color.vert, fontWeight: "600" },
+  blocked: { ...lienSouligne, fontSize: font.caption, color: color.vert, marginTop: 6 },
 }));

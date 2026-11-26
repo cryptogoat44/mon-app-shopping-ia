@@ -2,6 +2,7 @@ import { Text, type StyleProp, type TextStyle } from "react-native";
 import type { CommentMention } from "@monapp/shared-types";
 import { splitMentions } from "@/lib/comment-threads";
 import { color } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -43,5 +44,5 @@ export function MentionText({
 }
 
 const styles = themedStyles(() => ({
-  link: { color: color.vert, fontWeight: "600" },
+  link: { ...lienSouligne, color: color.vert, fontWeight: "600" },
 }));

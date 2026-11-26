@@ -3,20 +3,21 @@ import { AccessibilityInfo, ActivityIndicator, FlatList, Platform, Pressable, Re
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { color, font, serifDisplayLetterSpacing, serifFont, serifLineHeight, size, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { clearLastSpotResult } from "@/api/spotSession";
 import { ErrorMessage } from "@/components/error-message";
 import { FirstRunGuide } from "@/components/first-run-guide";
 import { HowItWorksCard } from "@/components/how-it-works";
 import { LinkEntry } from "@/components/link-entry";
-import { HistorySearchField, RecentSearchRow } from "@/components/recent-searches";
+import { HistorySearchField, RecentSearchTile } from "@/components/recent-searches";
 import { ScreenshotHelp } from "@/components/screenshot-help";
-import { EntryTiles, LatestVideoCard, LatestVideoDismissedNote, LatestVideoNote, LatestVideoQuestion } from "@/components/spot-entry";
+import { EntryTiles, LatestVideoCard, LatestVideoNote, LatestVideoQuestion } from "@/components/spot-entry";
 import { SearchLimitsNotice } from "@/components/search-limits-notice";
 import { VisualSearchTip } from "@/components/visual-search-tip";
 import { useAuth } from "@/lib/auth-context";
 import { importPhotoForSpotter, prepareSharedPhoto, takePhotoForSpotter, type ImportResult } from "@/lib/image-import";
-import { latestVideoUri, loadLatestVideo, saveLatestVideoChoice } from "@/lib/latest-video";
+import { latestVideoUri, loadLatestVideo, loadLatestVideoReduced, saveLatestVideoChoice, saveLatestVideoReduced } from "@/lib/latest-video";
 import type { LatestVideo, LatestVideoChoice, LatestVideoState } from "@/lib/latest-video-state";
 import { reopenParams } from "@/lib/recent-searches";
 import { useSearchHistory, type HistoryEntry } from "@/lib/use-search-history";
@@ -33,6 +34,7 @@ import { moveIntoCaptureCache } from "@/lib/visual-search-intake";
 import { useSearchLimits } from "@/lib/use-search-limits";
 import { useFirstRunGuide } from "@/lib/use-first-run-guide";
 import { themedStyles } from "@/theme/themed-styles";
+import { useTabBarSpace } from "@/lib/use-tab-bar-space";
 
 /** Dernière vidéo de la galerie (app iPhone, en option), relue à chaque retour
  * sur Spotter. L'accès aux photos n'est demandé à iOS qu'après un « oui ». */
@@ -41,13 +43,22 @@ function useLatestVideo() {
   const userId = session?.user.id ?? null;
   const [state, setState] = useState<LatestVideoState>({ kind: "off" });
   const [answer, setAnswer] = useState<"idle" | "saving" | "failed" | "answered">("idle");
-  // Retours du build 2 : la croix de la carte (« Ne plus proposer ma dernière vidéo »).
-  const [dismissal, setDismissal] = useState<"idle" | "saving" | "failed" | "done">("idle");
+  // Retours du build 3, point 3 : la carte se replie en une ligne fine au lieu
+  // de disparaître ; la forme est retenue sur l'appareil, par compte.
+  // Lot « fidélité aux maquettes » (décision 17) : repliée par défaut, la ligne fine de la maquette.
+  const [reduced, setReduced] = useState(true);
+  // Un geste pendant une relecture l'emporte sur la valeur relue (lue avant lui).
+  const reducedTouches = useRef(0);
   // Carte repliée sur une ligne par défaut, et de nouveau à chaque retour sur Spotter.
   const [expanded, setExpanded] = useState(false);
   const load = useCallback(async () => {
+    const touches = reducedTouches.current;
     try {
-      setState(await loadLatestVideo(userId));
+      // Lues ensemble : la carte ne s'affiche jamais grande puis petite. Forme
+      // illisible : repliée, le défaut (jamais la carte cachée pour si peu).
+      const [next, isReduced] = await Promise.all([loadLatestVideo(userId), userId ? loadLatestVideoReduced(userId).catch(() => true) : Promise.resolve(true)]);
+      if (touches === reducedTouches.current) setReduced(isReduced);
+      setState(next);
     } catch {
       // Galerie ou réponse illisible : le sélecteur reste proposé.
       setState({ kind: "off" });
@@ -56,8 +67,6 @@ function useLatestVideo() {
   // Retour sur Spotter : la note d'après la réponse a été lue.
   const refresh = useCallback(() => {
     setAnswer((current) => (current === "saving" ? current : "idle"));
-    // La note d'après la croix ne vaut que pour cette visite.
-    setDismissal((current) => (current === "saving" ? current : "idle"));
     setExpanded(false);
     return load();
   }, [load]);
@@ -74,18 +83,14 @@ function useLatestVideo() {
     setAnswer("answered");
   }
 
-  /** La croix : exactement l'état « désactivé » de Réglages (« no », sur ce téléphone, pour ce compte).
-   * Échec de l'enregistrement : la carte reste, avec le message. */
-  async function dismiss() {
-    if (!userId) return;
-    setDismissal("saving");
-    try {
-      await saveLatestVideoChoice(userId, "no");
-    } catch {
-      return setDismissal("failed");
-    }
-    await load();
-    setDismissal("done");
+  /** Réduire / rouvrir : la forme change tout de suite ; si l'enregistrement
+   * échoue, elle vaut pour cette visite seulement (simple préférence
+   * d'affichage : ni message, ni accord touché — Réglages seul éteint la proposition). */
+  function setCardReduced(next: boolean) {
+    reducedTouches.current += 1;
+    setReduced(next);
+    setExpanded(false);
+    if (userId) void saveLatestVideoReduced(userId, next).catch(() => {});
   }
 
   // Juste après un « oui » qui ne peut rien montrer : on dit pourquoi.
@@ -99,10 +104,9 @@ function useLatestVideo() {
     note,
     expanded,
     toggle: () => setExpanded((value) => !value),
-    dismiss: () => void dismiss(),
-    dismissing: dismissal === "saving",
-    dismissFailed: dismissal === "failed",
-    dismissed: dismissal === "done",
+    reduced,
+    reduce: () => setCardReduced(true),
+    reveal: () => setCardReduced(false),
   };
 }
 
@@ -157,7 +161,7 @@ function useSpotterEntries(reveal: () => void) {
     try {
       const taken = await takePhotoForSpotter();
       if (taken.kind === "denied") return setMessage(t.cameraCapture.denied);
-      await openPhoto(taken, t.cameraCapture.unavailable(t.spotter.addPhoto), "app", { entry: "photo_camera" });
+      await openPhoto(taken, t.cameraCapture.unavailable(t.spotter.tilePhoto), "app", { entry: "photo_camera" });
     } finally {
       setBusy(null);
     }
@@ -190,7 +194,7 @@ function useSpotterEntries(reveal: () => void) {
       // rangée dans « recherche-image/ » du cache, vidé à chaque lancement (app fermée en plein parcours).
       const visual = item.origin === "visual_intelligence";
       const ready = visual && prepared.kind === "picked" ? { ...prepared, uri: await moveIntoCaptureCache(prepared.uri) } : prepared;
-      await openPhoto(ready, t.share.imageUnreadable(t.spotter.addPhoto), visual ? "visual_intelligence" : "share", {
+      await openPhoto(ready, t.share.imageUnreadable(t.spotter.tilePhoto), visual ? "visual_intelligence" : "share", {
         discardImageAfterSearch: visual,
         entry: visual ? "photo_visual_search" : "photo_share",
       });
@@ -250,8 +254,9 @@ function HistoryHeader({ history }: { history: ReturnType<typeof useSearchHistor
       </Text>
       {failedFirst ? null : (
         <>
-          <Text style={styles.recentLead}>{t.retrouverPieces.recentLead}</Text>
           <HistorySearchField value={history.text} onChangeText={history.onChangeText} onClear={history.clear} />
+          {/* Règle du quota : gardée, juste au-dessus des cases qu'elle concerne (lot « fidélité aux maquettes »). */}
+          <Text style={styles.recentLead}>{t.retrouverPieces.recentLead}</Text>
         </>
       )}
     </View>
@@ -291,6 +296,10 @@ function HistoryFooter({ history }: { history: ReturnType<typeof useSearchHistor
 // comme un élément (jamais un composant recréé à chaque rendu : les champs
 // perdraient le clavier et le texte) ; puis « Récemment spottées », tout
 // l'historique, chargé par pages de 20 en descendant.
+// Retours du build 3, point 7 : l'historique en grille de deux colonnes
+// (numColumns fixe, jamais changé : pas de `key` sur la liste ; l'écart entre
+// les colonnes est porté par chaque case, pour qu'une case seule en fin de
+// liste garde sa demi-largeur).
 export default function SpotterScreen() {
   const router = useRouter();
   const history = useSearchHistory();
@@ -307,6 +316,8 @@ export default function SpotterScreen() {
   useSharedItemOpener(entries.openShared, entries.busy === null);
   // Lot « recherche confiance » : le guide de la première recherche, une seule fois par appareil, pour un historique vide.
   const guide = useFirstRunGuide(recentLoaded ? history.empty : null);
+  // Retours du build 3 (point 5) : la barre flotte au-dessus de la liste ; la dernière rangée remonte au-dessus d'elle.
+  const tabBarSpace = useTabBarSpace();
 
   const reloadHistory = history.reload;
   useFocusEffect(
@@ -376,31 +387,32 @@ export default function SpotterScreen() {
           busy={entries.busy === "latest"}
           expanded={latestVideo.expanded}
           onToggle={latestVideo.toggle}
-          onDismiss={latestVideo.dismiss}
-          dismissing={latestVideo.dismissing}
-          dismissFailed={latestVideo.dismissFailed}
+          reduced={latestVideo.reduced}
+          onReduce={latestVideo.reduce}
+          onReveal={latestVideo.reveal}
         />
       ) : null}
       {latestVideo.state.kind === "ask" ? <LatestVideoQuestion onAnswer={latestVideo.choose} saving={latestVideo.saving} failed={latestVideo.failed} /> : null}
       {latestVideo.note ? <LatestVideoNote message={latestVideo.note} /> : null}
-      {latestVideo.dismissed ? <LatestVideoDismissedNote onSettings={() => router.push("/settings")} /> : null}
       {recentLoaded && history.empty && guide.state !== "shown" ? <HowItWorksCard /> : null}
       <HistoryHeader history={history} />
     </View>
   );
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
       <FlatList
         ref={list}
         data={history.entries}
         keyExtractor={(entry) => entry.searchId}
-        renderItem={({ item }) => <RecentSearchRow entry={item} onOpen={() => openEntry(item)} />}
+        numColumns={2}
+        renderItem={({ item, index }) => <RecentSearchTile entry={item} column={index % 2 === 0 ? "left" : "right"} onOpen={() => openEntry(item)} />}
         ListHeaderComponent={header}
         ListFooterComponent={<HistoryFooter history={history} />}
         onEndReached={history.loadMore}
         onEndReachedThreshold={0.5}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace }]}
+        scrollIndicatorInsets={{ bottom: tabBarSpace }}
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
@@ -411,19 +423,19 @@ export default function SpotterScreen() {
 
 const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
-  content: { paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
+  content: { paddingHorizontal: space.md, paddingTop: space.md, maxWidth: 480, alignSelf: "center", width: "100%" },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, lineHeight: serifLineHeight.display, letterSpacing: serifDisplayLetterSpacing, color: color.encre },
-  lead: { fontSize: font.secondary, color: color.acier, marginTop: space.xs, lineHeight: 21 },
+  lead: { fontSize: font.caption, lineHeight: 18, color: color.acier, marginTop: space.xs },
   feedback: { fontSize: font.caption, marginTop: space.sm, lineHeight: 18 },
   sharedHelp: { marginTop: space.lg },
-  dropHint: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginTop: space.md, textAlign: "center" },
-  recentSection: { marginTop: space.xxl - space.xs, marginBottom: space.sm, gap: space.sm },
-  recentTitle: { fontSize: font.body, fontWeight: "600", color: color.encre },
-  recentLead: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
+  dropHint: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginTop: space.sm, textAlign: "center" },
+  recentSection: { marginTop: space.lg, marginBottom: 12, gap: space.xs },
+  recentTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre },
+  recentLead: { fontSize: font.caption, lineHeight: 18, color: color.acier, marginTop: space.xs },
   historyLoading: { marginTop: space.lg, minHeight: size.touchTarget },
   historyNote: { alignItems: "center", marginTop: space.lg },
   historyMessage: { fontSize: font.secondary, textAlign: "center", lineHeight: 21 },
   retry: { marginTop: space.sm, minHeight: size.touchTarget, minWidth: size.touchTarget, justifyContent: "center", alignItems: "center" },
-  retryLabel: { fontSize: font.body, color: color.vert, fontWeight: "600" },
+  retryLabel: { ...lienSouligne, fontSize: font.body, color: color.vert, fontWeight: "600" },
   historyEnd: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginTop: space.lg, textAlign: "center" },
 }));

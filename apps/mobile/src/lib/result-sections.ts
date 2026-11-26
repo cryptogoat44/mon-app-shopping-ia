@@ -73,3 +73,16 @@ export function opensOfferPage(piece: Pick<Piece, "origin" | "merchantUrl">): bo
     return false;
   }
 }
+
+/** Grille de propositions : la carte a-t-elle quelque chose à dire sous son prix (« Boutique connue », « En stock »…) ? */
+export function hasMarks(piece: Pick<Piece, "offerMark" | "inStock">): boolean {
+  return Boolean(piece.offerMark) || typeof piece.inStock === "boolean";
+}
+
+/** Grille de deux colonnes : la rangée de la carte `i` (elle et sa voisine, i ^ 1) a-t-elle une mention ? Alors
+ * les deux cartes réservent la rangée des mentions, même vide, et leurs « Voir chez … » restent alignés
+ * (components/proposal-card.tsx ; correctif du lot « finitions de l'œil »). */
+export function rowHasMarksAt(pieces: readonly Pick<Piece, "offerMark" | "inStock">[], i: number): boolean {
+  const neighbour = pieces[i ^ 1];
+  return hasMarks(pieces[i]) || (neighbour !== undefined && hasMarks(neighbour));
+}

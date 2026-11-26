@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { SpotImage } from "@/components/spot-image";
+import { PieceTile } from "@/components/piece-tile";
 import { ImageUnavailable } from "@/components/image-unavailable";
 import { WishlistPanel } from "@/components/wishlist-panel";
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, fetchMyLifestylePosts, fetchVault } from "@/lib/api";
@@ -23,6 +25,7 @@ import { memberListRoute } from "@/lib/member-lists";
 import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
+import { useTabBarSpace } from "@/lib/use-tab-bar-space";
 
 function chunk<T>(items: T[], size: number): T[][] {
   const rows: T[][] = [];
@@ -32,6 +35,10 @@ function chunk<T>(items: T[], size: number): T[][] {
 
 export default function ProfileScreen() {
   const router = useRouter();
+  // Retours du build 3 (point 5) : la barre flotte au-dessus des listes du profil (chargement,
+  // Envies, Vault, Lifestyle) ; leur dernière rangée remonte au-dessus d'elle.
+  const tabBarSpace = useTabBarSpace();
+  const bottomSpace = { paddingBottom: tabBarSpace };
   const navigation = useNavigation();
   const { profile, refreshProfile } = useAuth();
   const [items, setItems] = useState<VaultItem[]>([]);
@@ -235,7 +242,7 @@ export default function ProfileScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
       <View style={styles.nav}>
         <Text style={styles.navHandle}>@{profile?.username}</Text>
         <Pressable onPress={() => router.push("/settings")} hitSlop={12} style={styles.navButton} accessibilityRole="button" accessibilityLabel={t.settings.title}>
@@ -244,24 +251,25 @@ export default function ProfileScreen() {
       </View>
 
       {loading ? (
-        <ScrollView>
+        <ScrollView contentContainerStyle={bottomSpace} scrollIndicatorInsets={{ bottom: tabBarSpace }}>
           {profileHeader(false)}
           <View style={styles.grid}>
             {[0, 1, 2].map((i) => (
               <View key={i} style={styles.piece}>
-                <Skeleton style={styles.thumb} />
+                <Skeleton style={styles.vaultThumb} />
                 <Skeleton style={{ width: "80%", height: 11, marginTop: space.xs }} />
               </View>
             ))}
           </View>
         </ScrollView>
       ) : segment === "wishlist" ? (
-        <WishlistPanel news={news} header={profileHeader(false)} />
+        <WishlistPanel news={news} header={profileHeader(false)} bottomSpace={tabBarSpace} />
       ) : segment === "vault" ? (
         <FlatList
           data={chunk(items, 3)}
           keyExtractor={(row) => row.map((item) => item.id).join("-")}
-          contentContainerStyle={vaultError || isEmptyVault ? styles.emptyContent : styles.gridContent}
+          contentContainerStyle={[vaultError || isEmptyVault ? styles.emptyContent : styles.gridContent, bottomSpace]}
+          scrollIndicatorInsets={{ bottom: tabBarSpace }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
           renderItem={({ item: row }) => (
             <View style={styles.gridRow}>
@@ -271,13 +279,14 @@ export default function ProfileScreen() {
                   style={styles.piece}
                   onPress={() => router.push({ pathname: "/vault-item/[id]", params: { id: item.id } })}
                 >
-                  <View style={styles.thumb}>
-                    {item.imageUrl ? (
-                      <SpotImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} style={styles.thumbImage} fit="cover" size="card" accessibilityLabel={item.title} />
-                    ) : (
+                  {/* La tuile « Écrin » des grilles (components/piece-tile.tsx) : 4:5, la pièce entière. */}
+                  {item.imageUrl ? (
+                    <PieceTile variant="grid" size="card" hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} accessibilityLabel={item.title} edgeColor={item.edgeColor} recyclingKey={item.id} />
+                  ) : (
+                    <View style={styles.vaultThumb}>
                       <ClockIcon size={30} tint={color.encre} />
-                    )}
-                  </View>
+                    </View>
+                  )}
                   {item.verified ? (
                     <View style={styles.verifiedBadge}>
                       <VerifiedIcon size={16} />
@@ -327,7 +336,8 @@ export default function ProfileScreen() {
         />
       ) : (
         <ScrollView
-          contentContainerStyle={isEmptyLifestyle || lifestyleError ? styles.emptyContent : null}
+          contentContainerStyle={[isEmptyLifestyle || lifestyleError ? styles.emptyContent : null, bottomSpace]}
+          scrollIndicatorInsets={{ bottom: tabBarSpace }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
         >
           {profileHeader(false)}
@@ -445,7 +455,6 @@ const styles = themedStyles(() => ({
   grid: {
     paddingHorizontal: space.lg,
     paddingTop: space.md,
-    paddingBottom: space.xxl,
     flexDirection: "row",
     flexWrap: "wrap",
     // 3 colonnes de 31 % : un écart horizontal de 16 points faisait passer
@@ -459,7 +468,6 @@ const styles = themedStyles(() => ({
   gridContent: {
     paddingHorizontal: space.lg,
     paddingTop: space.md,
-    paddingBottom: space.xxl,
     maxWidth: 640,
     alignSelf: "center",
     width: "100%",
@@ -476,7 +484,7 @@ const styles = themedStyles(() => ({
   // … dans une liste qui a ses marges (Vault) : il les annule, et garde l'écart d'avant sous les onglets.
   headerInset: { marginHorizontal: -space.lg, marginTop: -space.md, marginBottom: space.md },
   emptyText: { fontSize: font.secondary, color: color.acier, textAlign: "center", lineHeight: 20, marginBottom: space.md },
-  emptyCta: { fontSize: font.body, color: color.vert, fontWeight: "600" },
+  emptyCta: { ...lienSouligne, fontSize: font.body, color: color.vert, fontWeight: "600" },
   // Vault vide : l'ajout à la main en bouton plein, Spotter en lien dessous.
   emptyButton: {
     backgroundColor: color.vert,
@@ -488,17 +496,21 @@ const styles = themedStyles(() => ({
   },
   emptyButtonLabel: { color: color.blanc, fontSize: font.secondary, fontWeight: "600" },
   addPiece: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 6, minHeight: 44, marginBottom: space.xs },
-  addPieceLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  addPieceLabel: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   piece: { width: "31%" },
+  // Grille « Lifestyle » (photos des membres) : carrée, coins des tuiles de grille.
   thumb: {
     backgroundColor: color.plinthe,
-    borderRadius: radius.sm,
+    borderRadius: radius.pieceGrid,
+    borderCurve: "continuous",
     aspectRatio: 1,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
   },
   thumbImage: { width: "100%", height: "100%" },
+  // Vault sans image (et squelette) : la forme de la tuile, sans photo donc sans bande.
+  vaultThumb: { backgroundColor: color.plinthe, borderRadius: radius.pieceGrid, borderCurve: "continuous", aspectRatio: 4 / 5, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   verifiedBadge: {
     position: "absolute",
     top: 8,

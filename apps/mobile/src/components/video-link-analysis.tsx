@@ -80,7 +80,10 @@ export function LinkAskView({
         autoFocus
         testID="video-link-query"
         placeholder={t.videoLinkAuto.placeholder}
+        shortPlaceholder={t.videoLinkAuto.placeholderShort}
         label={t.videoLinkAuto.title}
+        // Lot « finitions de l'œil » : le champ en bloc plein des autres écrans (plus le champ souligné).
+        boxed
       />
       <Text style={styles.help}>{t.videoLinkAuto.help}</Text>
       {problem ? <ErrorMessage style={styles.message}>{queryProblemMessage(problem)}</ErrorMessage> : null}
@@ -146,7 +149,10 @@ function LinkAskWithPieces({
         autoFocus={focusQuery}
         testID="video-link-query"
         placeholder={t.videoLinkAuto.placeholder}
+        shortPlaceholder={t.videoLinkAuto.placeholderShort}
         label={t.videoLinkAuto.title}
+        // Lot « finitions de l'œil » : le champ en bloc plein des autres écrans (plus le champ souligné).
+        boxed
       />
       {problem ? <ErrorMessage style={styles.message}>{queryProblemMessage(problem)}</ErrorMessage> : null}
       <Pressable
@@ -438,7 +444,7 @@ const styles = themedStyles(() => ({
   stepText: { flex: 1, fontSize: font.secondary, color: color.acier, lineHeight: 21 },
   stepCurrent: { color: color.encre, fontWeight: "600" },
   preview: { marginTop: space.md, alignItems: "center" },
-  momentFrame: { borderRadius: radius.sm, overflow: "hidden", backgroundColor: color.plinthe },
+  momentFrame: { borderRadius: radius.piece, borderCurve: "continuous", overflow: "hidden", backgroundColor: color.plinthe },
   fill: { width: "100%", height: "100%" },
   // Cadre de la pièce : blanc bordé de sombre, lisible sur toute image.
   box: { position: "absolute", borderWidth: 2, borderColor: color.surImage, borderRadius: radius.sm },

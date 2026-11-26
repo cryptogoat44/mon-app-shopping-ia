@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { Platform, Pressable, Text, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { color, font, radius, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { VISUAL_SEARCH_TIP_KEY, supportsVisualSearch } from "@/lib/visual-search-link";
 import { themedStyles } from "@/theme/themed-styles";
@@ -49,5 +50,5 @@ const styles = themedStyles(() => ({
   title: { fontSize: font.caption, color: color.acier, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.6 },
   body: { fontSize: font.secondary, color: color.encre, lineHeight: 21, marginTop: space.xs },
   dismiss: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start" },
-  dismissLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  dismissLabel: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
 }));

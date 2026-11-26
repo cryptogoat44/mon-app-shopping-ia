@@ -22,6 +22,7 @@ import { LoadFailure } from "@/components/load-failure";
 import { usePushOffer } from "@/components/push-offer-sheet";
 import { themedStyles } from "@/theme/themed-styles";
 import { Avatar } from "@/components/avatar";
+import { useTabBarSpace } from "@/lib/use-tab-bar-space";
 
 const actionText = (notification: AppNotification): string => notificationActionText(notification.type);
 
@@ -212,9 +213,11 @@ export default function NotificationsScreen() {
   }
 
   const isEmpty = notifications?.length === 0;
+  // Retours du build 3 (point 5) : la barre flotte au-dessus de la liste ; la dernière ligne remonte au-dessus d'elle.
+  const tabBarSpace = useTabBarSpace();
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
       {/* Onglet « Activité » de la barre (Lot F, barre A) : j'aime,
           commentaires et abonnements ; décisions de la modération (lot 5). */}
       <View style={styles.header}>
@@ -237,7 +240,8 @@ export default function NotificationsScreen() {
         <LoadFailure message={error} onRetry={() => void load()} />
       ) : (
         <ScrollView
-          contentContainerStyle={isEmpty ? styles.emptyContent : styles.content}
+          contentContainerStyle={[isEmpty ? styles.emptyContent : styles.content, { paddingBottom: tabBarSpace }]}
+          scrollIndicatorInsets={{ bottom: tabBarSpace }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
         >
           {error ? <ErrorMessage style={styles.errorText}>{error}</ErrorMessage> : null}
@@ -274,7 +278,7 @@ const styles = themedStyles(() => ({
   header: { paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: space.sm },
   headerTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, lineHeight: serifLineHeight.display, letterSpacing: serifDisplayLetterSpacing, color: color.encre },
   screen: { flex: 1, backgroundColor: color.porcelaine },
-  content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
+  content: { paddingHorizontal: space.lg, maxWidth: 480, alignSelf: "center", width: "100%" },
   emptyContent: { flexGrow: 1 },
   errorText: { fontSize: font.secondary, marginBottom: space.md },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl, marginTop: -60, gap: space.md },

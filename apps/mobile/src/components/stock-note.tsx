@@ -63,7 +63,7 @@ function StockSheet({ title, onClose }: { title: string; onClose: () => void }) 
 const styles = themedStyles(() => ({
   note: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", minHeight: 32 },
   label: { fontSize: 12, color: color.acier, flexShrink: 1 },
-  inStock: { color: color.vert, fontWeight: "600" },
+  inStock: { color: color.vert },
   more: { fontSize: 12 },
   backdrop: { flex: 1, backgroundColor: color.voile },
   sheet: {

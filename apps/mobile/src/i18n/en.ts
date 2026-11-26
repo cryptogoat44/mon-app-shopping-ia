@@ -28,6 +28,7 @@ export const en: Catalog = {
       zoomIn: "Zoom in",
       zoomOut: "Zoom out",
     },
+    zoomHint: "Pinch to zoom",
   },
   tabs: {
     feed: "Feed",
@@ -98,7 +99,6 @@ export const en: Catalog = {
     title: "Spotter",
     close: "Close",
     lead: "Find a piece you saw in a video or a photo.",
-    linkPlaceholder: "Paste or type a link",
     paste: "Paste",
     pasteEmpty: "There's no link on your clipboard.",
     pasteDenied: "Paste the link directly into the field.",
@@ -114,9 +114,9 @@ export const en: Catalog = {
       `${BRAND} can show your gallery's latest video here, ready to be analyzed. iOS will then ask for access to your photos. The video stays on your iPhone: only a few frames leave it, when you tap “Search”.`,
     latestVideoYes: "Yes, suggest it",
     latestVideoNo: "No thanks",
-    latestVideoAskNote: "Your answer changes nothing else: “Add a video” is still available. You can change this anytime in Settings.",
+    latestVideoAskNote: "Your answer changes nothing else: “Video” is still available. You can change this anytime in Settings.",
     latestVideoNoAccess:
-      `Without full access to your photos, ${BRAND} can't find your latest video: choose it with “Add a video”. Access can be changed in the iPhone Settings.`,
+      `Without full access to your photos, ${BRAND} can't find your latest video: choose it with “Video”. Access can be changed in the iPhone Settings.`,
     latestVideoEmpty: "No video in your gallery yet: the most recent one will appear here.",
     latestVideoChoiceFailed: "Your answer couldn't be saved. Please try again.",
     recentlySpotted: "Recently spotted",
@@ -139,12 +139,17 @@ export const en: Catalog = {
     prepareError: "Preparation didn't go through. Check your connection, then try again.",
     networkError: "Unable to connect. Check your internet connection, then try again.",
     serverError: `${BRAND} isn't responding right now. Please try again in a minute.`,
-    // Build 2 feedback: the "Your latest video" card folded to one row, and its cross
-    // (it turns the suggestion off, exactly like the switch in Settings).
+    // Build 2 feedback: the "Your latest video" card folded to one row.
     latestVideoExpand: "Search this video",
-    latestVideoDismiss: "Stop suggesting my latest video",
-    latestVideoDismissed: "Got it: your latest video won't be suggested anymore. You can turn this suggestion back on in Settings.",
-    latestVideoSettingsLink: "Open Settings",
+    // Build 3 feedback, point 3: the card collapses to a thin row instead of disappearing
+    // (no more cross; only Settings turns the suggestion off).
+    latestVideoReduce: "Collapse the “Your latest video” card",
+    latestVideoReveal: "Shows the full card",
+    latestVideoShow: "Show",
+    // "Matching the mockups" batch: short visible tile labels (VoiceOver still reads the full sentence).
+    tileVideo: "Video",
+    tilePhoto: "Photo",
+    tileCamera: "Camera",
   },
   video: {
     title: "Choose the frame",
@@ -228,6 +233,8 @@ export const en: Catalog = {
     yourVideo: "Your video",
     waitingVideo: `${BRAND} is finding the piece…`,
     usualVideo: "This usually takes 15 to 30 seconds.",
+    // "Matching the mockups" batch: the "Circle the piece" button, for a photo (a video keeps "Search").
+    searchPiece: "Search for this piece",
   },
   // Website (lot 4 ter): a tab left open offers the version now online.
   siteVersion: {
@@ -345,7 +352,33 @@ export const en: Catalog = {
       on: "You agreed to TikTok or Instagram videos being played here, in their official player.",
       withdraw: "Withdraw my consent",
       withdrawn: "Consent withdrawn: you'll be asked again with the next video.",
+      // Build 3 feedback: the Play button is the consent (spot-flags.ts PLAYER_CONSENT_BY_PLAY_BUTTON).
+      withdrawnPlay: "Consent withdrawn: the next video will only load if you press Play.",
+      // No consent yet (first video, or after withdrawing): nothing to withdraw, just the rule.
+      none: "No video is loaded from TikTok or Instagram until you press Play.",
     },
+    // Build 3 feedback: our playback bar under the video (TikTok), the Play button as consent,
+    // and the line shown when the image of the moment comes from our server.
+    controls: {
+      play: "Play",
+      pause: "Pause",
+      unmute: "Turn sound on",
+      mute: "Turn sound off",
+      sound: "Sound",
+      position: "Playback position",
+      positionValue: (current: string, total: string) => `${current} of ${total}`,
+    },
+    firstPlay: {
+      play: (platform: string) => `Play the ${platform} video`,
+      hint: "The video then loads and your choice is remembered.",
+      // One sentence, "Settings" underlined (link to Settings).
+      lineLead: (platform: string) => `When you press Play, the video loads from ${platform}, which receives your IP address and may use its own trackers. You can change this in `,
+      lineLink: "Settings",
+      lineEnd: ".",
+    },
+    privacyFrame: (platform: string) => `Video played by ${platform}. For the image of this moment, our server requests the public video from ${platform}, without your identity, and does not keep it. Failing that, only the frame taken on your phone is sent, then deleted from your phone.`,
+    // "Finishing touches" batch: short placeholder when the field is narrow or the text is enlarged (never cut mid-letter).
+    linkPlaceholderShort: "Video link",
   },
   videoLink: {
     fallbackTitle: "Spot this video",
@@ -457,6 +490,8 @@ export const en: Catalog = {
       notHere: "The video couldn't be played here: the AI can look for the piece for you.",
       snapshot: `${BRAND} couldn't take the frame of this moment: the AI can look for the piece for you.`,
     },
+    // "Finishing touches" batch: short placeholder when the field is narrow or the text is enlarged.
+    placeholderShort: "e.g. the beige leather jacket",
   },
   visualSearchTip: {
     title: "Tip",
@@ -490,7 +525,7 @@ export const en: Catalog = {
   },
   targeting: {
     title: "Circle the piece",
-    caption: "Only the circled area will be analyzed. To correct it, circle the piece again.",
+    caption: "The search covers the area you circle.",
     aiCaption: "The AI has circled the piece. Start the search, or circle it yourself to correct it.",
     instruction: {
       finger: "Circle the piece with your finger",
@@ -714,6 +749,11 @@ export const en: Catalog = {
       leave: `You're about to leave ${BRAND}: the site opens in your browser. None of these links is an affiliate link: ${BRAND} earns nothing on these purchases.`,
       close: "Close",
     },
+    // "Matching the mockups" batch: the sort pill, the short filter labels (contained in their spoken names), the "More" cell.
+    sortMenuLabel: (choice: string) => `Sort results: ${choice}`,
+    withPriceShort: "With a price",
+    inStockShort: "In stock",
+    moreShort: "More",
   },
   wishlistItem: {
     back: "Wishlist",
@@ -744,7 +784,7 @@ export const en: Catalog = {
     affiliateMention: "(affiliate link)",
   },
   retrouverPieces: {
-    recentLead: "Reopening a result doesn't count toward your daily searches.",
+    recentLead: "Reopening doesn't count toward your daily searches.",
     recentLoadError: "Unable to show your recent searches. Check your connection, then try again.",
     today: "Today",
     yesterday: "Yesterday",
@@ -758,6 +798,8 @@ export const en: Catalog = {
     historyLoading: "Loading your history",
     historyUnavailable: "Searching your history isn't available yet. Please try again a little later.",
     historyResultsShown: "Your search results are shown.",
+    // "Finishing touches" batch: short placeholder (narrow field, enlarged text).
+    historySearchPlaceholderShort: "Search",
   },
   sendPiece: {
     title: "Send to…",
@@ -1274,8 +1316,8 @@ export const en: Catalog = {
     latestVideoSwitchLabel: "Automatically suggest my latest video in Spotter",
     latestVideoOn: "On: Spotter suggests your gallery's latest video, ready to be analyzed.",
     latestVideoOnNoAccess:
-      `On, but ${BRAND} doesn't have full access to your photos: your latest video can't be found. You choose it with “Add a video”.`,
-    latestVideoOff: `Off: you choose the video with “Add a video”, without ${BRAND} reading your gallery.`,
+      `On, but ${BRAND} doesn't have full access to your photos: your latest video can't be found. You choose it with “Video” on Spotter.`,
+    latestVideoOff: `Off: you choose the video with “Video” on Spotter, without ${BRAND} reading your gallery.`,
     latestVideoAccessLeft: `${BRAND} still has access to your photos, without using it: you can remove it in the iPhone Settings.`,
     latestVideoOpenSettings: "Open iPhone Settings",
     latestVideoFailed: "Your choice couldn't be saved. Please try again.",
@@ -1320,6 +1362,8 @@ export const en: Catalog = {
     deleteError: "The account couldn't be deleted. Check your connection, then try again.",
     deleteTypeWord: (word: string) => `To confirm, type ${word} below.`,
     deleteWordLabel: (word: string) => `Confirmation word: ${word}`,
+    // "Matching the mockups" batch: the username row, at the top of the "Account" card.
+    usernameLabel: "Username",
   },
   contact: {
     settingsSection: "Help",

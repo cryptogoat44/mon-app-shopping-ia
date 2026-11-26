@@ -6,7 +6,8 @@ import { PRIVACY_LEVELS, type CreateVaultItemResponse, type VaultCategory, type 
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { deleteOwnedStorageFile, extractOwnedStoragePath } from "../lib/storage.js";
 import { fetchHdImageUrls } from "../lib/pieceImages.js";
-import { upgradeMerchantImageLater } from "../lib/merchantImage.js";
+import { queueMerchantImages, upgradeMerchantImageLater } from "../lib/merchantImage.js";
+import { edgeColorField, queueKeptEdgeColors } from "../lib/edgeColor.js";
 import { PHOTO_SIZES, optimizePhoto } from "../lib/photos.js";
 import { DatabaseReadError, INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseDbRows, parseInput } from "../lib/validation.js";
 import { findOwnMatch } from "../lib/ownMatches.js";
@@ -117,7 +118,15 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
 
     const totalCount = cursorDate ? null : (count ?? pageRows.length);
     const hdUrls = await fetchHdImageUrls(fastify, pageRows);
-    return reply.send({ items: pageRows.map((row, index) => toVaultItem(row, hdUrls[index])), nextCursor, totalCount });
+    // Couleur des bords de la vignette, si elle est déjà mesurée (lib/edgeColor.ts, éteint par défaut).
+    const items = pageRows.map((row, index) => ({ ...toVaultItem(row, hdUrls[index]), ...edgeColorField(row.image_url) }));
+    // Grandes images des pièces de la page qui n'en ont pas, mises en file
+    // après la réponse (lib/merchantImage.ts, éteint par défaut ; jamais
+    // d'attente ni d'échec de la liste).
+    queueMerchantImages(fastify, request.log, pageRows, hdUrls);
+    // Couleur des bords des vignettes pas encore mesurées, après la réponse (même règle).
+    queueKeptEdgeColors(fastify, request.log, pageRows);
+    return reply.send({ items, nextCursor, totalCount });
   });
 
   fastify.get("/api/vault/:id", { preHandler: fastify.requireAuth }, async (request, reply) => {
@@ -153,10 +162,12 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
     // Lien marchand : celui de la pièce identifiée d'origine (Spotter),
     // jamais pour une pièce ajoutée à la main.
     const [imageHdUrl] = await fetchHdImageUrls(fastify, [data as VaultItemRow]);
-    const item = toVaultItem(data as VaultItemRow, imageHdUrl ?? null);
+    const item = { ...toVaultItem(data as VaultItemRow, imageHdUrl ?? null), ...edgeColorField((data as VaultItemRow).image_url) };
     // Pas d'image HD : la grande image de la boutique, cherchée après la
     // réponse (lib/merchantImage.ts, éteint par défaut ; jamais un échec).
     upgradeMerchantImageLater(fastify, request.log, data as VaultItemRow, imageHdUrl ?? null);
+    // Couleur des bords de la vignette (lib/edgeColor.ts, éteint par défaut), après la réponse.
+    queueKeptEdgeColors(fastify, request.log, [data as VaultItemRow]);
     let merchant: { merchantName: string | null; merchantUrl: string | null; affiliateUrl: string | null } = {
       merchantName: null,
       merchantUrl: null,

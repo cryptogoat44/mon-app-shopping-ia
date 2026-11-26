@@ -230,17 +230,22 @@ async function readBody(response: IncomingMessage): Promise<Buffer> {
 
 /** Ouvre une adresse publique avec les garde-fous ci-dessus (https, adresses
  * publiques revérifiées et épinglées à chaque redirection, 3 redirections au
- * plus) et rend la réponse 200 et son adresse finale. Partagé par la copie
+ * plus ; `allowHost`, facultatif, refuse un hôte à chaque étape) et rend
+ * la réponse 200 et son adresse finale. Partagé par la copie
  * d'une image (ci-dessous) et la lecture de la page d'une boutique
  * (lib/merchantImage.ts) : mêmes protections, même identité de robot. */
 export async function openPublicUrl(
   rawUrl: string,
   headers: Readonly<Record<string, string>>,
   signal: AbortSignal,
-  resolver: Resolver = defaultResolver
+  resolver: Resolver = defaultResolver,
+  allowHost: (hostname: string) => boolean = () => true
 ): Promise<{ response: IncomingMessage; url: URL }> {
   let url = checkImageUrl(rawUrl);
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    // Hôte refusé par l'appelant (lib/edgeColor.ts : jamais un réseau
+    // social), vérifié avant CHAQUE connexion, redirections comprises.
+    if (!allowHost(url.hostname)) throw new PublicImageError("Hôte refusé");
     const response = await connect(url, await resolvePublicAddresses(url.hostname, resolver), signal, headers);
     const status = response.statusCode ?? 0;
     if (status >= 300 && status < 400) {

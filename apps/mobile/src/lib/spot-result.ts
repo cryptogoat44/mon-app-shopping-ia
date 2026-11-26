@@ -13,6 +13,8 @@ export function matchToPiece(match: ProductMatch): Piece {
     material: null,
     imageUrl: match.imageUrl,
     imageHdUrl: match.imageHdUrl ?? null,
+    // Couleur des bords mesurée par le serveur (lot « couleur des bords ») ; un serveur plus ancien ne l'envoie jamais.
+    edgeColor: match.edgeColor ?? null,
     priceFrom: match.priceMin,
     currency: match.currency,
     merchantName: match.merchantName,
@@ -115,6 +117,8 @@ export function toSpotResult(search: ProductSearch): SpotResult {
     ...withComplement,
     ...(verdict ? { verdict } : {}),
     ...(luxuryResale ? { luxuryResale } : {}),
+    // Couleurs des bords en cours de mesure (lot « couleur des bords ») : seulement un vrai true du serveur.
+    ...(search.edgeColorsPending === true ? { edgeColorsPending: true as const } : {}),
   };
 }
 
@@ -132,7 +136,66 @@ export function withTextSearch(previous: SpotResult, search: ProductSearch): Spo
     next.complement = { ...next.complement, query: previous.complement?.query ?? null, ...(previous.complement?.late ? { late: true } : {}) };
   }
   if (previous.owned) next.owned = previous.owned;
+  // Couleurs des bords encore en mesure : la réponse des mots ne l'annonce que
+  // si elle a elle-même mis une vignette en file ; garder l'annonce déjà reçue.
+  if (previous.edgeColorsPending === true) next.edgeColorsPending = true;
   return next;
+}
+
+/** Relecture des résultats (lot « vitrine », retours du build 3) : combien
+ * des premières propositions « shopping » et « words » le serveur peut
+ * doter d'une grande image (lot « grandes images »). */
+export const HD_REREAD_POOL = 8;
+
+/** Relire la recherche pour ses grandes images ? Oui tant qu'au moins une des
+ * HD_REREAD_POOL premières propositions « shopping » ou « words » n'a pas
+ * d'image haute définition. Oui aussi quand le serveur vient de mettre en
+ * file la mesure de couleurs des bords (edgeColorsPending, lot « couleur des
+ * bords ») : la relecture les apporte, même sans complément. */
+export function hdRereadDue(result: SpotResult | null): boolean {
+  if (!result || result.status !== "success" || !result.searchId) return false;
+  if (result.edgeColorsPending === true) return true;
+  if (!result.complement) return false;
+  const pool = [...result.complement.shopping, ...result.complement.words].slice(0, HD_REREAD_POOL);
+  return pool.some((piece) => !piece.imageHdUrl);
+}
+
+/** La recherche relue n'apporte QUE les grandes images (imageHdUrl) et la
+ * couleur des bords (edgeColor, lot « couleur des bords »), par identifiant
+ * de proposition : ordre, filtres, sélection et sections ne bougent pas ; une
+ * proposition inconnue est ignorée ; une grande image ou une couleur déjà là
+ * n'est jamais remplacée par du vide. Rien de neuf : le même objet (aucun
+ * rendu inutile). */
+export function withHdImages(previous: SpotResult, search: ProductSearch): SpotResult {
+  if (search.id !== previous.searchId) return previous;
+  const hdById = new Map<string, string>();
+  const edgeById = new Map<string, string>();
+  for (const match of search.matches) {
+    if (typeof match.imageHdUrl === "string" && match.imageHdUrl) hdById.set(match.id, match.imageHdUrl);
+    if (typeof match.edgeColor === "string" && match.edgeColor) edgeById.set(match.id, match.edgeColor);
+  }
+  if (hdById.size === 0 && edgeById.size === 0) return previous;
+  let changed = false;
+  const merge = (pieces: Piece[]): Piece[] => {
+    let listChanged = false;
+    const next = pieces.map((piece) => {
+      const hd = hdById.get(piece.id);
+      const edge = edgeById.get(piece.id);
+      const newHd = hd && hd !== piece.imageHdUrl;
+      const newEdge = edge && edge !== piece.edgeColor;
+      if (!newHd && !newEdge) return piece;
+      listChanged = true;
+      return { ...piece, ...(newHd ? { imageHdUrl: hd } : {}), ...(newEdge ? { edgeColor: edge } : {}) };
+    });
+    if (!listChanged) return pieces;
+    changed = true;
+    return next;
+  };
+  const pieces = merge(previous.pieces);
+  const similarPieces = merge(previous.similarPieces);
+  const complement = previous.complement ? { ...previous.complement, shopping: merge(previous.complement.shopping), words: merge(previous.complement.words) } : undefined;
+  if (!changed) return previous;
+  return { ...previous, pieces, similarPieces, ...(complement ? { complement } : {}) };
 }
 
 /** L'invitation n'est plus proposée (refus du serveur) : même résultat, sans

@@ -92,6 +92,26 @@ describe("contraste des initiales (WCAG), thèmes clair et sombre", () => {
     }
   });
 
+  it("lot « couleurs et logo » : la première teinte est le vert anglais en clair, une lavande sourde en sombre, initiales à 6:1 au moins", () => {
+    expect(avatarBackgrounds.light[0]).toBe("#004225");
+    expect(avatarBackgrounds.dark[0]).toBe("#B1A8D0");
+    expect(contrast(avatarBackgrounds.light[0]!, lightPalette.blanc)).toBeGreaterThanOrEqual(6);
+    expect(contrast(avatarBackgrounds.dark[0]!, darkPalette.blanc)).toBeGreaterThanOrEqual(6);
+    // Refusé : l'ancienne sauge claire du thème sombre a disparu.
+    expect(avatarBackgrounds.dark).not.toContain("#9CC3AE");
+  });
+
+  it("décision du 25 novembre 2026 : en sombre, le pétrole clair (bleu-vert pâle) devient un bois de rose sourd, initiales à 6:1 au moins", () => {
+    expect(avatarBackgrounds.dark[7]).toBe("#C4948C");
+    expect(contrast(avatarBackgrounds.dark[7]!, darkPalette.blanc)).toBeGreaterThanOrEqual(6);
+    // Refusé : le bleu-vert pâle d'avant.
+    expect(avatarBackgrounds.dark).not.toContain("#9CC8CC");
+    // Toutes les teintes, dans les deux thèmes : initiales à 6:1 au moins.
+    for (const [scheme, palette] of [["light", lightPalette], ["dark", darkPalette]] as const) {
+      for (const background of avatarBackgrounds[scheme]) expect(contrast(background, palette.blanc), `${scheme} ${background}`).toBeGreaterThanOrEqual(6);
+    }
+  });
+
   it("la pastille se détache du fond de l'écran (au moins 3:1, comme un élément graphique)", () => {
     for (const [scheme, palette] of [["light", lightPalette], ["dark", darkPalette]] as const) {
       for (const background of avatarBackgrounds[scheme]) expect(contrast(background, palette.porcelaine)).toBeGreaterThanOrEqual(3);

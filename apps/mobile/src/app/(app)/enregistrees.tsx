@@ -237,7 +237,7 @@ const styles = themedStyles(() => ({
   subtitle: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
   note: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
   gridRow: { flexDirection: "row", gap: space.sm, marginBottom: space.sm },
-  cell: { width: "32%", aspectRatio: 1, borderRadius: radius.sm, overflow: "hidden", backgroundColor: color.plinthe },
+  cell: { width: "32%", aspectRatio: 1, borderRadius: radius.pieceGrid, borderCurve: "continuous", overflow: "hidden", backgroundColor: color.plinthe },
   fill: { width: "100%", height: "100%" },
   photosMark: { position: "absolute", top: 6, right: 6, width: 22, height: 22, borderRadius: radius.full, backgroundColor: color.voileImage, alignItems: "center", justifyContent: "center" },
   empty: { fontSize: font.secondary, color: color.acier, textAlign: "center", marginTop: space.lg, lineHeight: 20, paddingHorizontal: space.md },

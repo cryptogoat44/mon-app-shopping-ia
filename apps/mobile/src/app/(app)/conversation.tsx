@@ -5,6 +5,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { MESSAGE_COUNTER_FROM, MESSAGE_MAX_LENGTH, type ChatMessage, type ConversationThread } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { getActiveLocale, t } from "@/i18n";
 import {
   ApiError,
@@ -771,10 +772,10 @@ const styles = themedStyles(() => ({
   centered: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl },
   message: { fontSize: font.secondary, textAlign: "center", marginTop: space.xs },
   retry: { marginTop: space.md, minHeight: 44, justifyContent: "center" },
-  retryLabel: { fontSize: font.body, color: color.vert, fontWeight: "600" },
+  retryLabel: { ...lienSouligne, fontSize: font.body, color: color.vert, fontWeight: "600" },
   thread: { padding: space.md, gap: space.sm, maxWidth: 640, alignSelf: "center", width: "100%" },
   older: { alignSelf: "center", minHeight: 44, justifyContent: "center", paddingHorizontal: space.md },
-  olderLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  olderLabel: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   empty: { fontSize: font.secondary, color: color.acier, textAlign: "center", marginTop: space.xl },
   bubbleRow: { flexDirection: "row", alignItems: "flex-end", gap: 4 },
   rowMine: { justifyContent: "flex-end" },

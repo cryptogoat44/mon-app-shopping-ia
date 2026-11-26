@@ -19,6 +19,12 @@ import { themedStyles } from "@/theme/themed-styles";
 // verdict (ancien serveur, base sans 0055, boutiques attendues ou en échec) :
 // rien.
 
+/** La phrase est-elle montrée ? (Lot « finitions de l'œil » : elle seule sous les pastilles ; le résumé
+ * « N offres · à partir de X € » n'est alors plus affiché, il reste lu par VoiceOver.) */
+export function verdictLineShown(verdict: SearchVerdict | undefined): boolean {
+  return Boolean(verdict && verdictSentence(verdict, t.result.verdict, getActiveLocale()));
+}
+
 export function VerdictLine({ verdict }: { verdict: SearchVerdict | undefined }) {
   const [open, setOpen] = useState(false);
   const sentence = verdict ? verdictSentence(verdict, t.result.verdict, getActiveLocale()) : null;
@@ -26,19 +32,22 @@ export function VerdictLine({ verdict }: { verdict: SearchVerdict | undefined })
     if (sentence && Platform.OS === "ios") AccessibilityInfo.announceForAccessibilityWithOptions(sentence, { queue: true });
   }, [sentence]);
   if (!verdict || !sentence) return null;
-  const affirmed = verdict.level === "identified";
+  // La zone annoncée (site et Android) est celle, toujours là, de la ligne d'information (components/result-sort-bar.tsx).
   return (
-    <View accessibilityLiveRegion="polite">
+    <View>
       <Pressable
         onPress={() => setOpen(true)}
         style={styles.box}
+        // Deux lignes (36 points) : la zone touchable garde ses 44 points sur l'iPhone, sans espace vide à l'œil.
+        hitSlop={{ top: 4, bottom: 4 }}
         accessibilityRole="button"
         accessibilityLabel={sentence}
         accessibilityHint={t.result.verdict.hint}
         testID="verdict"
       >
-        <Text style={affirmed ? [styles.sentence, styles.affirmed] : styles.sentence}>
-          {sentence} <Text style={styles.more}>ⓘ</Text>
+        <Text style={styles.sentence}>
+          {/* Espace insécable : le « ⓘ » ne se retrouve jamais seul sur une ligne (lot « finitions de l'œil »). */}
+          {sentence}{"\u00A0"}<Text style={styles.more}>ⓘ</Text>
         </Text>
       </Pressable>
       {open ? <VerdictSheet onClose={() => setOpen(false)} /> : null}
@@ -73,9 +82,10 @@ function VerdictSheet({ onClose }: { onClose: () => void }) {
 // Mêmes mesures et mêmes couleurs que l'avis « aucun prix » et les feuilles des mentions (contrastes déjà vérifiés).
 // Aucune hauteur ni nombre de lignes imposés : la phrase passe à la ligne sur 320 points et en grand texte.
 const styles = themedStyles(() => ({
-  box: { backgroundColor: color.surface, borderColor: color.filet, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: space.md, paddingVertical: space.sm, marginBottom: space.md, minHeight: 44, justifyContent: "center" },
-  sentence: { fontSize: font.secondary, color: color.encre, lineHeight: 21, flexShrink: 1 },
-  affirmed: { fontWeight: "600" },
+  // Lot « fidélité aux maquettes » : la même phrase, mot pour mot, sans encadré, en 13 pt acier.
+  // Lot « finitions de l'œil » : sous les pastilles (barre de tri), à la place du résumé ; aucune marge propre.
+  box: { minHeight: 36, justifyContent: "center" },
+  sentence: { fontSize: font.caption, lineHeight: 18, color: color.acier, flexShrink: 1 },
   more: { fontSize: font.caption, color: color.acier },
   backdrop: { flex: 1, backgroundColor: color.voile },
   sheet: {

@@ -20,12 +20,13 @@ import {
 } from "@/lib/look-page";
 import { fetchPublicLook, wakeServer } from "@/lib/look-public";
 import { WAKING_NOTICE_AFTER_MS } from "@/lib/root-route";
-import { SpotImage } from "@/components/spot-image";
+import { PieceTile } from "@/components/piece-tile";
 import { AffiliateMention } from "@/components/affiliate-mention";
 import { OfferMarkNote } from "@/components/offer-mark";
 import { PUBLIC_WEB_URL } from "@/constants/brand";
 import { ConnectingNotice } from "@/components/connecting";
 import { color, font, radius, serifFont, serifLineHeight, size, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { themedStyles } from "@/theme/themed-styles";
 
 // La page look (lot « page look », migration 0057, décisions du fondateur du
@@ -163,9 +164,7 @@ function LookContentView({ look, onFindMine }: { look: PublicLook; onFindMine: (
       {verdict ? <Text style={[styles.verdict, look.verdict?.level === "identified" ? styles.affirmed : null]}>{verdict}</Text> : null}
       <View style={styles.card}>
         {look.piece.image ? (
-          <View style={styles.hero}>
-            <SpotImage fallbackUri={look.piece.image} style={styles.fill} accessibilityLabel={look.piece.name} />
-          </View>
+          <PieceTile variant="hero" fallbackUri={look.piece.image} accessibilityLabel={look.piece.name} style={styles.hero} />
         ) : null}
         <Text style={styles.title} accessibilityRole="header">
           {look.piece.name}
@@ -263,8 +262,7 @@ const styles = themedStyles(() => ({
   kicker: { fontSize: font.caption, color: color.acier, marginBottom: space.md },
   block: { marginTop: space.lg },
   card: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md, gap: space.xs },
-  hero: { width: "100%", aspectRatio: 4 / 5, backgroundColor: color.plinthe, borderRadius: radius.sm, overflow: "hidden", marginBottom: space.sm },
-  fill: { width: "100%", height: "100%" },
+  hero: { marginBottom: space.sm },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre },
   brand: { fontSize: font.secondary, color: color.acier },
   verdict: { fontSize: font.secondary, color: color.encre, lineHeight: 21, marginBottom: space.md },
@@ -274,11 +272,11 @@ const styles = themedStyles(() => ({
   small: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
   sectionTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, lineHeight: serifLineHeight.body, color: color.encre, marginBottom: space.sm },
   row: { borderTopWidth: 1, borderTopColor: color.filet, paddingVertical: space.sm, gap: 2 },
-  link: { fontSize: font.secondary, color: color.vert, fontWeight: "600", minHeight: 32 },
+  link: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600", minHeight: 32 },
   note: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginTop: space.lg },
   primary: { backgroundColor: color.encre, borderRadius: radius.sm, minHeight: 48, justifyContent: "center", alignItems: "center", paddingHorizontal: space.md, paddingVertical: space.sm, marginTop: space.sm },
   primaryLabel: { color: color.porcelaine, fontSize: font.body, fontWeight: "600", textAlign: "center" },
   footer: { marginTop: space.xl, gap: space.sm, borderTopWidth: 1, borderTopColor: color.filet, paddingTop: space.md },
   footerRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center" },
-  footerLink: { fontSize: font.caption, color: color.vert, fontWeight: "600" },
+  footerLink: { ...lienSouligne, fontSize: font.caption, color: color.vert, fontWeight: "600" },
 }));

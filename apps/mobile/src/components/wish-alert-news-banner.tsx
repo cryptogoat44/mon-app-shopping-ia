@@ -3,6 +3,7 @@ import type { WishAlertNews } from "@monapp/shared-types";
 import { getActiveLocale, t } from "@/i18n";
 import { newsLine } from "@/lib/wish-alert-news";
 import { color, font, radius, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Lot « alertes visibles » : le bandeau « 2 nouveautés » en tête de vos
@@ -52,7 +53,7 @@ const styles = themedStyles(() => ({
   head: { flexDirection: "row", alignItems: "center", gap: space.sm },
   title: { flex: 1, fontSize: font.secondary, fontWeight: "600", color: color.encre },
   hide: { minHeight: 44, justifyContent: "center" },
-  hideLabel: { fontSize: font.caption, color: color.vert, fontWeight: "600" },
+  hideLabel: { ...lienSouligne, fontSize: font.caption, color: color.vert, fontWeight: "600" },
   source: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginBottom: space.xs },
   line: { flexDirection: "row", alignItems: "center", gap: space.sm, minHeight: 44, paddingVertical: space.xs, borderTopWidth: 1, borderTopColor: color.filet },
   lineText: { flex: 1, flexShrink: 1, fontSize: font.caption, color: color.encre, lineHeight: 18 },

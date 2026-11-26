@@ -267,12 +267,34 @@ propose aussi, une seule fois, de les activer toutes.
 
 Mission « liens vidéo » (novembre 2026) : un lien TikTok ou Instagram, partagé
 ou collé, ouvre la vidéo dans son **lecteur officiel**, et « Spotter ce
-moment » en prend l'image. Cette image est **uniquement l'instantané de ce que
-la vue montre** (`WKWebView.takeSnapshot`, module natif local
-`apps/mobile/modules/spotto-player-snapshot`) : ni enregistrement de l'écran,
-ni PDF, ni fichier de la plateforme téléchargé. Si l'instantané sort noir sur
-un vrai iPhone, on s'arrête là : aucune autre méthode sans décision du
-fondateur. L'image est effacée du téléphone dès que la recherche est partie.
+moment » en prend l'image. **Dans l'app**, cette image est uniquement
+l'instantané de ce que la vue montre (`WKWebView.takeSnapshot`, module natif
+local `apps/mobile/modules/spotto-player-snapshot`) : ni enregistrement de
+l'écran, ni PDF, ni fichier de la plateforme téléchargé par l'iPhone. Si
+l'instantané sort noir sur un vrai iPhone, on s'arrête là : aucune autre
+méthode dans l'app sans décision du fondateur. L'instantané est effacé du
+téléphone dès que la recherche est partie.
+
+**Retours du build 3** (26 novembre 2026, sans changer le module natif) :
+- **l'image du serveur** : pour une vidéo TikTok, quand l'interrupteur du
+  serveur `VIDEO_LINK_FRAME_ENABLED` est allumé chez Render (coupé par
+  défaut) et que le lecteur a donné son temps, l'app envoie à notre serveur
+  l'adresse publique de la vidéo et le moment ; le service vidéo récupère la
+  vidéo publique chez TikTok et en rend une seule image de ce moment, sans les
+  pictogrammes de TikTok, sans IA et sans rien garder. Elle passe avant
+  l'instantané, alors effacé. Jamais pour Instagram ;
+- **l'instantané contrôlé**, en secours (et seule voie pour Instagram) : une
+  image que l'app juge noire ou blanche est effacée et refusée, et pour
+  TikTok seulement une image floue aussi (seuil de netteté encore à calibrer
+  sur l'iPhone, avec des vidéos TikTok, `BLUR_LIMITS`, `blurCheckApplies`,
+  `apps/mobile/src/lib/player-state.ts`) ; l'app passe alors à l'analyse, ou
+  à l'écran de secours (après un refus pour flou, le lecteur reste proposé :
+  `playerStaysOffered`, `apps/mobile/src/lib/player-decision.ts`) ;
+- **l'accord** : plus d'écran à part, le premier appui sur Lecture vaut
+  accord (rien n'est chargé chez TikTok ou Meta avant), retenu par
+  plateforme et retirable dans Réglages (`PLAYER_CONSENT_BY_PLAY_BUTTON`,
+  `apps/mobile/src/lib/spot-flags.ts` : à `false`, l'ancien écran revient,
+  par un nouveau build).
 
 Quatre interrupteurs indépendants :
 
@@ -290,7 +312,7 @@ Un lecteur coupé, un accord refusé ou une vidéo qui ne se lit pas mènent à
 l'écran de secours « Spottez cette vidéo » (capture d'écran, puis « Recherche
 d'image » d'iOS 26 ou Partager → l'app), ou à l'analyse automatique si elle
 est allumée (voir « La vidéo d'abord » ci-dessous). L'accord préalable (traceurs des
-lecteurs) est demandé avant le premier lecteur, et se retire dans Réglages.
+lecteurs) est demandé avant le premier lecteur (premier appui sur Lecture), et se retire dans Réglages.
 
 **La vidéo d'abord** (retours du build 2, 24 novembre 2026, sans nouveau
 build) : sur l'app iPhone, quand le lecteur peut s'ouvrir, il passe AVANT
@@ -309,8 +331,37 @@ repartent vers la recherche automatique si l'analyse est allumée (sinon
 vers l'écran de secours « Spottez cette vidéo »), sans nouveau build.
 
 **Décision à confirmer avant tout envoi à Apple** (règles 5.2.2 et 5.2.3) :
-la mission remet le lecteur et la prise d'image, actifs par défaut. Pour
+la mission remet le lecteur et la prise d'image, actifs par défaut ; l'image du
+moment par le service vidéo (`VIDEO_LINK_FRAME_ENABLED`) relève en plus de la
+règle 5.2.3 (`app-store/NOTES-VALIDATION.md`, partie 1, point 12). Pour
 envoyer un build sans eux : les deux variables à `false` chez Expo, puis un
 nouveau build (le module est natif : une mise à jour à distance ne suffit
 pas). Revoir alors les notes pour Apple et les réponses « App Privacy »
 (`app-store/`).
+
+## 10. L'icône de l'iPhone : à regarder sur le Mac avant un build
+
+Depuis le lot « couleurs et logo » (25 novembre 2026), l'icône est le logo
+validé « Émail de chevalière » : un « S » en or poli sur un fond vert
+anglais en dégradé, avec une lueur douce en haut. L'iPhone la lit dans
+`apps/mobile/assets/marque/Spotto.icon`, un dossier au format d'Apple
+(« Icon Composer ») : `icon.json` et deux dessins, `Assets/S.svg` (le « S »)
+et `Assets/Email.svg` (le fond, plein cadre). Ce format ne peut pas être
+essayé sans Xcode : regardez-le une fois sur le Mac avant le prochain build.
+
+1. Dans le Finder, double-cliquez sur `Spotto.icon` : l'app Icon Composer
+   s'ouvre (elle vient avec Xcode 26).
+2. À gauche, deux calques : « S » au-dessus, « Email » en dessous.
+3. L'aperçu doit ressembler à `apps/mobile/assets/images/icon.png` : le
+   « S » doré, plus clair en haut à gauche, sur un vert qui fonce vers le bas,
+   sans reflet ni effet de verre (désactivés exprès).
+4. Fermez sans enregistrer.
+
+Si l'aperçu montre seulement le fond vert (le « S » caché dessous), ou un
+« S » d'une seule couleur, ou un fond sans dégradé : Icon Composer n'a pas lu
+les dessins comme prévu. Dites-le à Claude, qui fera fabriquer par le script
+les mêmes deux calques en images PNG (1024 × 1024, rendues par sharp) au
+lieu des SVG, ou corrigera l'ordre des calques ; rien d'autre ne change.
+
+Après le build, regardez aussi l'icône sur l'écran d'accueil de l'iPhone,
+en apparence claire puis sombre.

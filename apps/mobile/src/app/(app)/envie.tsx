@@ -1,6 +1,6 @@
 import { formatPrice } from "@/lib/format";
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -11,7 +11,8 @@ import { useAuth } from "@/lib/auth-context";
 import { useMessagesStatus } from "@/lib/use-messages-status";
 import { useCollectionsStatus } from "@/lib/use-collections-status";
 import { useWishAlertsStatus } from "@/lib/use-wish-alerts-status";
-import { alertDetails, bellOn, bellVisible, canReportWish, priceDropNow, type StockReportTarget } from "@/lib/wish-alerts";
+import { alertDetails, bellButtonText, bellOn, bellVisible, canReportWish, priceDropNow, type StockReportTarget } from "@/lib/wish-alerts";
+import { pairStacked } from "@/lib/text-fit";
 import { searchCountryFrom } from "@/lib/foreign-shop";
 import { keepAlertAllowed, turnOffKeepAlert, turnOnKeepAlert } from "@/lib/keep-alert";
 import { addToVaultFromQuestion, noStepFor, targetOfWish } from "@/lib/purchase-question";
@@ -20,9 +21,12 @@ import { vaultChanged } from "@/lib/vault-changes";
 import { FROM_ALERT } from "@/lib/push-state";
 import { shareWishOutside } from "@/lib/share-wish";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { acceptLanguage, getActiveLocale, t } from "@/i18n";
 import { PrivateAccountNote } from "@/components/private-account-note";
+import { ShareIcon } from "@/components/icons";
 import { ProductFrame } from "@/components/product-frame";
+import type { ZoomState } from "@/components/image-viewer";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
 import { ErrorMessage } from "@/components/error-message";
 import { WishBoughtButton } from "@/components/wish-bought-button";
@@ -78,6 +82,13 @@ export default function WishlistItemScreen() {
   const [alertState, setAlertState] = useState<WishAlertState | null>(null);
   const [alertSheet, setAlertSheet] = useState(false);
   const [stockReport, setStockReport] = useState<StockReportTarget | null>(null);
+  // Zoom à deux doigts sur place (retours du build 3) : la page ne défile pas pendant le pincement.
+  const [zoomState, setZoomState] = useState<ZoomState>("idle");
+  // « Je l'ai achetée » et la cloche l'un sous l'autre dès que l'un des deux ne tient plus sur une ligne dans sa
+  // moitié : selon la largeur ET la taille du texte (lot « finitions de l'œil », lib/text-fit.ts).
+  const { fontScale, width: windowWidth } = useWindowDimensions();
+  const pairStackedNow = pairStacked(windowWidth, fontScale, [t.result.markAsBought, bellButtonText(alertState)]);
+  const pairItem = pairStackedNow ? null : styles.pairItem;
   // Parcours 3 : « Vous l'avez achetée ? » au retour de la boutique, depuis le
   // bouton principal d'une Envie qui a sa proposition d'origine
   // (lib/use-purchase-question.ts) ; jamais pour une pièce déjà au Vault
@@ -195,9 +206,17 @@ export default function WishlistItemScreen() {
   const screen = (
     <SafeAreaView style={styles.screen}>
       <View style={styles.nav}>
-        <Pressable onPress={goBack} hitSlop={12} style={styles.navBack} accessibilityRole="button" accessibilityLabel={t.wishlistItem.backLabel}>
+        <Pressable onPress={goBack} style={styles.navBack} accessibilityRole="button" accessibilityLabel={t.wishlistItem.backLabel}>
           <Text style={styles.backLabel}>‹ {t.wishlistItem.back}</Text>
         </Pressable>
+        {/* Maquette « Écrin » 6 : le partage en haut à droite, même condition et même geste que « Partager hors de Spotto » (qui reste en bas). */}
+        {state === "ready" && item?.merchantUrl ? (
+          <Pressable onPress={handleShareOutside} style={styles.navShare} accessibilityRole="button" accessibilityLabel={t.wishlistItem.shareOutside}>
+            <View accessible={false}>
+              <ShareIcon size={18} tint={color.encre} strokeWidth={1.6} />
+            </View>
+          </Pressable>
+        ) : null}
       </View>
 
       {state !== "ready" || !item ? (
@@ -216,33 +235,42 @@ export default function WishlistItemScreen() {
           )}
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.content}>
-          <ProductFrame hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} accessibilityLabel={item.title} enlargeable />
+        <ScrollView contentContainerStyle={styles.content} scrollEnabled={zoomState !== "zooming"}>
+          <ProductFrame hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} edgeColor={item.edgeColor} accessibilityLabel={item.title} fullResolution onZoomStateChange={setZoomState} enlargeable />
           <Text style={styles.title} accessibilityRole="header">{item.title}</Text>
-          <Text style={styles.meta}>{[item.merchantName, displayPrice(item)].filter(Boolean).join(" · ")}</Text>
           {(() => {
             const details = alertDetails(alertState, getActiveLocale());
-            if (!details.lastPrice && !details.stock) return null;
+            const meta = <Text style={styles.meta}>{[item.merchantName, displayPrice(item)].filter(Boolean).join(" · ")}</Text>;
+            if (!details.lastPrice && !details.stock) return <View style={styles.priceRow}>{meta}</View>;
             // Parcours 3 : « Baisse de prix » au-dessus du dernier prix vu, même interrupteur coupé (lib/wish-alerts.ts).
             const drop = priceDropNow(alerts, alertState, { priceFrom: item.priceMin, currency: item.currency }, { country, inVault: item.inVault === true });
+            // Maquette « Écrin » 6 : la boutique et le prix à gauche, le dernier prix vu et le stock à droite, sur la même ligne (rien n'est coupé : la rangée passe à la ligne).
             return (
-              <View style={styles.alertDetails}>
+              <>
                 {drop ? (
                   <Text style={styles.priceDrop} testID="baisse-de-prix">
                     {t.wishAlerts.priceDrop}
                   </Text>
                 ) : null}
-                {details.lastPrice ? (
-                  <Text style={styles.alertDetail} testID="dernier-prix-vu">
-                    {details.lastPrice}
+                <View style={styles.priceRow}>
+                  {meta}
+                  <Text style={styles.alertDetails}>
+                    {details.lastPrice ? (
+                      // Lot « finitions de l'œil » (maquette 6) : le libellé en gris, la valeur en clair.
+                      <Text style={styles.alertDetail} testID="dernier-prix-vu">
+                        {lastSeenParts(details.lastPrice).label ? <Text style={styles.alertDetailLabel}>{lastSeenParts(details.lastPrice).label}</Text> : null}
+                        {lastSeenParts(details.lastPrice).value}
+                      </Text>
+                    ) : null}
+                    {details.lastPrice && details.stock ? <Text style={styles.alertDetail}>{" · "}</Text> : null}
+                    {details.stock ? (
+                      <Text style={[styles.alertDetail, alertState?.stock === "sold_out" ? styles.alertSoldOut : null]} testID="etat-du-stock">
+                        {details.stock}
+                      </Text>
+                    ) : null}
                   </Text>
-                ) : null}
-                {details.stock ? (
-                  <Text style={[styles.alertDetail, alertState?.stock === "sold_out" ? styles.alertSoldOut : null]} testID="etat-du-stock">
-                    {details.stock}
-                  </Text>
-                ) : null}
-              </View>
+                </View>
+              </>
             );
           })()}
 
@@ -255,9 +283,9 @@ export default function WishlistItemScreen() {
                 context={from === FROM_ALERT ? "price_alert" : "wishlist"}
                 isAffiliate={isAffiliateLink(item)}
                 primary
+                externalIcon
               />
             ) : null}
-            <WishBoughtButton item={item} onAdded={() => setItem((current) => (current ? { ...current, inVault: true } : current))} />
             {/* Actions propres au site, rien sur iPhone (components/piece-extra-actions). */}
             <PieceExtraActions
               matchId={item.productMatchId}
@@ -268,15 +296,30 @@ export default function WishlistItemScreen() {
             />
           </View>
 
-          {/* Lot 2 : la cloche (jamais pour une pièce achetée : aucune alerte ne partirait), puis « Plus disponible ? » (discret), pour une pièce reconnue. */}
-          {bellVisible(alerts, alertState, item.inVault) || canReportWish(alerts, alertState) ? (
-            <View style={styles.alerts}>
-              {bellVisible(alerts, alertState, item.inVault) ? <WishAlertButton title={item.title} state={alertState} onPress={() => setAlertSheet(true)} /> : null}
-              {canReportWish(alerts, alertState) ? (
-                <StockReportLink pieceName={item.title} onPress={() => setStockReport({ kind: "wish", id: item.id, title: item.title })} style={styles.stockReport} />
+          {/* Maquette « Écrin » 6 : « Je l'ai achetée » et la cloche côte à côte (l'un sous l'autre en grand texte) ; seul, un bouton prend
+              toute la largeur. Lot 2 : la cloche, jamais pour une pièce achetée (aucune alerte ne partirait). */}
+          {item.productMatchId || bellVisible(alerts, alertState, item.inVault) ? (
+            <View style={[styles.pairRow, { flexDirection: pairStackedNow ? "column" : "row" }]}>
+              {item.productMatchId ? (
+                // Sa feuille de catégorie et son message d'erreur restent sous le bouton.
+                <View style={pairItem}>
+                  <WishBoughtButton item={item} style={styles.pairButton} onAdded={() => setItem((current) => (current ? { ...current, inVault: true } : current))} />
+                </View>
+              ) : null}
+              {/* Dans sa propre vue, comme « Je l'ai achetée » : la marge intérieure du bouton ne compte pas dans le partage (site). */}
+              {bellVisible(alerts, alertState, item.inVault) ? (
+                <View style={pairItem}>
+                  <WishAlertButton title={item.title} state={alertState} onPress={() => setAlertSheet(true)} style={styles.pairButton} />
+                </View>
               ) : null}
             </View>
           ) : null}
+          {/* « Plus disponible ? » (discret), centré juste sous la rangée, pour une pièce reconnue ; jamais sous « Plus ». */}
+          <View style={styles.alerts}>
+            {canReportWish(alerts, alertState) ? (
+              <StockReportLink pieceName={item.title} onPress={() => setStockReport({ kind: "wish", id: item.id, title: item.title })} style={styles.stockReport} />
+            ) : null}
+          </View>
 
           {collections.enabled ? (
             <Pressable
@@ -405,27 +448,41 @@ export default function WishlistItemScreen() {
   return <ShopWatchContext.Provider value={purchase.watch}>{screen}</ShopWatchContext.Provider>;
 }
 
+/** « Dernier prix vu : 240 € » en deux parties : le libellé (le texte de la phrase sans le prix) et la valeur.
+ * Phrase d'une autre forme : tout en valeur, comme avant. */
+function lastSeenParts(text: string): { label: string | null; value: string } {
+  const label = t.wishAlerts.lastSeenPrice("");
+  return label && text.startsWith(label) && text.length > label.length ? { label, value: text.slice(label.length) } : { label: null, value: text };
+}
+
 const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
-  nav: { height: 47, justifyContent: "center", paddingHorizontal: space.lg },
-  navBack: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start" },
-  backLabel: { color: color.encre, fontSize: font.secondary },
+  nav: { height: 44, flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 8 },
+  navBack: { minHeight: 44, minWidth: 44, paddingHorizontal: 8, justifyContent: "center" },
+  backLabel: { fontSize: font.body, fontWeight: "400", color: color.encre },
+  navShare: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl },
   message: { fontSize: font.secondary, textAlign: "center", marginBottom: space.sm },
   retry: { marginTop: space.md, minHeight: 44, justifyContent: "center" },
-  retryLabel: { fontSize: font.body, color: color.vert, fontWeight: "600" },
-  content: { padding: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
+  retryLabel: { ...lienSouligne, fontSize: font.body, color: color.vert, fontWeight: "600" },
+  content: { paddingHorizontal: space.md, paddingTop: 4, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre, marginTop: space.md },
-  meta: { fontSize: font.secondary, color: color.acier, marginTop: 4, marginBottom: space.lg },
-  alertDetails: { marginTop: -space.md, marginBottom: space.lg, gap: 2 },
-  alertDetail: { fontSize: font.secondary, color: color.encre },
+  priceRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", columnGap: space.sm, marginTop: 4 },
+  meta: { fontSize: font.caption, lineHeight: 18, color: color.acier },
+  alertDetails: { fontSize: font.caption, lineHeight: 18 },
+  alertDetail: { fontSize: font.caption, lineHeight: 18, color: color.encre },
+  alertDetailLabel: { color: color.acier },
   alertSoldOut: { fontWeight: "600" },
   // Parcours 3 : « Baisse de prix », en vert (le seul accent).
-  priceDrop: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
-  merchant: { marginBottom: space.lg },
+  priceDrop: { fontSize: font.caption, color: color.vert, fontWeight: "600", marginTop: 4 },
+  merchant: { marginTop: space.md, marginBottom: 0 },
   extraActions: { marginTop: space.sm },
-  alerts: { marginBottom: space.lg },
-  stockReport: { alignSelf: "center" },
+  pairRow: { gap: space.sm, marginTop: space.sm },
+  // Deux moitiés égales, quelle que soit la longueur des libellés (flexBasis explicite : le site le lit aussi).
+  pairItem: { flexGrow: 1, flexShrink: 1, flexBasis: 0 },
+  pairButton: { flexGrow: 1 },
+  alerts: { marginBottom: space.md },
+  stockReport: { alignSelf: "center", marginTop: 0 },
   shareSection: { borderTopWidth: 1, borderTopColor: color.filet, paddingTop: space.lg, marginBottom: space.lg, gap: space.sm },
   sectionTitle: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
   hint: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
@@ -442,7 +499,7 @@ const styles = themedStyles(() => ({
   secondaryLabel: { color: color.vert, fontSize: font.secondary, fontWeight: "600" },
   sharedBox: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md, gap: 6 },
   sharedTitle: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
-  sharedLink: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  sharedLink: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   removeRow: { alignItems: "center", minHeight: 44, justifyContent: "center" },
   removeLabel: { color: color.danger, fontSize: font.secondary, fontWeight: "600" },
   confirm: { backgroundColor: color.plinthe, borderRadius: radius.md, padding: space.md },

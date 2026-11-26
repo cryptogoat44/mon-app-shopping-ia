@@ -122,11 +122,14 @@ export const INSTAGRAM_PAGE_CSP = [
 const head = (csp: string) =>
   `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">`;
 
-/** TikTok : le lecteur officiel en plein cadre, construit depuis l'identifiant seul. null : identifiant refusé. */
-export function tiktokHostPage(videoId: string, title: string): string | null {
-  const src = tiktokPlayerUrl(videoId);
+/** TikTok : le lecteur officiel en plein cadre, construit depuis l'identifiant seul ; `params` : ses
+ * réglages (lib/player-link.ts, commandes cachées par défaut). Coins arrondis à 14 px (retours du build 3),
+ * en CSS seulement, en plus du cadre natif arrondi : la règle de sécurité n'a pas de style-src et les
+ * empreintes des scripts ne changent pas. null : identifiant refusé. */
+export function tiktokHostPage(videoId: string, title: string, params?: string): string | null {
+  const src = tiktokPlayerUrl(videoId, params);
   if (!src) return null;
-  return `${head(TIKTOK_PAGE_CSP)}<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}#player{position:absolute;top:0;left:0;width:100%;height:100%;border:0}</style></head><body><iframe id="player" src="${escapeHtmlAttribute(src)}" allow="autoplay; encrypted-media" title="${escapeHtmlAttribute(title)}"></iframe><script>${TIKTOK_RELAY}</script></body></html>`;
+  return `${head(TIKTOK_PAGE_CSP)}<style>html,body{margin:0;height:100%;background:#000;overflow:hidden;border-radius:14px}#player{position:absolute;top:0;left:0;width:100%;height:100%;border:0;border-radius:14px}</style></head><body><iframe id="player" src="${escapeHtmlAttribute(src)}" allow="autoplay; encrypted-media" title="${escapeHtmlAttribute(title)}"></iframe><script>${TIKTOK_RELAY}</script></body></html>`;
 }
 
 // ---- Code d'intégration Instagram : vérifié avant d'être écrit ----
@@ -179,10 +182,12 @@ export function sanitizeInstagramEmbed(html: unknown): string | null {
   return markup;
 }
 
-/** Instagram : le code officiel vérifié, puis embed.js et instgrm.Embeds.process().
+/** Instagram : le code officiel vérifié, puis embed.js et instgrm.Embeds.process(). Coins arrondis
+ * (retours du build 3) par le cadre natif ; ici `border-radius` seulement, sans `overflow:hidden` qui
+ * empêcherait un code d'intégration plus haut que la place de défiler dans sa vue.
  * null : code refusé (écran de secours). */
 export function instagramHostPage(embedHtml: unknown, title: string): string | null {
   const markup = sanitizeInstagramEmbed(embedHtml);
   if (!markup) return null;
-  return `${head(INSTAGRAM_PAGE_CSP)}<style>html,body{margin:0;background:#fff}#post{display:flex;justify-content:center}</style></head><body><div id="post" role="region" aria-label="${escapeHtmlAttribute(title)}">${markup}</div><script>${INSTAGRAM_RELAY}</script></body></html>`;
+  return `${head(INSTAGRAM_PAGE_CSP)}<style>html,body{margin:0;background:#fff;border-radius:14px}#post{display:flex;justify-content:center}</style></head><body><div id="post" role="region" aria-label="${escapeHtmlAttribute(title)}">${markup}</div><script>${INSTAGRAM_RELAY}</script></body></html>`;
 }

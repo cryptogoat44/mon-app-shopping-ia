@@ -31,6 +31,8 @@ export const fr = {
       zoomIn: "Zoomer",
       zoomOut: "Dézoomer",
     },
+    // Zoom à deux doigts sur place (retours du build 3) : pastille montrée la toute première fois seulement, sur iPhone.
+    zoomHint: "Pincez pour zoomer",
   },
   tabs: {
     feed: "Fil",
@@ -102,8 +104,7 @@ export const fr = {
   spotter: {
     title: "Spotter",
     close: "Fermer",
-    lead: "Retrouvez une pièce vue dans une vidéo ou sur une photo.",
-    linkPlaceholder: "Collez ou tapez un lien",
+    lead: "Retrouvez une pièce vue dans une vidéo ou une photo.",
     paste: "Coller",
     pasteEmpty: "Le presse-papiers ne contient pas de lien.",
     pasteDenied: "Collez le lien directement dans le champ.",
@@ -119,9 +120,9 @@ export const fr = {
       `${BRAND} peut afficher ici la dernière vidéo de votre galerie, prête à être analysée. iOS vous demandera alors l'accès à vos photos. La vidéo reste sur votre iPhone : seules quelques images en partent, quand vous appuyez sur « Lancer ».`,
     latestVideoYes: "Oui, me la proposer",
     latestVideoNo: "Non merci",
-    latestVideoAskNote: "Votre réponse ne change rien d'autre : « Ajouter une vidéo » reste disponible. Modifiable à tout moment dans Réglages.",
+    latestVideoAskNote: "Votre réponse ne change rien d'autre : « Vidéo » reste disponible. Modifiable à tout moment dans Réglages.",
     latestVideoNoAccess:
-      `Sans l'accès complet à vos photos, ${BRAND} ne peut pas repérer votre dernière vidéo : choisissez-la avec « Ajouter une vidéo ». L'accès se modifie dans les Réglages de l'iPhone.`,
+      `Sans l'accès complet à vos photos, ${BRAND} ne peut pas repérer votre dernière vidéo : choisissez-la avec « Vidéo ». L'accès se modifie dans les Réglages de l'iPhone.`,
     latestVideoEmpty: "Aucune vidéo dans votre galerie pour l'instant : la plus récente apparaîtra ici.",
     latestVideoChoiceFailed: "Votre réponse n'a pas pu être enregistrée. Réessayez.",
     recentlySpotted: "Récemment spottées",
@@ -142,12 +143,17 @@ export const fr = {
     prepareError: "La préparation a échoué. Vérifiez votre connexion, puis réessayez.",
     networkError: "Connexion impossible. Vérifiez votre connexion internet, puis réessayez.",
     serverError: `${BRAND} ne répond pas pour le moment. Réessayez dans une minute.`,
-    // Retours du build 2 : la carte « Votre dernière vidéo » repliée sur une ligne, et sa croix
-    // (elle éteint la proposition, exactement comme l'interrupteur de Réglages).
+    // Retours du build 2 : la carte « Votre dernière vidéo » repliée sur une ligne.
     latestVideoExpand: "Rechercher dans cette vidéo",
-    latestVideoDismiss: "Ne plus proposer ma dernière vidéo",
-    latestVideoDismissed: "C'est noté : votre dernière vidéo ne vous sera plus proposée. Vous pouvez réactiver cette proposition dans Réglages.",
-    latestVideoSettingsLink: "Ouvrir Réglages",
+    // Retours du build 3, point 3 : la carte se réduit en une ligne fine au lieu de disparaître
+    // (plus de croix ; seul Réglages éteint la proposition).
+    latestVideoReduce: "Réduire la carte « Votre dernière vidéo »",
+    latestVideoReveal: "Affiche la carte en entier",
+    latestVideoShow: "Rouvrir",
+    // Lot « fidélité aux maquettes » : libellés visibles courts des tuiles (la phrase entière reste lue par VoiceOver).
+    tileVideo: "Vidéo",
+    tilePhoto: "Photo",
+    tileCamera: "Appareil photo",
   },
   // Lot 4 : choix d'une image dans une vidéo importée (la vidéo reste sur l'appareil).
   video: {
@@ -238,6 +244,8 @@ export const fr = {
     yourVideo: "Votre vidéo",
     waitingVideo: `${BRAND} repère la pièce…`,
     usualVideo: "Cela prend en général 15 à 30 secondes.",
+    // Lot « fidélité aux maquettes » : le bouton de l'écran « Entourez la pièce », pour une photo (la vidéo garde « Lancer »).
+    searchPiece: "Chercher cette pièce",
   },
   // Site (lot 4 ter) : un onglet resté ouvert propose la version en ligne.
   siteVersion: {
@@ -364,7 +372,33 @@ export const fr = {
       on: "Vous avez accepté que les vidéos TikTok ou Instagram soient lues ici, dans leur lecteur officiel.",
       withdraw: "Retirer mon accord",
       withdrawn: "Accord retiré : la question vous sera reposée à la prochaine vidéo.",
+      // Retours du build 3 : le bouton Lecture vaut accord (spot-flags.ts PLAYER_CONSENT_BY_PLAY_BUTTON).
+      withdrawnPlay: "Accord retiré : la prochaine vidéo ne sera chargée que si vous touchez Lecture.",
+      // Aucun accord encore (première vidéo, ou après un retrait) : rien à retirer, la règle seulement.
+      none: "Aucune vidéo n'est chargée chez TikTok ou Instagram tant que vous n'avez pas touché Lecture.",
     },
+    // Retours du build 3 : notre barre de lecture sous la vidéo (TikTok), le bouton Lecture qui vaut accord,
+    // et la phrase affichée quand l'image du moment vient de notre serveur.
+    controls: {
+      play: "Lire",
+      pause: "Mettre en pause",
+      unmute: "Activer le son",
+      mute: "Couper le son",
+      sound: "Son",
+      position: "Position dans la vidéo",
+      positionValue: (current: string, total: string) => `${current} sur ${total}`,
+    },
+    firstPlay: {
+      play: (platform: string) => `Lire la vidéo ${platform}`,
+      hint: "La vidéo est alors chargée et votre choix est retenu.",
+      // Une phrase, « Réglages » souligné (lien vers les Réglages).
+      lineLead: (platform: string) => `En touchant Lecture, la vidéo est chargée chez ${platform}, qui reçoit votre adresse IP et peut utiliser ses propres traceurs. Modifiable dans `,
+      lineLink: "Réglages",
+      lineEnd: ".",
+    },
+    privacyFrame: (platform: string) => `Vidéo lue par ${platform}. Pour l'image de ce moment, notre serveur demande la vidéo publique à ${platform}, sans votre identité, et ne la garde pas. À défaut, seule l'image prise sur votre téléphone est envoyée, puis effacée de votre téléphone.`,
+    // Lot « finitions de l'œil » : texte d'attente court quand le champ est étroit ou le texte agrandi (jamais coupé au milieu d'une lettre).
+    linkPlaceholderShort: "Lien de la vidéo",
   },
   // Mission « liens vidéo » : écran de secours, pièces déjà repérées par
   // d'autres membres (jamais qui), lien en attente. TEXTES À VALIDER.
@@ -486,6 +520,8 @@ export const fr = {
       notHere: "La vidéo n'a pas pu être lue ici : l'IA peut chercher la pièce pour vous.",
       snapshot: `${BRAND} n'a pas pu prendre l'image de ce moment : l'IA peut chercher la pièce pour vous.`,
     },
+    // Lot « finitions de l'œil » : texte d'attente court quand le champ est étroit ou le texte agrandi.
+    placeholderShort: "ex. la veste en cuir beige",
   },
   // Recherche d'image d'iOS (iOS 26 et suivants) : carte montrée une fois.
   visualSearchTip: {
@@ -525,7 +561,7 @@ export const fr = {
   // pièce s'entoure au doigt, ou à la souris sur un ordinateur. Textes à valider.
   targeting: {
     title: "Entourez la pièce",
-    caption: "Seule la zone entourée sera analysée. Pour corriger, entourez à nouveau la pièce.",
+    caption: "La recherche porte sur la zone que vous entourez.",
     // Moment d'une vidéo choisi après l'analyse d'un lien : le cadre de l'IA est déjà tracé.
     aiCaption: "L'IA a entouré la pièce. Lancez la recherche, ou entourez-la vous-même pour corriger.",
     // Consigne avant le premier tracé.
@@ -804,6 +840,11 @@ export const fr = {
       leave: `Vous allez quitter ${BRAND} : le site s'ouvre dans votre navigateur. Aucun de ces liens n'est affilié : ${BRAND} ne touche rien sur ces achats.`,
       close: "Fermer",
     },
+    // Lot « fidélité aux maquettes » : la pastille du tri, les libellés courts des filtres (contenus dans leur nom lu), la case « Plus ».
+    sortMenuLabel: (choice: string) => `Trier les résultats : ${choice}`,
+    withPriceShort: "Avec prix",
+    inStockShort: "En stock",
+    moreShort: "Plus",
   },
   wishlistItem: {
     back: "Envies",
@@ -838,7 +879,7 @@ export const fr = {
   // Lot « Retrouver ses pièces » : toutes les recherches récentes (« Tout
   // voir ») et « Je l'ai achetée » depuis la fiche d'une envie.
   retrouverPieces: {
-    recentLead: "Rouvrir un résultat ne compte pas dans vos recherches du jour.",
+    recentLead: "Rouvrir ne compte pas dans vos recherches du jour.",
     recentLoadError: "Impossible d'afficher vos recherches récentes. Vérifiez votre connexion, puis réessayez.",
     today: "Aujourd'hui",
     yesterday: "Hier",
@@ -852,6 +893,8 @@ export const fr = {
     historyLoading: "Chargement de votre historique",
     historyUnavailable: "La recherche dans votre historique n'est pas encore disponible. Réessayez un peu plus tard.",
     historyResultsShown: "Résultats de votre recherche affichés.",
+    // Lot « finitions de l'œil » : texte d'attente court (champ étroit, texte agrandi).
+    historySearchPlaceholderShort: "Rechercher",
   },
   // Lot 5 : envoyer une envie à une personne sur Spotto.
   sendPiece: {
@@ -1395,8 +1438,8 @@ export const fr = {
     latestVideoSwitchLabel: "Proposer automatiquement ma dernière vidéo dans Spotter",
     latestVideoOn: "Activé : Spotter vous propose la dernière vidéo de votre galerie, prête à être analysée.",
     latestVideoOnNoAccess:
-      `Activé, mais ${BRAND} n'a pas l'accès complet à vos photos : la dernière vidéo ne peut pas être repérée. Vous la choisissez avec « Ajouter une vidéo ».`,
-    latestVideoOff: `Désactivé : vous choisissez la vidéo avec « Ajouter une vidéo », sans que ${BRAND} lise votre galerie.`,
+      `Activé, mais ${BRAND} n'a pas l'accès complet à vos photos : la dernière vidéo ne peut pas être repérée. Vous la choisissez avec « Vidéo » sur Spotter.`,
+    latestVideoOff: `Désactivé : vous choisissez la vidéo avec « Vidéo » sur Spotter, sans que ${BRAND} lise votre galerie.`,
     latestVideoAccessLeft: `${BRAND} a encore accès à vos photos, sans s'en servir : vous pouvez le lui retirer dans les Réglages de l'iPhone.`,
     latestVideoOpenSettings: "Ouvrir les Réglages de l'iPhone",
     latestVideoFailed: "Votre choix n'a pas pu être enregistré. Réessayez.",
@@ -1445,6 +1488,8 @@ export const fr = {
     deleteError: "La suppression a échoué. Vérifiez votre connexion, puis réessayez.",
     deleteTypeWord: (word: string) => `Pour confirmer, tapez ${word} ci-dessous.`,
     deleteWordLabel: (word: string) => `Mot de confirmation : ${word}`,
+    // Lot « fidélité aux maquettes » : la ligne du nom d'utilisateur, en tête de la carte « Compte ».
+    usernameLabel: "Nom d'utilisateur",
   },
   // « Nous contacter » (Réglages, écran d'accueil) : adresse de l'éditeur,
   // lue à la construction (lib/contact.ts). Sans adresse réelle, rien ne
@@ -1986,7 +2031,7 @@ export const fr = {
     settingHelp: "Dans un commentaire ou sur une photo.",
     settingError: "Le réglage n'a pas pu être enregistré. Réessayez.",
     everyone: "Tout le monde",
-    following: "Les comptes que je suis",
+    following: "Comptes que je suis",
     nobody: "Personne",
     notifReply: "a répondu à votre commentaire.",
     notifMention: "vous a mentionné(e) dans un commentaire.",

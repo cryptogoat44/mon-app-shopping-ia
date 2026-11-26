@@ -3,6 +3,7 @@ import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View } from "rea
 import * as Haptics from "expo-haptics";
 import type { CollectionSummary } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { ApiError, fetchCollections, fetchWishCollections, setWishCollections } from "@/lib/api";
 import { selectionChanged, toggleSelection } from "@/lib/collections";
@@ -155,7 +156,7 @@ const styles = themedStyles(() => ({
   rowTitle: { flex: 1, fontSize: font.body, color: color.encre },
   badge: { fontSize: font.caption, color: color.vert, fontWeight: "600" },
   plus: { width: 22, height: 22, borderRadius: radius.full, borderWidth: 1, borderColor: color.vert, alignItems: "center", justifyContent: "center" },
-  newLabel: { fontSize: font.body, color: color.vert, fontWeight: "600" },
+  newLabel: { ...lienSouligne, fontSize: font.body, color: color.vert, fontWeight: "600" },
   buttons: { flexDirection: "row", gap: space.sm, paddingHorizontal: space.lg, marginTop: space.sm },
   button: { flex: 1, minHeight: 48, borderRadius: radius.md, borderWidth: 1, borderColor: color.filet, alignItems: "center", justifyContent: "center" },
   primary: { backgroundColor: color.vert, borderColor: color.vert },

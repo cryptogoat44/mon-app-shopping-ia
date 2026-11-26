@@ -10,6 +10,7 @@ import { PRIVACY_LEVELS } from "@/lib/vault-labels";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/lib/toast-context";
 import { color, font, radius, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { PostCard } from "@/components/post-card";
 import { CommentsSection } from "@/components/comments-section";
@@ -251,7 +252,7 @@ const styles = themedStyles(() => ({
   centered: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl },
   message: { fontSize: font.secondary, textAlign: "center" },
   retry: { marginTop: space.md, minHeight: 44, justifyContent: "center" },
-  retryLabel: { fontSize: font.body, color: color.vert, fontWeight: "600" },
+  retryLabel: { ...lienSouligne, fontSize: font.body, color: color.vert, fontWeight: "600" },
   content: { paddingTop: space.sm, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   owner: { paddingHorizontal: space.lg },
   label: { fontSize: font.caption, color: color.acier, marginBottom: 10 },

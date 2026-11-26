@@ -429,7 +429,7 @@ const styles = themedStyles(() => ({
   authorName: { fontSize: 14, fontWeight: "600", color: color.encre },
   timestamp: { fontSize: 12, color: color.acier, marginLeft: "auto" },
   moreButton: { marginLeft: space.xs, padding: 2 },
-  media: { width: "100%", aspectRatio: 1, backgroundColor: color.plinthe, borderRadius: radius.sm },
+  media: { width: "100%", aspectRatio: 1, backgroundColor: color.plinthe, borderRadius: radius.piece, borderCurve: "continuous", overflow: "hidden" },
   heartOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" },
   // Cible de 44 points, l'icône de 28 dans le coin bas gauche de la photo.
   peopleButton: { position: "absolute", left: 0, bottom: 0, width: 44, height: 44, alignItems: "center", justifyContent: "center" },
