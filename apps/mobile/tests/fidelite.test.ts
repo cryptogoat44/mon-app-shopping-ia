@@ -575,6 +575,19 @@ describe("partie B1 : l'interrupteur du site", () => {
     expect(web).toContain("if (reduceMotion) left.setValue(to);");
   });
 
+  // Relecture du lot : react-native-web ne traite la barre d'espace que pour un rôle « button ».
+  it("clavier : la barre d'espace bascule l'interrupteur (sans faire défiler), jamais quand il est désactivé", () => {
+    expect(web).toContain('if (event.key !== " " && event.key !== "Spacebar") return;');
+    expect(web).toContain("event.preventDefault();");
+    expect(web).toContain("if (!disabled && !event.repeat) onValueChange?.(!value);");
+    expect(web).toContain("{...webKeys}");
+  });
+
+  it("refusé : basculer à l'espace sans regarder `disabled`, ou un Pressable sans `onKeyDown`", () => {
+    expect(web).not.toMatch(/preventDefault\(\);\s*onValueChange/);
+    expect(web).toContain("onKeyDown: (event:");
+  });
+
   it.each(users)("%s : l'interrupteur commun ; refusé : celui de react-native-web importé directement", (path) => {
     const source = code(path);
     expect(source).toContain('import { Switch } from "@/components/switch";');
