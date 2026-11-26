@@ -153,6 +153,20 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((value) => value === "true"),
+  // Couleur des bords de la vignette des propositions (retours du build 3,
+  // lot « couleur des bords », lib/edgeColor.ts) : le serveur télécharge la
+  // petite image d'une proposition affichée, mesure la couleur unie de ses
+  // bords et ne garde que cette couleur, EN MÉMOIRE (7 jours, rien dans la
+  // base) ; l'app s'en sert comme fond derrière une photo qui ne remplit pas
+  // sa tuile. ÉTEINTE par défaut : seule la valeur exacte "true" l'allume ; à
+  // allumer seulement une fois la politique de confidentialité mise à jour
+  // (téléchargement nouveau, côté serveur). Hors de la liste des variables
+  // modifiables par les outils (render-guard) : le fondateur seul la règle, à
+  // la main, dans Render.
+  EDGE_COLOR_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value === "true"),
   // Facultatif : jeton d'accès d'Expo, seulement si la « sécurité renforcée
   // des notifications » est activée dans le compte Expo. Absent : les
   // notifications partent sans jeton (le service d'Expo est gratuit). Une

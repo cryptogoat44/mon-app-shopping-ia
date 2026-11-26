@@ -99,3 +99,18 @@ describe("garde-fou de Render : MERCHANT_IMAGE_RESULTS_ENABLED", () => {
     expect(assertEditableVariable("spotto-api", "SENTRY_ENVIRONMENT", "production")).toEqual({ key: "SENTRY_ENVIRONMENT", value: "production", mustExist: false });
   });
 });
+
+// Lot « couleur des bords » : le serveur télécharge des vignettes qu'il ne
+// téléchargeait pas ; l'interrupteur ne s'allume qu'après la politique de
+// confidentialité, sur la phrase du fondateur, à la main dans Render.
+describe("garde-fou de Render : EDGE_COLOR_ENABLED", () => {
+  it("refusé : aucun outil ne peut l'allumer ni le couper, sur aucun service", () => {
+    for (const service of ["spotto-api", "site"] as const) {
+      for (const value of ["true", "false"]) expect(() => assertEditableVariable(service, "EDGE_COLOR_ENABLED", value), `${service} ${value}`).toThrow(/refusée/);
+    }
+  });
+
+  it("permis : les variables déjà autorisées le restent (SENTRY_ENVIRONMENT sur spotto-api)", () => {
+    expect(assertEditableVariable("spotto-api", "SENTRY_ENVIRONMENT", "production")).toEqual({ key: "SENTRY_ENVIRONMENT", value: "production", mustExist: false });
+  });
+});
