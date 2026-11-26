@@ -105,6 +105,16 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((value) => value?.trim() || undefined),
+  // Image du moment (retours du build 3, accord du fondateur) : pour une
+  // vidéo TikTok, le service vidéo rend l'image exacte du moment choisi dans
+  // le lecteur, sans IA. COUPÉE par défaut : seule la valeur exacte "true"
+  // l'allume. Demande VIDEO_WORKER_URL et VIDEO_WORKER_SECRET, pas
+  // ANTHROPIC_API_KEY. Hors de la liste des variables modifiables par les
+  // outils (render-guard) : le fondateur seul la règle, à la main, dans Render.
+  VIDEO_LINK_FRAME_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value === "true"),
   // Propositions de l'IA (Parcours 2, lot « propositions », décision du
   // fondateur du 21 novembre 2026) : « Voir les propositions de l'IA » sur
   // l'écran d'un lien, l'IA nommant jusqu'à 3 pièces visibles sans les mots

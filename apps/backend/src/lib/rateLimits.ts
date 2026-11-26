@@ -236,6 +236,16 @@ export const RATE_LIMITS = {
     windowMs: HOUR,
     message: "Vous avez demandé beaucoup d'analyses de liens en peu de temps. Réessayez dans un moment.",
   },
+  // Image du moment d'une vidéo TikTok (retours du build 3, route POST
+  // /api/video-links/frame, interrupteur VIDEO_LINK_FRAME_ENABLED) : chaque
+  // demande fait récupérer la vidéo par le service vidéo, sans IA. Par membre,
+  // refus compris : bloque un script ; la vidéo demandée compte aussi dans le
+  // plafond commun ci-dessous (videoLinkFetchGlobal).
+  videoLinkFrame: {
+    max: 30,
+    windowMs: HOUR,
+    message: "Vous avez demandé beaucoup d'images de vidéos en peu de temps. Réessayez dans un moment.",
+  },
   // - plafond commun des vidéos demandées au service vidéo, compté juste
   //   avant chaque demande (au-delà : 503 « video_busy », l'app propose la
   //   capture d'écran). Ménage les adresses de Render auprès de TikTok et

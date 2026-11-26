@@ -2489,7 +2489,46 @@ export interface VideoLinkAnalysisResponse {
 export interface VideoLinkAnalysisStatus {
   enabled: boolean;
   pieces?: true;
+  /** Image du moment (retours du build 3, champ additif) : présent, et
+   * seulement à `true`, quand l'interrupteur VIDEO_LINK_FRAME_ENABLED est
+   * allumé et le service vidéo bien réglé (POST /api/video-links/frame
+   * possible, TikTok seulement). Indépendant de `enabled` (l'analyse par l'IA). */
+  frame?: true;
 }
+
+/** POST /api/video-links/frame (retours du build 3) : l'image nette d'un
+ * moment exact d'une vidéo TikTok publique, tirée de la vidéo elle-même par
+ * le service vidéo, sans IA. Instagram est refusé (le lecteur ne donne pas
+ * son temps). Rien n'est gardé. */
+export interface VideoLinkFrameRequest {
+  /** Lien de la vidéo TikTok (ou lien court TikTok), comme pour l'analyse. */
+  url: string;
+  /** Instant affiché par le lecteur, en secondes (0 à 90, décimales permises). */
+  atSeconds: number;
+}
+
+/** Réponse : UNE image, « data:image/jpeg;base64,… », 1 280 px au plus sur le grand côté. */
+export interface VideoLinkFrameResponse {
+  image: string;
+  width: number;
+  height: number;
+  /** Instant de l'image rendue dans la vidéo, en secondes (à une image près du moment demandé). */
+  timeSeconds: number;
+}
+
+/** Codes d'erreur de l'image du moment (champ « error ») ; aucun code d'IA.
+ * L'app retombe alors sur l'image prise sur l'appareil, ou le secours. */
+export type VideoLinkFrameErrorCode =
+  | "video_frame_disabled"
+  | "invalid_moment"
+  | "invalid_link"
+  | "video_unavailable"
+  | "video_private"
+  | "video_too_long"
+  | "video_busy"
+  | "video_timeout"
+  | "rate_limited"
+  | "internal_error";
 
 /** Codes d'erreur de l'analyse d'un lien (champ « error »). Toute erreur
  * « vidéo indisponible » ramène le membre à la capture d'écran. */

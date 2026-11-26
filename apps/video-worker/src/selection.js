@@ -7,6 +7,7 @@
 // dépendance : netteté (variance du laplacien), empreinte dHash de 64 bits et
 // couleurs moyennes de 3 × 3 zones, sur une petite image de 96 × 96 px
 // fournie par ffmpeg (rouge-vert-bleu, 3 octets par pixel).
+import { WorkerError } from "./contract.js";
 
 /** Côté de la petite image examinée. */
 export const SCORING_EDGE = 96;
@@ -124,6 +125,29 @@ export function isNearDuplicate(/** @type {FrameScore} */ a, /** @type {FrameSco
 function percentile(/** @type {number[]} */ values, /** @type {number} */ ratio) {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.min(sorted.length - 1, Math.floor(ratio * sorted.length))] ?? 0;
+}
+
+/**
+ * Mode « moment » (image du moment, retours du build 3) : UNE image, celle
+ * de la fenêtre décodée la plus proche de `atSeconds` ; si elle est floue
+ * (moins de 40 % de la meilleure netteté de la fenêtre : flou de mouvement,
+ * image de transition), la plus proche parmi les nettes. Fenêtre unie
+ * (noir, fondu) : « blank_moment ». Logique pure.
+ * @template {FrameScore & { timeSeconds: number }} T
+ * @param {readonly T[]} candidates
+ * @param {number} atSeconds
+ * @returns {T}
+ */
+export function pickMoment(candidates, atSeconds) {
+  if (candidates.length === 0) throw new WorkerError("unavailable", "no_frames");
+  const best = Math.max(...candidates.map((candidate) => candidate.sharpness));
+  if (!(best >= MIN_SHARPNESS)) throw new WorkerError("unsupported", "blank_moment");
+  const threshold = BLUR_RATIO * best;
+  const distance = (/** @type {T} */ candidate) => Math.abs(candidate.timeSeconds - atSeconds);
+  const closest = (/** @type {readonly T[]} */ pool) => pool.reduce((chosen, candidate) => (distance(candidate) < distance(chosen) ? candidate : chosen));
+  const nearest = closest(candidates);
+  if (nearest.sharpness >= threshold) return nearest;
+  return closest(candidates.filter((candidate) => candidate.sharpness >= threshold));
 }
 
 /**

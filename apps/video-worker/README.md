@@ -58,6 +58,25 @@ constantes dans `src/contract.js`.
     Les images sont dans l'ordre du temps : 6 à 12, jusqu'à 16 pour une
     vidéo de plus de 40 s. Une vidéo de quelques secondes peut en donner
     moins.
+- **Demander l'image d'un moment** (retours du build 3, route
+  `POST /api/video-links/frame` du serveur principal, TikTok seulement,
+  interrupteur `VIDEO_LINK_FRAME_ENABLED`) :
+  - même route `POST /frames`, avec en plus le champ facultatif
+    `"atSeconds"` : un nombre de 0 à 90 (secondes, décimales permises) ;
+    autre chose (texte, négatif, plus de 90) : 400 `bad_request` (détail
+    `at_refused` dans le journal), avant toute place prise dans la file ;
+  - ffmpeg se place 0,5 s avant ce moment et décode **toutes** les images
+    d'une seconde (jamais les seules images clés), puis le service rend
+    **une seule** image : la plus proche du moment, ou, si elle est floue
+    (moins de 40 % de la meilleure netteté de cette seconde), la plus
+    proche parmi les nettes. Un moment au-delà de la fin de la vidéo prend
+    la dernière image ;
+  - même forme de réponse (`durationSeconds`, `frames` avec une seule
+    image, 1 280 px au plus) ; seconde toute unie (noir, fondu) : 422
+    `unsupported` (détail `blank_moment`) ;
+  - aucune IA ; mêmes limites (25 s, 2 demandes à la fois, file de 2) ;
+  - le journal note seulement `moment: true` (jamais l'instant demandé) et
+    `mode: "moment"`.
 - **Vérifier l'état du service :**
   - `GET /health`, sans secret ;
   - réponse : `{"status": "ok", "ytDlp": "2026.10.26", "ffmpeg": "7.1.x"}` ;
@@ -76,12 +95,12 @@ secours.
 
 | Code | Statut | Quand |
 |---|---|---|
-| `bad_request` | 400 | Corps invalide, adresse refusée (autre site, http, paramètres…) |
+| `bad_request` | 400 | Corps invalide, adresse refusée (autre site, http, paramètres…), `atSeconds` hors de 0 à 90 ou pas un nombre (détail `at_refused`) |
 | `unauthorized` | 401 | Secret absent ou faux ; ou service sans secret valide (tout est refusé) |
 | `private` | 404 | Vidéo privée, compte privé, réservée aux abonnés ou aux adultes |
 | `not_found` | 404 | Vidéo supprimée ou introuvable |
 | `too_long` | 413 | Vidéo de plus de 90 s |
-| `unsupported` | 422 | Adresse non reconnue par yt-dlp, publication sans vidéo, direct |
+| `unsupported` | 422 | Adresse non reconnue par yt-dlp, publication sans vidéo, direct ; image du moment : seconde toute unie, noir ou fondu (détail `blank_moment`) |
 | `blocked` | 451 | Accès refusé au service : IP bloquée, connexion demandée, limite anonyme d'Instagram, restriction par pays, refus 403 |
 | `unavailable` | 502 | Extracteur cassé par un changement de la plateforme, réponse illisible, ffmpeg en échec, adresse du fichier refusée |
 | `busy` | 503 | Déjà 2 demandes en cours et file pleine, ou arrêt en cours |
@@ -235,9 +254,10 @@ Une ligne JSON par demande, avec seulement des compteurs et des codes :
 - `result` (`ok` ou le code d'erreur), `detail` (raison fixe, par exemple
   `ip_blocked`, `login_required`, `extractor_failed`, `too_long_metadata`,
   `queue_full`) ;
-- `platform`, `ms`, `ytDlpMs` (informations), `downloadMs` et `mediaKb`
-  (téléchargement), `ffmpegMs`, `attempts`, `mode` (`full` ou `keyframes`),
-  `codec` ;
+- `platform`, `moment` (`true` pour une image du moment, jamais l'instant
+  demandé), `ms`, `ytDlpMs` (informations), `downloadMs` et `mediaKb`
+  (téléchargement), `ffmpegMs`, `attempts`, `mode` (`full`, `keyframes` ou
+  `moment`), `codec` ;
 - `duration` (par tranche : `0-15`, `15-30`…), `candidates`, `frames` ;
 - `active`, `queued`, `served`, `failed`.
 

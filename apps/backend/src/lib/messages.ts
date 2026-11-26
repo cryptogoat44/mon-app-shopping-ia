@@ -356,6 +356,12 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Trop de demandes en ce moment. Réessayez dans un instant.": "Too many requests right now. Please try again in a moment.",
   "Lien de page look invalide.": "Invalid look page link.",
   "Le lien n'a pas pu être créé pour l'instant. Réessayez plus tard.": "The link couldn't be created right now. Please try again later.",
+  // Image du moment (retours du build 3, routes/videoLinkAnalysis.ts, lib/rateLimits.ts).
+  "L'image de ce moment ne peut pas être préparée par nos serveurs en ce moment.": "Our servers can't prepare the image of this moment right now.",
+  "Ce moment de la vidéo n'est pas valable.": "This moment of the video isn't valid.",
+  "Ce lien n'est pas celui d'une vidéo TikTok.": "This link isn't a TikTok video.",
+  "Vous avez demandé beaucoup d'images de vidéos en peu de temps. Réessayez dans un moment.":
+    "You've requested a lot of video images in a short time. Please try again in a moment.",
 };
 
 /** Message dans la langue voulue. Un message inconnu (par exemple un texte

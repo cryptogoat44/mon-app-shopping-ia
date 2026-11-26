@@ -84,3 +84,15 @@ describe("garde-fou de Render : VIDEO_PIECES_ENABLED", () => {
     expect(assertEditableVariable("spotto-api", "SENTRY_ENVIRONMENT", "production")).toEqual({ key: "SENTRY_ENVIRONMENT", value: "production", mustExist: false });
   });
 });
+
+describe("garde-fou de Render : VIDEO_LINK_FRAME_ENABLED (image du moment, retours du build 3)", () => {
+  it("refusé : aucun outil ne peut l'allumer ni le couper, sur aucun service (le fondateur seul, à la main)", () => {
+    for (const service of ["spotto-api", "site"] as const) {
+      for (const value of ["true", "false"]) expect(() => assertEditableVariable(service, "VIDEO_LINK_FRAME_ENABLED", value), `${service} ${value}`).toThrow(/refusée/);
+    }
+  });
+
+  it("permis : les variables déjà autorisées le restent (SENTRY_ENVIRONMENT sur spotto-api)", () => {
+    expect(assertEditableVariable("spotto-api", "SENTRY_ENVIRONMENT", "production")).toEqual({ key: "SENTRY_ENVIRONMENT", value: "production", mustExist: false });
+  });
+});
