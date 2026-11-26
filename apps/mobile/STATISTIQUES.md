@@ -130,6 +130,24 @@ vous verrez dans PostHog.
   - **`player_to_ai`** (nouveau) : le membre a touché « Trouver la pièce
     automatiquement » sous le lecteur. `from` = `player` ; `link_platform`
     = `tiktok` ou `instagram`. Jamais le lien, la vidéo ni l'image.
+- **L'image du moment** (retours du build 3, app iPhone) : « Spotter ce
+  moment » demande l'image nette du moment à notre serveur (TikTok, quand le
+  serveur le permet) ; sinon, ou en cas d'échec, l'app prend un instantané de
+  l'écran, refusé s'il est noir, blanc ou flou.
+  - **`player_spot`** : `image_source` (nouveau) = `server` (l'image rendue
+    par notre serveur) ou `snapshot` (l'instantané de l'écran). Absent : une
+    version d'avant (toujours l'instantané).
+  - **`player_unavailable`** : `reason` peut valoir `snapshot_blurry`
+    (nouveau) : l'instantané était flou et le serveur n'a pas donné l'image.
+  - **`player_frame_failed`** (nouveau) : l'image n'est pas venue du serveur
+    (l'instantané prend le relais). `reason` = un code du service vidéo
+    (`video_unavailable`, `video_private`, `video_too_long`, `video_busy`,
+    `video_timeout`), `invalid_link`, `invalid_moment`, `rate_limited`
+    (plafond horaire), `server` (autre erreur du serveur), `timeout` (plus de
+    30 s), `network` (réseau), `disabled` (interrupteur coupé) ou `invalid`
+    (réponse refusée par l'app) ; `link_platform` = `tiktok`. Pas de
+    `platform`. Jamais le lien ni le moment.
+  - Rien n'est mesuré sur la barre de lecture (ni glissé, ni son).
 
 ### 3b. Depuis une vidéo du téléphone
 

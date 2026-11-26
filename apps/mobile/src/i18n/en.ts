@@ -347,7 +347,31 @@ export const en: Catalog = {
       on: "You agreed to TikTok or Instagram videos being played here, in their official player.",
       withdraw: "Withdraw my consent",
       withdrawn: "Consent withdrawn: you'll be asked again with the next video.",
+      // Build 3 feedback: the Play button is the consent (spot-flags.ts PLAYER_CONSENT_BY_PLAY_BUTTON).
+      withdrawnPlay: "Consent withdrawn: the next video will only load if you press Play.",
+      // No consent yet (first video, or after withdrawing): nothing to withdraw, just the rule.
+      none: "No video is loaded from TikTok or Instagram until you press Play.",
     },
+    // Build 3 feedback: our playback bar under the video (TikTok), the Play button as consent,
+    // and the line shown when the image of the moment comes from our server.
+    controls: {
+      play: "Play",
+      pause: "Pause",
+      unmute: "Turn sound on",
+      mute: "Turn sound off",
+      sound: "Sound",
+      position: "Playback position",
+      positionValue: (current: string, total: string) => `${current} of ${total}`,
+    },
+    firstPlay: {
+      play: (platform: string) => `Play the ${platform} video`,
+      hint: "The video then loads and your choice is remembered.",
+      // One sentence, "Settings" underlined (link to Settings).
+      lineLead: (platform: string) => `When you press Play, the video loads from ${platform}, which receives your IP address and may use its own trackers. You can change this in `,
+      lineLink: "Settings",
+      lineEnd: ".",
+    },
+    privacyFrame: (platform: string) => `Video played by ${platform}. For the image of this moment, our server requests the public video from ${platform}, without your identity, and does not keep it. Failing that, only the frame taken on your phone is sent, then deleted from your phone.`,
   },
   videoLink: {
     fallbackTitle: "Spot this video",

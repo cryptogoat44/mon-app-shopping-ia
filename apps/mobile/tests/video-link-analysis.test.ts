@@ -361,13 +361,21 @@ describe("propositions de l'IA (mode « pièces »)", () => {
   const withLabels = (labels: unknown, count = 2) => ({ ...body(Array.from({ length: count }, (_, index) => moment({ timeSeconds: index }))), labels });
 
   it("état : `pieces` compte seulement s'il vaut exactement `true`, et seulement avec l'analyse allumée", () => {
-    expect(linkAnalysisStatus({ enabled: true, pieces: true })).toEqual({ enabled: true, pieces: true });
-    expect(linkAnalysisStatus({ enabled: true })).toEqual({ enabled: true, pieces: false });
-    for (const value of ["true", 1, false, null, [true], {}]) expect(linkAnalysisStatus({ enabled: true, pieces: value }), JSON.stringify(value)).toEqual({ enabled: true, pieces: false });
-    expect(linkAnalysisStatus({ enabled: false, pieces: true })).toEqual({ enabled: false, pieces: false });
-    expect(linkAnalysisStatus({ enabled: "true", pieces: true })).toEqual({ enabled: false, pieces: false });
+    expect(linkAnalysisStatus({ enabled: true, pieces: true })).toEqual({ enabled: true, pieces: true, frame: false });
+    expect(linkAnalysisStatus({ enabled: true })).toEqual({ enabled: true, pieces: false, frame: false });
+    for (const value of ["true", 1, false, null, [true], {}]) expect(linkAnalysisStatus({ enabled: true, pieces: value }), JSON.stringify(value)).toEqual({ enabled: true, pieces: false, frame: false });
+    expect(linkAnalysisStatus({ enabled: false, pieces: true })).toEqual({ enabled: false, pieces: false, frame: false });
+    expect(linkAnalysisStatus({ enabled: "true", pieces: true })).toEqual({ enabled: false, pieces: false, frame: false });
     for (const value of [null, undefined, "true", [true]]) expect(linkAnalysisStatus(value)).toEqual(LINK_ANALYSIS_OFF);
-    expect(LINK_ANALYSIS_OFF).toEqual({ enabled: false, pieces: false });
+    expect(LINK_ANALYSIS_OFF).toEqual({ enabled: false, pieces: false, frame: false });
+  });
+
+  it("retours du build 3 : `frame` (image du moment, lot 1) seulement pour la valeur exacte `true`, indépendant de l'analyse", () => {
+    expect(linkAnalysisStatus({ enabled: false, frame: true })).toEqual({ enabled: false, pieces: false, frame: true });
+    expect(linkAnalysisStatus({ enabled: true, frame: true }).frame).toBe(true);
+    // Refusé : tout autre valeur, ou absent (serveur sans le lot 1).
+    for (const value of ["true", 1, false, null, [true], {}]) expect(linkAnalysisStatus({ enabled: true, frame: value }).frame, JSON.stringify(value)).toBe(false);
+    expect(linkAnalysisStatus({ enabled: true }).frame).toBe(false);
   });
 
   it("demande : le lien seul, aucun texte ; le mode se lit dans la demande", () => {

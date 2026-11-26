@@ -31,7 +31,9 @@ export type FallbackReason =
   | "player_error"
   | "no_answer"
   | "webview_error"
-  | "snapshot_failed";
+  | "snapshot_failed"
+  /** Retours du build 3 : l'instantané était flou (contrôle de netteté), et le serveur n'a pas donné l'image du moment. */
+  | "snapshot_blurry";
 
 export type PlayerDecision =
   /** Lecteur officiel. */

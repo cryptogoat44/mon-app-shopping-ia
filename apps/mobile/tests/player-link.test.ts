@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { normalizeVideoLink } from "@monapp/shared-types";
-import { isAllowedNavigation, isPlayerPlatform, playerBaseUrl, sameDocument, TIKTOK_ORIGIN, tiktokPlayerUrl, videoOpenUrl } from "../src/lib/player-link";
+import { isAllowedNavigation, isPlayerPlatform, playerBaseUrl, sameDocument, TIKTOK_ORIGIN, TIKTOK_PLAYER_PARAMS, TIKTOK_PLAYER_PARAMS_NATIVE, tiktokPlayerUrl, videoOpenUrl } from "../src/lib/player-link";
 
 // Mission « liens vidéo » : du lien à l'adresse du lecteur officiel, sans
 // aucun appel réseau de l'app (le serveur reconnaît la vidéo et suit les
@@ -10,9 +10,17 @@ import { isAllowedNavigation, isPlayerPlatform, playerBaseUrl, sameDocument, TIK
 const ID = "6718335390845095173";
 
 describe("lecteur TikTok : construit depuis l'identifiant seul", () => {
-  it("https://www.tiktok.com/player/v1/{id}?autoplay=1", () => {
+  it("retours du build 3 : https://www.tiktok.com/player/v1/{id}, commandes de TikTok cachées par ses paramètres officiels", () => {
     expect(TIKTOK_ORIGIN).toBe("https://www.tiktok.com");
-    expect(tiktokPlayerUrl(ID)).toBe(`https://www.tiktok.com/player/v1/${ID}?autoplay=1`);
+    expect(TIKTOK_PLAYER_PARAMS).toBe("autoplay=1&controls=0&progress_bar=0&rel=0");
+    expect(tiktokPlayerUrl(ID)).toBe(`https://www.tiktok.com/player/v1/${ID}?autoplay=1&controls=0&progress_bar=0&rel=0`);
+  });
+
+  it("repli : les commandes de TikTok, comme au build 3 (lecture automatique seule)", () => {
+    expect(TIKTOK_PLAYER_PARAMS_NATIVE).toBe("autoplay=1");
+    expect(tiktokPlayerUrl(ID, TIKTOK_PLAYER_PARAMS_NATIVE)).toBe(`https://www.tiktok.com/player/v1/${ID}?autoplay=1`);
+    // Identifiant refusé : toujours rien, avec l'un ou l'autre réglage.
+    expect(tiktokPlayerUrl("abc", TIKTOK_PLAYER_PARAMS_NATIVE)).toBeNull();
   });
 
   it("identifiant qui n'est pas fait de 6 à 25 chiffres : refusé", () => {

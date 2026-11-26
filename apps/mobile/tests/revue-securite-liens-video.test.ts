@@ -116,8 +116,27 @@ describe("lecteur-01 / reception-03 : instantanés du lecteur", () => {
     }
     // Permis : une vraie image passe.
     await expect(snapshotPlayer(7)).resolves.toMatchObject({ uri: snapshot });
-    // Toute erreur de l'instantané mène au même chemin (lecteur.tsx).
-    expect(code("src/app/(app)/spot/lecteur.tsx")).toMatch(/shot = await snapshotPlayer\(tag\);\s*\} catch \{\s*return fallback\("snapshot_failed"\);/);
+    // Retours du build 3 : toute erreur de l'instantané passe par chooseSpotImage (lib/spot-moment.ts) ; sans
+    // image du serveur, le même chemin de secours (snapshot_failed, ou snapshot_blurry pour une image floue).
+    const screen = code("src/app/(app)/spot/lecteur.tsx");
+    expect(screen).toContain('snapshotResult.status === "rejected" ? snapshotErrorCode(snapshotResult.reason) : null');
+    expect(screen).toContain('if (choice.source === "none") return fallback(choice.reason);');
+  });
+
+  it("retours du build 3 : image floue refusée (« blurry_frame ») et effacée ; une image nette passe", async () => {
+    const snapshot = `${disk.CACHE}lecteur-instantane/lecteur-instantane-1.jpg`;
+    const real = smallCopy.base64;
+    try {
+      // Un dégradé lisse, ni noir ni blanc : flou.
+      smallCopy.base64 = grayPngBase64(96, 171, (x, y) => 60 + x + Math.floor(y / 2));
+      await expect(snapshotPlayer(7)).rejects.toThrow("blurry_frame");
+      expect(discardLocalFile).toHaveBeenCalledWith(snapshot);
+    } finally {
+      smallCopy.base64 = real;
+    }
+    discardLocalFile.mockClear();
+    await expect(snapshotPlayer(7)).resolves.toMatchObject({ uri: snapshot });
+    expect(discardLocalFile).not.toHaveBeenCalledWith(snapshot);
   });
 
   it("« Entourez la pièce » quitté : le brouillon dont l'image n'est pas à garder est abandonné (effet de démontage)", () => {

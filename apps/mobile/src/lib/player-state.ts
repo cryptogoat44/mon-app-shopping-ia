@@ -146,6 +146,138 @@ export function isBlankFrame(sample: FrameSample): boolean {
   return percentile(0.99) <= BLANK_LIMITS.blackP99Max || percentile(0.01) >= BLANK_LIMITS.whiteP1Min;
 }
 
+// ---- Image floue (retours du build 3) ----
+// Second CONTRÔLE de l'instantané, sur la même petite copie de 96 px : une
+// image floue (capture 06 du fondateur : la vidéo floue, les pictogrammes de
+// TikTok nets) est refusée au lieu d'être envoyée. Mesurée dans la zone de
+// isBlankFrame seulement : sans la colonne de boutons de TikTok, l'en-tête et
+// le bas (nets même quand la vidéo est floue), ni le bouton central.
+// Netteté des BORDS : sur les 5 % de pixels au plus fort gradient de la zone,
+// moyenne du carré du laplacien divisée par la moyenne du carré du gradient.
+// Un bord franc est étroit (laplacien fort pour son gradient) ; un bord flou
+// est large (laplacien faible). La mesure ne dépend ni de la luminosité (les
+// deux termes croissent comme le carré du contraste) ni de la QUANTITÉ de
+// bords : un gros plan net d'un manteau uni, qui n'a que quelques bords,
+// mesure autant qu'une rue chargée. (L'ancienne mesure, variance du laplacien
+// sur variance des gris, refusait ces gros plans nets : ≈ 0,07.)
+// Mesure faite par tuile (3 × 3, tuile médiane) et sans les bandes noires du
+// haut et du bas : une ligne de sous-titre nette ou le bord d'une bande noire
+// ne font plus passer une vidéo floue (avant : capture 06 + sous-titre ≈ 14,
+// 06 entre bandes noires ≈ 3,7 ; maintenant ≈ 0,1).
+
+/** Seuil de départ, À CALIBRER sur l'iPhone (journal « [player] netteté » en
+ * développement) ; repères mesurés sur des copies de 96 px : capture 06 floue
+ * ≈ 0,1 ; 05 nette ≈ 2, et autant assombrie ; gros plans unis nets (manteau
+ * sombre sur la moitié de l'image, en buste, silhouette) ≈ 1,5 à 2, les mêmes
+ * floutés ≈ 0,2 à 0,4. */
+export const BLUR_LIMITS = { minSharpness: 0.5 } as const;
+
+/** Part des pixels au plus fort gradient sur laquelle on juge les bords. */
+const SHARPNESS_TOP_FRACTION = 0.05;
+/** Gradient minimal (niveaux de gris par pixel) des bords jugés ; repères :
+ * capture 05 assombrie à 15 % ≈ 10, 06 floue assombrie à 15 % ≈ 4,6. */
+const SHARPNESS_MIN_EDGE = 3;
+
+/** Bandes noires retirées des bords de la zone (vidéo en paysage dans la
+ * boîte 9:16, fond noir de la page TikTok) : lignes du haut et du bas dont
+ * tous les gris sont ≤ BLANK_LIMITS.blackP99Max, plus cette marge (px), pour
+ * que le bord franc de la bande ne soit pas jugé comme un bord de la vidéo.
+ * Les lignes seulement, pas les colonnes : un vêtement sombre sur le côté
+ * d'un plan sombre (net) n'est pas une bande. */
+const SHARPNESS_BAND_MARGIN = 2;
+/** La zone (sans les bandes noires) est coupée en 3 × 3 tuiles : l'image est
+ * jugée sur la tuile MÉDIANE (la plus basse des deux du milieu) parmi celles
+ * qui ont des bords. Quelques bords nets (une ligne de sous-titre incrustée,
+ * nette même quand la caméra bouge) ne suffisent plus à faire passer une
+ * vidéo floue. */
+const SHARPNESS_TILES = 3;
+
+/** Netteté des bords de la zone examinée (rectangle BLANK_ZONE sans
+ * BLANK_HOLE, sans les bandes noires du bord) : médiane des tuiles qui ont
+ * des bords. Seuls comptent les pixels dont le pixel et ses quatre voisins
+ * sont dans la zone et hors du trou (aucun bord inventé au bord du trou ni
+ * lu dans la colonne de TikTok). Zone unie : 0. Exportée pour le journal de
+ * développement (calibrage). */
+export function frameSharpness(sample: FrameSample): number {
+  const { width, height, gray } = sample;
+  if (width < 3 || height < 3) return 0;
+  let left = Math.floor(BLANK_ZONE.left * width);
+  let right = Math.ceil(BLANK_ZONE.right * width);
+  let top = Math.floor(BLANK_ZONE.top * height);
+  let bottom = Math.ceil(BLANK_ZONE.bottom * height);
+  const value = (x: number, y: number) => gray[y * width + x] ?? 0;
+  const black = BLANK_LIMITS.blackP99Max;
+  const rowBlack = (y: number) => {
+    for (let x = left; x < right; x += 1) if (value(x, y) > black) return false;
+    return true;
+  };
+  const zoneTop = top;
+  const zoneBottom = bottom;
+  while (top < bottom && rowBlack(top)) top += 1;
+  while (top < bottom && rowBlack(bottom - 1)) bottom -= 1;
+  if (top > zoneTop) top += SHARPNESS_BAND_MARGIN;
+  if (bottom < zoneBottom) bottom -= SHARPNESS_BAND_MARGIN;
+  if (right - left < 3 || bottom - top < 3) return 0;
+  const isHole = (x: number, y: number) => inside((x + 0.5) / width, (y + 0.5) / height, BLANK_HOLE);
+  const tileScores: number[] = [];
+  for (let ty = 0; ty < SHARPNESS_TILES; ty += 1) {
+    for (let tx = 0; tx < SHARPNESS_TILES; tx += 1) {
+      const tileLeft = left + Math.floor(((right - left) * tx) / SHARPNESS_TILES);
+      const tileRight = left + Math.floor(((right - left) * (tx + 1)) / SHARPNESS_TILES);
+      const tileTop = top + Math.floor(((bottom - top) * ty) / SHARPNESS_TILES);
+      const tileBottom = top + Math.floor(((bottom - top) * (ty + 1)) / SHARPNESS_TILES);
+      const score = edgeScore(tileLeft, tileRight, tileTop, tileBottom);
+      if (score !== null) tileScores.push(score);
+    }
+  }
+  if (tileScores.length === 0) return 0;
+  tileScores.sort((a, b) => a - b);
+  return tileScores[Math.floor((tileScores.length - 1) / 2)]!;
+
+  /** Score des bords d'une tuile, ou null si la tuile n'a aucun vrai bord. Les
+   * voisins restent dans la zone (sans bandes) : x de left+1 à right-2. */
+  function edgeScore(x0: number, x1: number, y0: number, y1: number): number | null {
+    const gradients: number[] = [];
+    const laplacians: number[] = [];
+    for (let y = Math.max(y0, top + 1); y < Math.min(y1, bottom - 1); y += 1) {
+      for (let x = Math.max(x0, left + 1); x < Math.min(x1, right - 1); x += 1) {
+        if (isHole(x, y) || isHole(x - 1, y) || isHole(x + 1, y) || isHole(x, y - 1) || isHole(x, y + 1)) continue;
+        const center = value(x, y);
+        const west = value(x - 1, y);
+        const east = value(x + 1, y);
+        const north = value(x, y - 1);
+        const south = value(x, y + 1);
+        const gx = (east - west) / 2;
+        const gy = (south - north) / 2;
+        const laplacian = 4 * center - west - east - north - south;
+        gradients.push(gx * gx + gy * gy);
+        laplacians.push(laplacian * laplacian);
+      }
+    }
+    if (gradients.length === 0) return null;
+    const sorted = Float64Array.from(gradients).sort();
+    const threshold = Math.max(sorted[Math.min(sorted.length - 1, Math.floor((1 - SHARPNESS_TOP_FRACTION) * sorted.length))]!, Number.MIN_VALUE);
+    let gradientSum = 0;
+    let laplacianSum = 0;
+    let count = 0;
+    for (let k = 0; k < gradients.length; k += 1) {
+      if (gradients[k]! < threshold) continue;
+      gradientSum += gradients[k]!;
+      laplacianSum += laplacians[k]!;
+      count += 1;
+    }
+    // Bords les plus forts sous 3 niveaux de gris par pixel : aucun vrai bord,
+    // seulement les marches d'arrondi d'un dégradé (tuile floue ou unie).
+    if (count === 0 || gradientSum / count < SHARPNESS_MIN_EDGE ** 2) return null;
+    return laplacianSum / gradientSum;
+  }
+}
+
+/** Image floue : netteté des bords de la zone sous BLUR_LIMITS.minSharpness. */
+export function isBlurryFrame(sample: FrameSample): boolean {
+  return frameSharpness(sample) < BLUR_LIMITS.minSharpness;
+}
+
 // ---- Commandes au lecteur TikTok (relayées par la page hôte) ----
 
 export type PlayerCommand = "play" | "pause" | "mute" | "unMute";
@@ -182,21 +314,71 @@ export function parsePlayerConsent(raw: string | null): PlayerConsent {
   return consent;
 }
 
-// ---- Taille du lecteur ----
+// ---- Taille du lecteur (retours du build 3) ----
+// La vidéo prend la place qui reste après la zone d'actions MESURÉE (barre de
+// lecture, ligne « Vidéo … de @… », « Spotter ce moment », « Trouver la pièce
+// automatiquement ») : les deux actions sont visibles sans défiler, grand
+// texte compris. Les commandes de TikTok étant cachées, son ancien minimum
+// (325 × 578, sans lequel il ne les dessinait pas) n'a plus lieu d'être.
 
-/** En dessous, le lecteur TikTok ne dessine pas ses commandes. */
-export const TIKTOK_MIN_SIZE = { width: 325, height: 578 } as const;
+/** Plancher de lisibilité : en dessous seulement, l'écran défile. */
+export const PLAYER_MIN_HEIGHT = 240;
 const SIDE_GUTTER = 16;
-/** Barre « ‹ / Fermer » (47) + ligne « Vidéo … de @pseudo » (44) + « Spotter ce moment » (52) + 3 espaces de 8 + marge (8). */
-const CHROME = 183;
+/** Barre « ‹ Retour / Fermer ». */
+const NAV_HEIGHT = 47;
+const GAP = 8;
 
-/** Lecteur 9:16 le plus grand possible, « Spotter ce moment » visible sous
- * lui ; jamais sous 325 × 578 quand la largeur le permet (l'écran défile). */
-export function playerLayout(safeWidth: number, safeHeight: number): { width: number; height: number } {
-  const maxByWidth = ((safeWidth - 2 * SIDE_GUTTER) * 16) / 9;
-  const wanted = Math.min(Math.max(0, safeHeight - CHROME), maxByWidth);
-  const height = Math.floor(Math.max(Math.min(TIKTOK_MIN_SIZE.height, maxByWidth), wanted, 0));
+/** Avant la première mesure de la zone d'actions : barre 44 + ligne @pseudo 44 + Spotter 52 + 3 × 8 (+ Trouver 48 + 8 si l'analyse est allumée ; + phrase d'accord 44 + 8 la première fois). */
+export function estimatedActionsHeight(input: { analysis: boolean; firstPlay: boolean; controls: boolean }): number {
+  let height = 44 + 52 + 2 * GAP;
+  if (input.controls) height += 44 + GAP;
+  if (input.analysis) height += 48 + GAP;
+  if (input.firstPlay) height += 44 + GAP;
+  return height;
+}
+
+/** Lecteur 9:16 le plus grand possible au-dessus de la zone d'actions
+ * (`actionsHeight`, mesurée) ; jamais sous 240 de haut quand la largeur le
+ * permet (l'écran défile alors). Arrondis vers le bas. */
+export function playerLayout(safeWidth: number, safeHeight: number, actionsHeight: number): { width: number; height: number } {
+  const maxByWidth = Math.max(0, ((safeWidth - 2 * SIDE_GUTTER) * 16) / 9);
+  const wanted = Math.min(Math.max(0, safeHeight - NAV_HEIGHT - Math.max(0, actionsHeight) - 2 * GAP), maxByWidth);
+  const height = Math.floor(Math.max(Math.min(PLAYER_MIN_HEIGHT, maxByWidth), wanted, 0));
   return { width: Math.floor((height * 9) / 16), height };
+}
+
+// ---- Barre de lecture (retours du build 3, TikTok seulement) ----
+
+/** Part lue, de 0 à 1 ; null tant que la durée est inconnue ou nulle (la barre reste éteinte). */
+export function progressFraction(currentTime: number | null, duration: number | null): number | null {
+  if (duration === null || !Number.isFinite(duration) || duration <= 0) return null;
+  if (currentTime === null || !Number.isFinite(currentTime)) return 0;
+  return Math.min(1, Math.max(0, currentTime / duration));
+}
+
+/** Position demandée (fraction de la barre) → secondes, bornées à [0, durée − 0,1]. */
+export function seekSeconds(fraction: number, duration: number): number {
+  if (!Number.isFinite(duration) || duration <= 0) return 0;
+  const safe = Number.isFinite(fraction) ? Math.min(1, Math.max(0, fraction)) : 0;
+  return Math.min(Math.max(0, duration - 0.1), Math.max(0, safe * duration));
+}
+
+/** Largeur minimale de notre barre : lecture 44 + son 44 + le temps (≈ 80) + 3 écarts de 4 ≈ 180 pt
+ * fixes, et au moins ≈ 120 pt de trait pour le prendre au doigt. */
+export const CONTROLS_MIN_WIDTH = 300;
+
+/** Largeur de notre barre : celle de la vidéo, jamais moins de CONTROLS_MIN_WIDTH (la rangée est en
+ * plus bornée à la largeur de la colonne : maxWidth 100 %). Petit iPhone ou grand texte : la vidéo
+ * rétrécit, pas le trait. */
+export function controlsRowWidth(videoWidth: number): number {
+  return Math.max(Number.isFinite(videoWidth) ? Math.floor(videoWidth) : 0, CONTROLS_MIN_WIDTH);
+}
+
+/** « 0:05 », « 1:02 » : minutes et secondes entières, jamais négatif. */
+export function formatPlayerTime(seconds: number): string {
+  const whole = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
+  const minutes = Math.floor(whole / 60);
+  return `${minutes}:${String(whole % 60).padStart(2, "0")}`;
 }
 
 /** Hauteur d'un code d'intégration : celle qu'il annonce, dans la place disponible. */
