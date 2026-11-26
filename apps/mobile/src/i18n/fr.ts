@@ -366,6 +366,8 @@ export const fr = {
       withdrawn: "Accord retiré : la question vous sera reposée à la prochaine vidéo.",
       // Retours du build 3 : le bouton Lecture vaut accord (spot-flags.ts PLAYER_CONSENT_BY_PLAY_BUTTON).
       withdrawnPlay: "Accord retiré : la prochaine vidéo ne sera chargée que si vous touchez Lecture.",
+      // Aucun accord encore (première vidéo, ou après un retrait) : rien à retirer, la règle seulement.
+      none: "Aucune vidéo n'est chargée chez TikTok ou Instagram tant que vous n'avez pas touché Lecture.",
     },
     // Retours du build 3 : notre barre de lecture sous la vidéo (TikTok), le bouton Lecture qui vaut accord,
     // et la phrase affichée quand l'image du moment vient de notre serveur.
@@ -386,7 +388,7 @@ export const fr = {
       lineLink: "Réglages",
       lineEnd: ".",
     },
-    privacyFrame: (platform: string) => `Vidéo lue par ${platform}. Pour l'image de ce moment, notre serveur demande la vidéo publique à ${platform}, sans votre identité, et ne la garde pas.`,
+    privacyFrame: (platform: string) => `Vidéo lue par ${platform}. Pour l'image de ce moment, notre serveur demande la vidéo publique à ${platform}, sans votre identité, et ne la garde pas. À défaut, seule l'image prise sur votre téléphone est envoyée, puis effacée.`,
   },
   // Mission « liens vidéo » : écran de secours, pièces déjà repérées par
   // d'autres membres (jamais qui), lien en attente. TEXTES À VALIDER.

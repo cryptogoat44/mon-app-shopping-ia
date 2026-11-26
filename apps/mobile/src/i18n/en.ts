@@ -347,6 +347,8 @@ export const en: Catalog = {
       withdrawn: "Consent withdrawn: you'll be asked again with the next video.",
       // Build 3 feedback: the Play button is the consent (spot-flags.ts PLAYER_CONSENT_BY_PLAY_BUTTON).
       withdrawnPlay: "Consent withdrawn: the next video will only load if you press Play.",
+      // No consent yet (first video, or after withdrawing): nothing to withdraw, just the rule.
+      none: "No video is loaded from TikTok or Instagram until you press Play.",
     },
     // Build 3 feedback: our playback bar under the video (TikTok), the Play button as consent,
     // and the line shown when the image of the moment comes from our server.
@@ -367,7 +369,7 @@ export const en: Catalog = {
       lineLink: "Settings",
       lineEnd: ".",
     },
-    privacyFrame: (platform: string) => `Video played by ${platform}. For the image of this moment, our server requests the public video from ${platform}, without your identity, and does not keep it.`,
+    privacyFrame: (platform: string) => `Video played by ${platform}. For the image of this moment, our server requests the public video from ${platform}, without your identity, and does not keep it. Failing that, only the frame taken on your phone is sent, then deleted.`,
   },
   videoLink: {
     fallbackTitle: "Spot this video",
