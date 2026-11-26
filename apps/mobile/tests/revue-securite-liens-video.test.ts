@@ -127,8 +127,9 @@ describe("lecteur-01 / reception-03 : instantanés du lecteur", () => {
     const snapshot = `${disk.CACHE}lecteur-instantane/lecteur-instantane-1.jpg`;
     const real = smallCopy.base64;
     try {
-      // Un dégradé lisse, ni noir ni blanc : flou.
-      smallCopy.base64 = grayPngBase64(96, 171, (x, y) => 60 + x + Math.floor(y / 2));
+      // Des bords étalés partout (larges ondulations), ni noir ni blanc : flou.
+      // (Un dégradé sans aucun vrai bord n'a rien à juger : il passe.)
+      smallCopy.base64 = grayPngBase64(96, 171, (x, y) => Math.round(120 + 70 * Math.sin(x / 8) * Math.cos(y / 11)));
       await expect(snapshotPlayer(7)).rejects.toThrow("blurry_frame");
       expect(discardLocalFile).toHaveBeenCalledWith(snapshot);
     } finally {

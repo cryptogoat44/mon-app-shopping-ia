@@ -74,7 +74,7 @@ async function looksUnusable(uri: string): Promise<"blank_frame" | "blurry_frame
     const sample = decodePngSample(base64ToBytes(saved.base64));
     if (isBlankFrame(sample)) return "blank_frame";
     // Calibrage du seuil sur l'iPhone (BLUR_LIMITS) : la valeur seule, jamais l'image.
-    if (typeof __DEV__ !== "undefined" && __DEV__) console.info("[player] netteté", frameSharpness(sample).toFixed(3));
+    if (typeof __DEV__ !== "undefined" && __DEV__) console.info("[player] netteté", frameSharpness(sample)?.toFixed(3) ?? "rien à juger");
     return isBlurryFrame(sample) ? "blurry_frame" : null;
   } catch {
     return "blank_frame";
