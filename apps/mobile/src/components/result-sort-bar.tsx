@@ -55,7 +55,7 @@ export function ResultSortBar({
           testID="with-price-only"
         >
           <View style={[styles.chip, view.withPriceOnly ? styles.chipActive : null]}>
-            <Text style={[styles.chipLabel, view.withPriceOnly ? styles.chipLabelActive : null]} numberOfLines={1}>
+            <Text style={[styles.chipLabel, view.withPriceOnly ? styles.chipLabelActive : null]}>
               {view.withPriceOnly ? "✓ " : ""}
               {t.result.withPriceShort}
             </Text>
@@ -93,7 +93,7 @@ function SortMenuButton({ view, onChange }: { view: ResultView; onChange: (view:
         testID="sort-menu"
       >
         <View style={[styles.chip, styles.chipActive]}>
-          <Text style={[styles.chipLabel, styles.chipLabelActive]} numberOfLines={1}>
+          <Text style={[styles.chipLabel, styles.chipLabelActive]}>
             {current.label}
           </Text>
           <View accessible={false}>
@@ -159,7 +159,7 @@ export function InStockOnlyToggle({ view, onChange }: { view: ResultView; onChan
       testID="in-stock-only"
     >
       <View style={[styles.chip, checked ? styles.chipActive : null]}>
-        <Text style={[styles.chipLabel, checked ? styles.chipLabelActive : null]} numberOfLines={1}>
+        <Text style={[styles.chipLabel, checked ? styles.chipLabelActive : null]}>
           {checked ? "✓ " : ""}
           {t.result.inStockShort}
         </Text>
@@ -199,10 +199,12 @@ export function WithPriceOnlyEmpty({ onShowAll }: { onShowAll: () => void }) {
 const styles = themedStyles(() => ({
   bar: { marginBottom: 12 },
   filters: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginTop: space.xs },
-  // Zone tactile de 44 points autour d'une pastille de 32 (maquette « Écrin » 4).
-  chipZone: { minHeight: size.touchTarget, justifyContent: "center", flexShrink: 0 },
+  // Zone tactile de 44 points autour d'une pastille de 32 (maquette « Écrin » 4). Grand texte : la pastille
+  // grandit (minHeight, jamais height), ne dépasse jamais la ligne et son libellé passe à la ligne (aucun numberOfLines).
+  chipZone: { minHeight: size.touchTarget, justifyContent: "center", flexShrink: 1, maxWidth: "100%" },
   chip: {
-    height: 32,
+    minHeight: 32,
+    paddingVertical: 4,
     paddingHorizontal: 12,
     borderRadius: radius.full,
     borderWidth: 1,
@@ -212,7 +214,7 @@ const styles = themedStyles(() => ({
     gap: 4,
   },
   chipActive: { backgroundColor: color.vert, borderColor: color.vert },
-  chipLabel: { fontSize: font.caption, fontWeight: "500", color: color.encre },
+  chipLabel: { fontSize: font.caption, fontWeight: "500", color: color.encre, flexShrink: 1 },
   chipLabelActive: { color: color.blanc },
   summary: { fontSize: font.caption, lineHeight: 18, color: color.acier, fontWeight: "400", marginTop: space.xs },
   backdrop: { flex: 1, backgroundColor: color.voile },

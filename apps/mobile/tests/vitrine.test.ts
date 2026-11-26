@@ -286,7 +286,12 @@ describe("zones tactiles intactes", () => {
     // Lot « fidélité aux maquettes » : la pastille du tri et les filtres, des pastilles de 32 dans une zone de 44.
     expect(styleOf(bar, "chipZone")).toContain("minHeight: size.touchTarget");
     expect(bar.match(/style=\{styles\.chipZone\}/g)).toHaveLength(3);
-    expect(styleOf(bar, "chip")).toContain("height: 32");
+    // Relecture du lot : grand texte, la pastille grandit et passe à la ligne ; refusé : une hauteur fixe, un libellé coupé.
+    expect(styleOf(bar, "chip")).toContain("minHeight: 32,");
+    expect(styleOf(bar, "chip")).not.toMatch(/\bheight: 32/);
+    expect(styleOf(bar, "chipZone")).toContain("flexShrink: 1, maxWidth: \"100%\"");
+    expect(styleOf(bar, "chipLabel")).toContain("flexShrink: 1");
+    expect(bar).not.toMatch(/styles\.chipLabel[^>]*numberOfLines/);
     expect(read("src/components/proposal-card.tsx")).toMatch(/shopLink: \{ minHeight: size\.touchTarget/);
     for (const path of ["src/components/send-to-friend-link.tsx", "src/components/stock-report-sheet.tsx", "src/components/spot-corrections.tsx"]) {
       expect(read(path), path).toMatch(/minHeight: (44|size\.touchTarget)/);
