@@ -69,8 +69,12 @@ describe("écran « vidéo partagée » : la vidéo d'abord sur iPhone", () => {
   it("l'écran de l'analyse dit pourquoi il prend le relais, et ne repropose pas le lecteur qui vient d'échouer", () => {
     // Retours du build 3 : l'instantané flou (snapshot_blurry) dit la même phrase que l'instantané en échec.
     expect(screen).toContain('playerBroken === "snapshot_failed" || playerBroken === "snapshot_blurry" ? t.videoLinkAuto.playerLead.snapshot : t.videoLinkAuto.playerLead.notHere');
-    expect(screen).toContain("const playerButton = withPlayer && playerBroken === null ? (");
+    expect(screen).toContain("const playerButton = withPlayer && playerStaysOffered(playerBroken) ? (");
     expect(screen).toContain("AccessibilityInfo.announceForAccessibility(playerBroken === \"snapshot_failed\" || playerBroken === \"snapshot_blurry\"");
+    // Instantané flou sans l'analyse : l'écran de secours propose aussi de revenir au lecteur (un autre moment).
+    const fallbackStage = screen.slice(screen.indexOf('} else if (stage.kind === "fallback") {'), screen.indexOf('} else if (stage.kind === "web") {'));
+    expect(fallbackStage).toContain('{stage.reason === "snapshot_blurry" ? playerButton : null}');
+    expect(fallbackStage).not.toContain("        {playerButton}");
   });
 
   it("refusé : lecteur en échec après un échec de l'analyse, ni l'ancien échec réaffiché ni « l'IA peut chercher » dit par VoiceOver ; permis : la phrase dite quand la question s'affiche", () => {

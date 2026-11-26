@@ -101,7 +101,8 @@ describe("module natif de l'instantané : takeSnapshot, et rien d'autre", () => 
   it("retours du build 2 : l'image noire est refusée par un CONTRÔLE en JS (pont), le module natif reste l'instantané seul", () => {
     const bridge = read(join(MOBILE, "src", "lib", "player-snapshot.ts"));
     // Retours du build 3 : le même contrôle, étendu à l'image floue (« blurry_frame »), sur la même petite copie.
-    expect(bridge).toContain("const unusable = await looksUnusable(uri);");
+    expect(bridge).toContain("const unusable = await looksUnusable(uri, blurCheckApplies(platform));");
+    expect(bridge).toContain("if (!checkBlur) return null;");
     expect(bridge).toContain("if (unusable) throw new Error(unusable);");
     expect(bridge).toContain("const sample = decodePngSample(base64ToBytes(saved.base64));");
     expect(bridge).toContain('if (isBlankFrame(sample)) return "blank_frame";');

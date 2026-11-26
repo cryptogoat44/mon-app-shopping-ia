@@ -22,6 +22,9 @@
 // contrôlé : noir ou blanc (« blank_frame »), et désormais flou
 // (« blurry_frame », player-state.ts isBlurryFrame), sur la même petite copie
 // de 96 px, sans coût de plus. Refusé, il est effacé avant l'erreur.
+// Le refus pour flou ne vaut que pour TikTok (blurCheckApplies) : la mesure
+// ne distingue pas un tissu uni à plis doux, net, d'une image floue, et pour
+// Instagram l'instantané est la seule voie (le doute profite au membre).
 //
 // Module absent de l'app installée (les deux lecteurs coupés au build, ou
 // Expo Go) : `snapshotAvailable` vaut false, et l'écran montre le secours.
@@ -29,7 +32,8 @@
 import { requireOptionalNativeModule } from "expo";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { Image } from "react-native";
-import { frameSharpness, isBlankFrame, isBlurryFrame } from "./player-state";
+import type { PlayerPlatform } from "./player-link";
+import { blurCheckApplies, frameSharpness, isBlankFrame, isBlurryFrame } from "./player-state";
 import { base64ToBytes, decodePngSample } from "./png-pixels";
 import { discardLocalFile } from "./video-frames";
 
@@ -63,7 +67,7 @@ const BLANK_CHECK_EDGE = 96;
 /** Petite copie PNG (96 px), décodée dans l'app comme video-frames.ts :
  * noire ou blanche (« blank_frame »), floue (« blurry_frame »), ou bonne
  * (null) ? Sa copie est effacée aussitôt. Illisible : traitée comme vide. */
-async function looksUnusable(uri: string): Promise<"blank_frame" | "blurry_frame" | null> {
+async function looksUnusable(uri: string, checkBlur: boolean): Promise<"blank_frame" | "blurry_frame" | null> {
   try {
     const context = ImageManipulator.manipulate(uri);
     context.resize({ width: BLANK_CHECK_EDGE });
@@ -73,8 +77,9 @@ async function looksUnusable(uri: string): Promise<"blank_frame" | "blurry_frame
     if (!saved.base64) return "blank_frame";
     const sample = decodePngSample(base64ToBytes(saved.base64));
     if (isBlankFrame(sample)) return "blank_frame";
+    if (!checkBlur) return null;
     // Calibrage du seuil sur l'iPhone (BLUR_LIMITS) : la valeur seule, jamais l'image.
-    if (typeof __DEV__ !== "undefined" && __DEV__) console.info("[player] netteté", frameSharpness(sample).toFixed(3));
+    if (typeof __DEV__ !== "undefined" && __DEV__) console.info("[player] netteté", frameSharpness(sample)?.toFixed(3) ?? "rien à juger");
     return isBlurryFrame(sample) ? "blurry_frame" : null;
   } catch {
     return "blank_frame";
@@ -86,14 +91,15 @@ async function looksUnusable(uri: string): Promise<"blank_frame" | "blurry_frame
  * que la recherche est partie, ou si elle est abandonnée. Taille illisible :
  * le fichier est effacé ici, avant l'erreur (son adresse serait perdue).
  * Image noire, blanche ou illisible : effacée ici, puis « blank_frame » ;
- * floue : effacée ici, puis « blurry_frame » (lib/spot-moment.ts). */
-export async function snapshotPlayer(viewTag: number): Promise<PlayerSnapshot> {
+ * floue (TikTok seulement) : effacée ici, puis « blurry_frame »
+ * (lib/spot-moment.ts). */
+export async function snapshotPlayer(viewTag: number, platform: PlayerPlatform): Promise<PlayerSnapshot> {
   if (!native) throw new Error("player snapshot module missing");
   const uri = await native.snapshot(viewTag);
   if (typeof uri !== "string" || !uri.startsWith("file://")) throw new Error("player snapshot: unexpected answer");
   try {
     const { width, height } = await imageSize(uri);
-    const unusable = await looksUnusable(uri);
+    const unusable = await looksUnusable(uri, blurCheckApplies(platform));
     if (unusable) throw new Error(unusable);
     return { uri, width, height };
   } catch (error) {
