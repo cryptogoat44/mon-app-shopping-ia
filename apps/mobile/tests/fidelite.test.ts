@@ -272,7 +272,7 @@ describe("Résultat, la grande carte (maquettes 4-resultat-grande-carte)", () =>
   });
 
   it("« Ce n'est pas la bonne pièce ? » sur la ligne du prix ; toutes les mentions gardées", () => {
-    const row = screen.slice(screen.indexOf("<View style={styles.metaRow}>"), screen.indexOf("<ForeignShopNote piece={piece} />"));
+    const row = screen.slice(screen.indexOf("<View style={styles.metaRow}"), screen.indexOf("<ForeignShopNote piece={piece} />"));
     expect(row).toContain("<CorrectionsLink");
     expect(styleOf(screen, "metaRow")).toContain('flexWrap: "wrap", justifyContent: "space-between"');
     for (const mention of ["<CheapestBadge inline />", "<ForeignShopNote piece={piece} />", "<OfferMarkNote piece={piece} />", "<StockNote piece={piece} />", "<AffiliateMention"]) {

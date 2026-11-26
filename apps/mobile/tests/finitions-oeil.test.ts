@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { setActiveLocale } from "../src/i18n";
 import { EDGE_INSET_NATIVE, EDGE_INSET_PER_BLUR, EDGE_STRIP, edgeBands, fillsTile } from "../src/lib/piece-image";
-import { actionsInTwoRows, estimatedTextWidth, marksUnderLink, pairStacked, placeholderFor } from "../src/lib/text-fit";
+import { actionsInTwoRows, estimatedTextWidth, pairStacked, placeholderFor } from "../src/lib/text-fit";
 import { rowHasMarksAt } from "../src/lib/result-sections";
 import { recentDayLabel, recentDayShort } from "../src/lib/recent-searches";
 import { fr } from "../src/i18n/fr";
@@ -198,7 +198,7 @@ describe("3 · correctif : « Ce n'est pas la bonne pièce ? » ne grandit plus 
   const style = (source: string, name: string) => source.match(new RegExp(`\\n  ${name}: \\{([^}]*)\\}`))?.[1] ?? "";
 
   it("refusé : le lien de 44 points posé tel quel sur la ligne du prix (elle passait de 18 à 44 points) ; permis : 18 points dans la ligne, 44 de zone vers le haut", () => {
-    const row = screen.slice(screen.indexOf("<View style={styles.metaRow}>"), screen.indexOf("<ForeignShopNote piece={piece} />"));
+    const row = screen.slice(screen.indexOf("<View style={styles.metaRow}"), screen.indexOf("<ForeignShopNote piece={piece} />"));
     expect(row).toContain("<CorrectionsLink inline ");
     expect(row).not.toContain("styles.notRight");
     // La boîte garde 44 points (le site ignore les zones élargies), dont 26 au-dessus de la ligne : la ligne ne compte que 18.
@@ -213,24 +213,26 @@ describe("3 · correctif : « Ce n'est pas la bonne pièce ? » ne grandit plus 
   });
 
   it("« Le moins cher » sur la rangée des mentions : pas de ligne de plus sous le prix", () => {
-    const card = screen.slice(screen.indexOf("<View style={styles.metaRow}>"), screen.indexOf("{piece.merchantUrl ? (\n              <Pressable style={styles.primary}"));
-    expect(card.indexOf("<CheapestBadge inline />")).toBeGreaterThan(card.indexOf("<View\n                style={[styles.marks"));
+    const card = screen.slice(screen.indexOf("<View style={styles.metaRow}"), screen.indexOf("{piece.merchantUrl ? (\n              <Pressable style={styles.primary}"));
+    expect(card.indexOf("<CheapestBadge inline />")).toBeGreaterThan(card.indexOf("<View style={[styles.marks"));
     expect(card.match(/<CheapestBadge/g)).toHaveLength(1);
   });
 
-  it("mentions sous le lien (lien passé à la ligne, ou rangée qui va jusque sous lui) : elles ne remontent plus ; sinon elles remontent (8 points)", () => {
-    // Refusé : sous le lien.
-    expect(marksUnderLink(0, 70)).toBe(true);
-    expect(marksUnderLink(180, 175)).toBe(true);
-    // Permis : lien à droite, « En stock » à gauche, loin de lui ; mesures inconnues.
-    expect(marksUnderLink(183, 70)).toBe(false);
-    expect(marksUnderLink(null, 70)).toBe(false);
-    expect(marksUnderLink(183, null)).toBe(false);
-    expect(screen).toContain("sheetActions.length > 0 && marksUnderLink(correctionsLinkLeft, marksRight) ? styles.marksUnderLink : null,");
-    // Sous le lien, la règle l'emporte sur celle de la pastille (dernière du tableau de styles).
-    expect(screen.indexOf("styles.marksUnderLink : null,")).toBeGreaterThan(screen.indexOf("selectedIndex === cheapest ? styles.marksWithBadge : null,"));
-    // Zone des mentions sur l'iPhone : 6 points au-dessus ; le lien s'arrête au bas de la ligne : 6 points d'écart suffisent.
-    expect(style(screen, "marksUnderLink")).toBe(" marginTop: 6 ");
+  it("refusé (correctif) : sous le lien, les mentions descendues de 14 points (la rangée d'actions passait sous le bas de l'écran) ; permis : même hauteur, la ligne du prix au-dessus pour le toucher", () => {
+    // Refusé : une marge de plus, mesurée après coup (l'écran sautait de 14 points au premier dessin).
+    expect(screen).not.toContain("marksUnderLink");
+    expect(screen).not.toContain("setMarksRight");
+    expect(read("src/lib/text-fit.ts")).not.toContain("marksUnderLink");
+    expect(link).not.toContain("onLayout");
+    // Permis : les mentions remontent toujours de 8 points (6 avec « Le moins cher »), dans tous les cas.
+    expect(screen).toContain("<View style={[styles.marks, selectedIndex === cheapest ? styles.marksWithBadge : null]}>");
+    expect(style(screen, "marks")).toContain("marginVertical: -8");
+    expect(style(screen, "marksWithBadge")).toBe(" marginTop: -6 ");
+    // La ligne du prix passe au-dessus (zIndex) : le lien gagne les 8 points de recouvrement et la zone élargie des mentions ;
+    // son vide laisse passer le toucher vers les mentions (box-none).
+    expect(style(screen, "metaRow")).toContain("zIndex: 1");
+    expect(screen).toContain('<View style={styles.metaRow} pointerEvents="box-none">');
+    expect(screen.indexOf('<View style={styles.metaRow} pointerEvents="box-none">')).toBeLessThan(screen.indexOf("<View style={[styles.marks"));
     expect(read("src/components/stock-note.tsx")).toContain("hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}");
     expect(read("src/components/offer-mark.tsx")).toContain("hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}");
   });

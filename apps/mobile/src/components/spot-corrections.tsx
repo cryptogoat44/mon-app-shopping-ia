@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Modal, Pressable, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from "react-native";
+import { Modal, Pressable, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
@@ -75,9 +75,9 @@ export function CorrectionButtons({ list, actions, onAddVideo, importing }: { li
  * du prix de la grande carte, il ne prend que la hauteur de cette ligne (18 points) ; sa zone de 44 points
  * déborde vers le HAUT, sur le nom de la pièce (rien de touchable), jamais vers le bas, où sont les
  * mentions (une vraie boîte, pas une zone élargie : le site l'ignore). Correctif du lot « finitions de l'œil ». */
-export function CorrectionsLink({ onPress, style, inline = false, onLayout }: { onPress: () => void; style?: StyleProp<ViewStyle>; inline?: boolean; onLayout?: (event: LayoutChangeEvent) => void }) {
+export function CorrectionsLink({ onPress, style, inline = false }: { onPress: () => void; style?: StyleProp<ViewStyle>; inline?: boolean }) {
   return (
-    <Pressable onPress={onPress} onLayout={onLayout} style={[styles.link, inline ? styles.linkInline : null, style]} accessibilityRole="button" testID="corrections-link">
+    <Pressable onPress={onPress} style={[styles.link, inline ? styles.linkInline : null, style]} accessibilityRole="button" testID="corrections-link">
       <Text style={inline ? [styles.linkLabel, styles.linkLabelInline] : styles.linkLabel}>{t.result.notRight}</Text>
     </Pressable>
   );

@@ -76,7 +76,7 @@ import { ForeignShopNote } from "@/components/foreign-shop-note";
 import { OfferMarkNote } from "@/components/offer-mark";
 import { StockNote } from "@/components/stock-note";
 import { VerdictLine, verdictLineShown } from "@/components/verdict-line";
-import { actionsInTwoRows, marksUnderLink } from "@/lib/text-fit";
+import { actionsInTwoRows } from "@/lib/text-fit";
 import { verdictToTrack } from "@/lib/verdict";
 import { LuxuryResaleEntry } from "@/components/luxury-resale";
 import { luxuryResaleToTrack } from "@/lib/luxury-resale";
@@ -148,8 +148,6 @@ export default function ResultScreen() {
   const [actionError, setActionError] = useState<string | null>(null);
   // Grande carte : où sont « Ce n'est pas la bonne pièce ? » (bord gauche) et la fin de la rangée des mentions
   // (bord droit), mesurés ; les mentions ne remontent sur la ligne du prix que si elles ne sont pas sous le lien.
-  const [correctionsLinkLeft, setCorrectionsLinkLeft] = useState<number | null>(null);
-  const [marksRight, setMarksRight] = useState<number | null>(null);
   // La page look (lot « page look ») : « Partager le look » quand le serveur
   // le permet, une feuille de confirmation, puis la feuille de partage.
   const lookStatus = useLookPagesStatus();
@@ -974,28 +972,23 @@ export default function ResultScreen() {
               {piece.name}
             </Text>
             {/* Juste sous la proposition, visible sans défilement (décision du fondateur, lot 4 ter) : sur la ligne du prix (maquette « Écrin » 4). */}
-            <View style={styles.metaRow}>
+            {/* Au-dessus des mentions (zIndex) : leur zone touchable remonte de 8 points sur cette ligne, le lien y gagne ;
+                box-none : le vide de la ligne laisse passer le toucher vers les mentions (correctif, aucune hauteur de plus). */}
+            <View style={styles.metaRow} pointerEvents="box-none">
               <Text style={styles.meta}>
                 {[piece.merchantName, displayPrice(piece)].filter(Boolean).join(" · ")}
               </Text>
               {/* Correctif du lot « finitions de l'œil » : le lien ne compte que pour la hauteur du texte (18 points) ;
                   sa zone de 44 points déborde vers le haut, sur le nom (components/spot-corrections.tsx). */}
               {sheetActions.length > 0 ? (
-                <CorrectionsLink inline onLayout={(event) => setCorrectionsLinkLeft(event.nativeEvent.layout.x)} onPress={() => setCorrectionsOpen(true)} />
+                <CorrectionsLink inline onPress={() => setCorrectionsOpen(true)} />
               ) : null}
             </View>
             <ForeignShopNote piece={piece} />
             {/* Rien à dire (ni pastille, ni mention, ni stock) : pas de rangée, sa marge négative ne tire pas le bouton sur le prix.
                 « Le moins cher » est sur la rangée des mentions (correctif du lot « finitions de l'œil » : pas de ligne de plus). */}
             {selectedIndex === cheapest || piece.offerMark || typeof piece.inStock === "boolean" ? (
-              <View
-                style={[
-                  styles.marks,
-                  selectedIndex === cheapest ? styles.marksWithBadge : null,
-                  sheetActions.length > 0 && marksUnderLink(correctionsLinkLeft, marksRight) ? styles.marksUnderLink : null,
-                ]}
-                onLayout={(event) => setMarksRight(event.nativeEvent.layout.width)}
-              >
+              <View style={[styles.marks, selectedIndex === cheapest ? styles.marksWithBadge : null]}>
                 {selectedIndex === cheapest ? <CheapestBadge inline /> : null}
                 {/* Boutiques douteuses : « Boutique connue » ou « Prix inhabituellement bas » (components/offer-mark.tsx). */}
                 <OfferMarkNote piece={piece} />
@@ -1314,16 +1307,16 @@ const styles = themedStyles(() => ({
   // Lot « finitions de l'œil » : marges resserrées pour que la rangée d'actions tienne sans défiler (390 × 844, titre de deux lignes).
   rankLabel: { ...surtitre, color: color.acier, marginTop: space.sm },
   name: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: serifLineHeight.title, marginTop: 4 },
-  metaRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", columnGap: space.md, marginTop: space.xs },
+  // zIndex : la ligne du prix passe au-dessus des mentions (ordre du toucher sur l'iPhone et le site), sans changer de hauteur.
+  metaRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", columnGap: space.md, marginTop: space.xs, zIndex: 1 },
   meta: { fontSize: font.caption, lineHeight: 18, color: color.acier },
   // Sans grande carte, le lien garde sa place (à gauche, en haut de la liste).
   notRight: { alignItems: "flex-start", marginTop: 0 },
   // Les mentions (zones touchables de 32 points pour un texte de 16) ne réservent plus leur marge vide à l'œil :
-  // leur zone déborde sur l'espace de la ligne du prix et du bouton, sans les recouvrir. alignSelf : la rangée a la
-  // largeur de son contenu (mesurée : est-elle sous le lien ?) ; minHeight : « Le moins cher » seul y reste centré.
+  // leur zone déborde sur l'espace de la ligne du prix et du bouton, sans les recouvrir (la ligne du prix est au-dessus :
+  // sous le lien, c'est lui qui reçoit le toucher). alignSelf : la rangée a la largeur de son contenu ; minHeight :
+  // « Le moins cher » seul y reste centré.
   marks: { flexDirection: "row", flexWrap: "wrap", columnGap: space.sm, alignItems: "center", alignSelf: "flex-start", minHeight: 32, marginVertical: -8 },
-  // Sous « Ce n'est pas la bonne pièce ? » : elles ne remontent plus (leur zone de l'iPhone dépasse de 6 points vers le haut).
-  marksUnderLink: { marginTop: 6 },
   // Avec « Le moins cher » (une pastille pleine de 19 points, centrée) : 2 points de moins vers le prix, pour qu'elle ne le touche pas.
   marksWithBadge: { marginTop: -6 },
   primary: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: 12 },
