@@ -268,6 +268,11 @@ describe("POST /api/video-links/frame : cas permis", () => {
   });
 
   it("bornes : 0 et 90 sont permis", async () => {
+    // Le service vidéo rend l'image de l'instant demandé (vidéo de 90 s).
+    workerReply = () => {
+      const asked = Number(workerCalls.at(-1)!.body.atSeconds);
+      return jsonResponse(200, { durationSeconds: 90, frames: [{ timeSeconds: asked, width: 720, height: 1280, jpegBase64: frame.toString("base64") }] });
+    };
     const target = await buildApp();
     for (const atSeconds of [0, 90]) expect((await frameOf(target, { url: SHARED_TEXT, atSeconds })).statusCode, String(atSeconds)).toBe(200);
     expect(workerCalls.map((call) => call.body.atSeconds)).toEqual([0, 90]);
@@ -380,6 +385,28 @@ describe("POST /api/video-links/frame : cas refusés", () => {
     workerReply = () => jsonResponse(401, { error: "unauthorized" });
     expect((await frameOf(empty, { url: SHARED_TEXT, atSeconds: AT })).statusCode).toBe(502);
     expect(logs.some((line) => line.includes("Image du moment d'une vidéo : service vidéo mal réglé"))).toBe(true);
+  });
+
+  it("service vidéo ancien (ignore atSeconds) : plusieurs images, ou une image loin de l'instant demandé, donnent 502 « video_unavailable », jamais une mauvaise image", async () => {
+    const one = (timeSeconds: number) => ({ timeSeconds, width: 720, height: 1280, jpegBase64: frame.toString("base64") });
+    // Refusé : six images de toute la vidéo, dans l'ordre (réponse d'un service vidéo d'avant ce lot).
+    workerReply = () => jsonResponse(200, { durationSeconds: 7, frames: [0.4, 1.6, 2.8, 4, 5.2, 6.4].map(one) });
+    const target = await buildApp();
+    const many = await frameOf(target, { url: SHARED_TEXT, atSeconds: AT });
+    expect(many.statusCode).toBe(502);
+    expect(many.json().error).toBe("video_unavailable");
+    // Refusé : une seule image, mais du début de la vidéo, pour un instant demandé à 3,2 s.
+    workerReply = () => jsonResponse(200, { durationSeconds: 7, frames: [one(0.4)] });
+    expect((await frameOf(target, { url: SHARED_TEXT, atSeconds: AT })).statusCode).toBe(502);
+    // Permis : instant au-delà de la fin, l'image rendue est la dernière (bornée à la durée).
+    workerReply = () => jsonResponse(200, { durationSeconds: 7, frames: [one(6.95)] });
+    const end = await frameOf(target, { url: SHARED_TEXT, atSeconds: 60 });
+    expect(end.statusCode).toBe(200);
+    expect(end.json<VideoLinkFrameResponse>().timeSeconds).toBe(6.95);
+    // Permis : une image à moins de 1,5 s de l'instant demandé.
+    workerReply = () => jsonResponse(200, { durationSeconds: 7, frames: [one(4.5)] });
+    expect((await frameOf(target, { url: SHARED_TEXT, atSeconds: AT })).statusCode).toBe(200);
+    expectNoAiNorQuota();
   });
 
   it(`${MAX_PARALLEL_ANALYSES} demandes en cours (partagées avec l'analyse) : la suivante reçoit aussitôt 503 « video_busy »`, async () => {

@@ -110,6 +110,11 @@ export const MAX_PARALLEL_ANALYSES = 3;
 const BODY_LIMIT = 16 * 1024;
 /** Image du moment : instant de 0 à 90 s (la durée maximale du service vidéo). */
 const momentField = z.number().finite().min(0).max(90);
+/** Image du moment : écart permis entre l'instant demandé (borné à la durée)
+ * et celui de l'image rendue. Au-delà, ou avec plus d'une image, la réponse
+ * vient d'un service vidéo ancien (qui ignore atSeconds et rend des images
+ * de toute la vidéo) : refusée, l'app garde la photo de l'écran. */
+export const MOMENT_TIME_TOLERANCE_SECONDS = 1.5;
 
 const querySchema = z.string().trim().min(VIDEO_AI.queryMinLength).max(SEARCH_QUERY_MAX_LENGTH);
 const urlField = z.string().min(1).max(VIDEO_LINK_INPUT_MAX_LENGTH);
@@ -595,7 +600,8 @@ export default async function videoLinkAnalysisRoutes(fastify: FastifyInstance, 
         workerFrames = fetched.frames;
         const workerMs = Date.now() - startedAt;
         const frame = workerFrames[0];
-        if (!frame) throw new VideoWorkerError("invalid_response");
+        if (!frame || workerFrames.length !== 1) throw new VideoWorkerError("invalid_response");
+        if (Math.abs(frame.timeSeconds - Math.min(atSeconds, fetched.durationSeconds)) > MOMENT_TIME_TOLERANCE_SECONDS) throw new VideoWorkerError("invalid_response");
         const { image, width, height } = await momentImageWithSize(frame);
         // Des durées seulement : jamais l'adresse, l'instant ni l'image.
         log.info({ platform: "tiktok", workerMs, totalMs: Date.now() - startedAt }, "Image du moment d'une vidéo");
