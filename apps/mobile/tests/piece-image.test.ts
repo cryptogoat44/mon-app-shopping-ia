@@ -12,6 +12,7 @@ import {
   keepHdImage,
   TILE_RATIO,
   twoStepLayers,
+  HD_FADE_MS,
   twoStepSources,
   type TwoStepState,
 } from "../src/lib/piece-image";
@@ -129,6 +130,31 @@ describe("la plus nette des deux images, jamais la plus petite", () => {
 
   it("originale bloquée par le marchand : la vignette reste", () => {
     expect(twoStepLayers(state({ hd: "failed", thumbLoaded: true, thumbWidth: 280 }))).toEqual({ showThumb: true, showHd: false });
+  });
+});
+
+// Lot « vitrine » : la tuile a un fond opaque (plinthe) ; la vignette reste
+// sous l'originale pendant son fondu, pour que ce fond ne clignote jamais.
+describe("pas de flash quand l'originale remplace la vignette", () => {
+  it("refusé : la vignette n'est pas retirée pendant le fondu de l'originale", () => {
+    expect(twoStepLayers(state({ hd: "loaded", hdWidth: 1200, thumbLoaded: true, thumbWidth: 280, hdFaded: false }))).toEqual({ showThumb: true, showHd: true });
+  });
+
+  it("permis : le fondu fini, la vignette est retirée", () => {
+    expect(twoStepLayers(state({ hd: "loaded", hdWidth: 1200, thumbLoaded: true, thumbWidth: 280, hdFaded: true }))).toEqual({ showThumb: false, showHd: true });
+    // Vignette en échec : rien à garder dessous, même pendant le fondu.
+    expect(twoStepLayers(state({ hd: "loaded", hdWidth: 1200, thumbFailed: true, hdFaded: false }))).toEqual({ showThumb: false, showHd: true });
+  });
+
+  it("le fondu et le minuteur ont la même durée ; minuteur arrêté si la carte change ou disparaît", () => {
+    expect(HD_FADE_MS).toBe(180);
+    const image = readFileSync(join(__dirname, "../src/components/spot-image.tsx"), "utf8");
+    expect(image).toContain("transition={HD_FADE_MS}");
+    expect(image).not.toMatch(/transition=\{\d+\}/);
+    expect(image).toContain("hdFaded: false, hdSize: null");
+    expect(image).toContain("const timer = setTimeout(() => update({ hdFaded: true }), HD_FADE_MS);");
+    expect(image).toContain("return () => clearTimeout(timer);");
+    expect(image).toContain("}, [key, fading]);");
   });
 });
 

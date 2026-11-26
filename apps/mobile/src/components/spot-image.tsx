@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { StyleSheet, View, type ImageStyle, type StyleProp, type ViewStyle } from "react-native";
 import { Image } from "expo-image";
-import { imageAfterErrors, imageSources, twoStepLayers, twoStepSources, type PieceImageSize, type TwoStepState } from "@/lib/piece-image";
+import { HD_FADE_MS, imageAfterErrors, imageSources, twoStepLayers, twoStepSources, type PieceImageSize, type TwoStepState } from "@/lib/piece-image";
 
 // Image d'une proposition. Grande carte et fiches (« large », par défaut) :
 // l'originale du marchand (haute définition) en priorité, et la petite
@@ -72,7 +72,7 @@ function useReportSize(displayed: ImageNaturalSize | null, onImageSize: ((size: 
 }
 
 /** Deux temps : la vignette tout de suite, l'originale par-dessus, en fondu,
- * dès qu'elle est arrivée (la vignette est alors retirée) ; originale bloquée
+ * dès qu'elle est arrivée (la vignette est retirée à la fin du fondu) ; originale bloquée
  * par le marchand, ou plus étroite que la vignette (retours du build 2) : la
  * vignette reste (lib/piece-image.ts, twoStepLayers). Deux images empilées
  * plutôt que la « placeholder » d'expo-image, restée superposée à l'image
@@ -99,12 +99,21 @@ function TwoStepImage({
 }) {
   const key = `${thumb}\n${hd}`;
   type Local = TwoStepState & { key: string; hdSize: ImageNaturalSize | null; thumbSize: ImageNaturalSize | null };
-  const fresh: Local = { key, hd: "loading", hdWidth: null, thumbLoaded: false, thumbWidth: null, thumbFailed: false, hdSize: null, thumbSize: null };
+  const fresh: Local = { key, hd: "loading", hdWidth: null, thumbLoaded: false, thumbWidth: null, thumbFailed: false, hdFaded: false, hdSize: null, thumbSize: null };
   const [state, setState] = useState(fresh);
   // Une autre carte (liste qui réutilise ses éléments) repart de zéro.
   const current = state.key === key ? state : fresh;
   const update = (patch: Partial<Local>) => setState((previous) => ({ ...(previous.key === key ? previous : fresh), ...patch }));
   const { showThumb, showHd } = twoStepLayers(current);
+  // La vignette reste sous l'originale le temps de son fondu : le fond opaque
+  // de la tuile (plinthe) ne se voit jamais seul au changement d'image.
+  const fading = current.hd === "loaded" && !current.hdFaded;
+  useEffect(() => {
+    if (!fading) return;
+    const timer = setTimeout(() => update({ hdFaded: true }), HD_FADE_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, fading]);
   // L'image du dessus : l'originale arrivée et gardée, sinon la vignette.
   useReportSize(showHd && current.hd === "loaded" ? current.hdSize : showThumb ? current.thumbSize : null, onImageSize);
   return (
@@ -128,7 +137,7 @@ function TwoStepImage({
           contentFit={fit}
           cachePolicy="memory-disk"
           recyclingKey={recyclingKey}
-          transition={180}
+          transition={HD_FADE_MS}
           allowDownscaling={!fullResolution}
           onLoad={(event) => update({ hd: "loaded", hdWidth: event.source?.width ?? null, hdSize: naturalSize(event.source) })}
           onError={() => update({ hd: "failed" })}

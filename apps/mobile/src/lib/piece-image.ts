@@ -63,16 +63,24 @@ export interface TwoStepState {
   thumbLoaded: boolean;
   thumbWidth: number | null;
   thumbFailed: boolean;
+  /** false tant que l'originale arrivée apparaît en fondu (HD_FADE_MS) :
+   * la vignette reste dessous, sinon le fond opaque de la tuile se verrait
+   * un instant (lot « vitrine »). Absent : fondu terminé. */
+  hdFaded?: boolean;
 }
+
+/** Durée du fondu de l'originale par-dessus la vignette (millisecondes). */
+export const HD_FADE_MS = 180;
 
 /** Ce qui est affiché. L'originale reste par-dessus sauf en échec ou plus
  * étroite que la vignette. La vignette est retirée seulement quand
  * l'originale arrivée est gardée ET que la vignette est réglée (arrivée ou en
- * échec) : avant, on ne pourrait plus comparer les deux largeurs. */
+ * échec) : avant, on ne pourrait plus comparer les deux largeurs. Et
+ * seulement une fois le fondu de l'originale fini (hdFaded). */
 export function twoStepLayers(state: TwoStepState): { showThumb: boolean; showHd: boolean } {
   const showHd = state.hd !== "failed" && !(state.hd === "loaded" && !keepHdImage(state.hdWidth, state.thumbWidth));
   const thumbSettled = state.thumbLoaded || state.thumbFailed;
-  const showThumb = !state.thumbFailed && !(showHd && state.hd === "loaded" && thumbSettled);
+  const showThumb = !state.thumbFailed && !(showHd && state.hd === "loaded" && thumbSettled && state.hdFaded !== false);
   return { showThumb, showHd };
 }
 
