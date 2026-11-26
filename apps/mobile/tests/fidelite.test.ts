@@ -388,7 +388,8 @@ describe("Résultat, « Autres propositions » (maquette 5)", () => {
   it("carte : nom 15/20 sur deux lignes réservées (minHeight, jamais height) ; « › » hors du soulignement", () => {
     expect(styleOf(card, "cardName")).toContain("minHeight: 40");
     expect(styleOf(card, "cardName")).not.toMatch(/[^n]height: 40/);
-    expect(card).toContain("<Text style={styles.shopLinkLabel}>{label}</Text>");
+    // Lot « finitions de l'œil » : le libellé souligné sur une ligne (raccourci), le « › » dans son propre texte.
+    expect(card).toContain("<Text style={styles.shopLinkLabel} numberOfLines={1}>\n            {label}\n          </Text>");
     expect(card).toContain("<Text style={styles.shopLinkChevron}>");
     expect(styleOf(card, "shopLinkChevron")).not.toContain("lienSouligne");
   });

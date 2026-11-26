@@ -150,3 +150,43 @@ describe("3 · le haut du Résultat : une seule ligne grise sous les pastilles",
     expect(screen).toContain('{piece.offerMark || typeof piece.inStock === "boolean" ? (\n              <View style={styles.marks}>');
   });
 });
+
+describe("5 · le prix n'est jamais coupé ; 4 · le rythme d'« Autres propositions »", () => {
+  const card = read("src/components/proposal-card.tsx");
+  const style = (name: string) => card.match(new RegExp(`\\n  ${name}: \\{([^}]*)\\}`))?.[1] ?? "";
+
+  it("refusé : un seul texte « boutique · prix » tronqué ; permis : la boutique rétrécit (une ligne), le prix ne rétrécit pas", () => {
+    expect(card).not.toContain('{[piece.merchantName, price].filter(Boolean).join(" · ")}');
+    expect(card).toContain("<ShopAndPrice shop={piece.merchantName} price={price} />");
+    expect(card).toMatch(/<Text style=\{\[styles\.cardMeta, styles\.cardShop\]\} numberOfLines=\{1\}>/);
+    expect(style("cardShop")).toContain("flexShrink: 1");
+    expect(style("cardPrice")).toContain("flexShrink: 0");
+    expect(style("cardMetaRow")).toContain('flexDirection: "row"');
+  });
+
+  it("« Voir chez … › » sur une ligne : le libellé souligné raccourci, le chevron hors du texte raccourci et du soulignement", () => {
+    const link = card.slice(card.indexOf("<View style={styles.shopLinkLine}>"), card.indexOf("</Pressable>", card.indexOf("<View style={styles.shopLinkLine}>")));
+    expect(link).toContain("<Text style={styles.shopLinkLabel} numberOfLines={1}>");
+    expect(link).toMatch(/<\/Text>\s*<Text style=\{styles\.shopLinkChevron\}>\{"\\u00a0›"\}<\/Text>/);
+    expect(card).not.toContain("<Text numberOfLines={2}>");
+    expect(style("shopLinkLabel")).toContain("flexShrink: 1");
+    expect(style("shopLinkChevron")).toContain("flexShrink: 0");
+    expect(style("shopLinkChevron")).not.toContain("lienSouligne");
+  });
+
+  it("« Le moins cher » posé sur la photo (les lignes de la carte ne bougent plus) ; ailleurs, la pastille d'avant", () => {
+    expect(card).toContain("{cheapest ? <CheapestBadge onTile /> : null}");
+    expect(style("badgeOnTile")).toContain('position: "absolute"');
+    // La ligne triée par prix garde sa pastille sous le prix.
+    expect(card).toContain("{cheapest ? <CheapestBadge /> : null}");
+  });
+
+  it("rythme : mention remontée vers le prix, lien vers la mention ; rangée des mentions absente quand il n'y a rien à dire", () => {
+    expect(style("marks")).toContain("marginTop: -5, marginBottom: -8");
+    expect(style("shopLinkTight")).toContain("marginTop: -6");
+    expect(card).toContain('{piece.offerMark || typeof piece.inStock === "boolean" ? (\n        <View style={styles.marks}>');
+    expect(card).toContain("<ShopLink piece={piece} placement={placement} tight />");
+    // Zones touchables gardées.
+    expect(style("shopLink")).toContain("minHeight: size.touchTarget");
+  });
+});

@@ -95,40 +95,68 @@ export function ProposalCard({
     <View style={column === undefined ? styles.card : [styles.cardColumn, column === "left" ? styles.cardLeft : styles.cardRight]}>
       <Pressable onPress={onSelect} accessibilityRole="button" accessibilityLabel={label} accessibilityHint={t.result.showLargeHint}>
         {/* La tuile « Écrin » des grilles (components/piece-tile.tsx) ; le libellé est celui du bouton. */}
-        <PieceTile variant="grid" size="card" hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} edgeColor={piece.edgeColor} />
+        <View>
+          <PieceTile variant="grid" size="card" hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} edgeColor={piece.edgeColor} />
+          {/* Lot « finitions de l'œil » : « Le moins cher » posé sur le coin de la photo, pour que les lignes de la
+              carte restent alignées sur celles de sa voisine (lu avec la carte : son libellé le contient). */}
+          {cheapest ? <CheapestBadge onTile /> : null}
+        </View>
         <Text style={styles.cardName} numberOfLines={2}>
           {piece.name}
         </Text>
-        <Text style={styles.cardMeta} numberOfLines={1}>
-          {[piece.merchantName, price].filter(Boolean).join(" · ")}
-        </Text>
-        {cheapest ? <CheapestBadge /> : null}
+        {/* Le prix n'est jamais coupé : c'est le nom de la boutique qui se raccourcit (lot « finitions de l'œil »). */}
+        <ShopAndPrice shop={piece.merchantName} price={price} />
         {/* Lot premier essai : prix dans la devise d'un autre pays que celui de la recherche. */}
         <ForeignShopNote piece={piece} compact />
       </Pressable>
-      {/* Côte à côte quand elles tiennent (« Boutique connue · En stock »), sinon l'une sous l'autre (retours du build 3). */}
-      <View style={styles.marks}>
-        {/* Boutiques douteuses : « Boutique connue » ou « Prix inhabituellement bas », touchable à part. */}
-        <OfferMarkNote piece={piece} />
-        {piece.offerMark && typeof piece.inStock === "boolean" ? (
-          <Text style={styles.markDot} accessible={false}>
-            ·
-          </Text>
-        ) : null}
-        {/* Stock affiché : « En stock » ou « Épuisée » d'après Google, touchable à part (components/stock-note.tsx). */}
-        <StockNote piece={piece} />
-      </View>
-      {piece.merchantUrl ? <ShopLink piece={piece} placement={placement} /> : null}
+      {/* Côte à côte quand elles tiennent (« Boutique connue · En stock »), sinon l'une sous l'autre (retours du build 3).
+          Rien à dire : pas de rangée (ses marges négatives, rythme de la maquette 5, ne tirent rien sur le prix). */}
+      {piece.offerMark || typeof piece.inStock === "boolean" ? (
+        <View style={styles.marks}>
+          {/* Boutiques douteuses : « Boutique connue » ou « Prix inhabituellement bas », touchable à part. */}
+          <OfferMarkNote piece={piece} />
+          {piece.offerMark && typeof piece.inStock === "boolean" ? (
+            <Text style={styles.markDot} accessible={false}>
+              ·
+            </Text>
+          ) : null}
+          {/* Stock affiché : « En stock » ou « Épuisée » d'après Google, touchable à part (components/stock-note.tsx). */}
+          <StockNote piece={piece} />
+        </View>
+      ) : null}
+      {piece.merchantUrl ? <ShopLink piece={piece} placement={placement} tight /> : null}
+    </View>
+  );
+}
+
+/** « <boutique> · <prix> » sur une ligne : le nom de la boutique se raccourcit
+ * (points de suspension), le prix reste entier, à toutes les largeurs et en
+ * grand texte (lot « finitions de l'œil »). Lu avec la carte (son libellé). */
+export function ShopAndPrice({ shop, price }: { shop: string | null | undefined; price: string | null }) {
+  if (!shop && !price) return null;
+  return (
+    <View style={styles.cardMetaRow}>
+      {shop ? (
+        <Text style={[styles.cardMeta, styles.cardShop]} numberOfLines={1}>
+          {shop}
+        </Text>
+      ) : null}
+      {price ? (
+        <Text style={[styles.cardMeta, styles.cardPrice]} numberOfLines={1}>
+          {shop ? `\u00a0· ${price}` : price}
+        </Text>
+      ) : null}
     </View>
   );
 }
 
 /** Pastille « Le moins cher » (lib/result-sort.ts, cheapestIndex) : sur une
  * carte, une ligne de la liste triée ou la grande carte. Lue avec la carte
- * par VoiceOver (son libellé la contient). */
-export function CheapestBadge() {
+ * par VoiceOver (son libellé la contient). `onTile` : posée sur le coin de la
+ * photo d'une carte de grille (elle ne décale plus les lignes de la carte). */
+export function CheapestBadge({ onTile = false }: { onTile?: boolean } = {}) {
   return (
-    <View style={styles.badge} testID="cheapest-badge">
+    <View style={onTile ? [styles.badge, styles.badgeOnTile] : styles.badge} testID="cheapest-badge">
       <Text style={styles.badgeLabel} numberOfLines={1}>
         {t.result.cheapestBadge}
       </Text>
@@ -146,7 +174,7 @@ export function CheapestBadge() {
  * pièce (« Vous l'avez achetée ? », lib/use-purchase-question.ts) ; l'appel
  * openMerchantLink lui est confié tel quel. Sans écran qui guette, rien ne
  * change. */
-function ShopLink({ piece, placement }: { piece: Piece; placement?: ClickPlacement }) {
+function ShopLink({ piece, placement, tight = false }: { piece: Piece; placement?: ClickPlacement; tight?: boolean }) {
   const [blockedUrl, setBlockedUrl] = useState<string | null>(null);
   const shop = useShopWatch();
   const label = opensOfferPage(piece) ? t.result.viewOffer : t.result.viewAt(piece.merchantName ?? "");
@@ -168,16 +196,19 @@ function ShopLink({ piece, placement }: { piece: Piece; placement?: ClickPlaceme
     <>
       <Pressable
         onPress={handlePress}
-        style={styles.shopLink}
+        style={tight ? [styles.shopLink, styles.shopLinkTight] : styles.shopLink}
         accessibilityRole="link"
         // Le nom de la pièce : parmi les liens de la page (rotor de VoiceOver), « Voir chez … » seul serait ambigu.
         accessibilityLabel={[label, piece.name, isAffiliate ? t.result.affiliateDisclosure : null].filter(Boolean).join(", ")}
       >
-        {/* Le « › » hors du soulignement, collé au libellé par une espace insécable. */}
-        <Text numberOfLines={2}>
-          <Text style={styles.shopLinkLabel}>{label}</Text>
+        {/* Une seule ligne (lot « finitions de l'œil ») : le libellé souligné se raccourcit (points de suspension),
+            le « › », hors du soulignement et du texte raccourci, reste toujours visible. */}
+        <View style={styles.shopLinkLine}>
+          <Text style={styles.shopLinkLabel} numberOfLines={1}>
+            {label}
+          </Text>
           <Text style={styles.shopLinkChevron}>{"\u00a0›"}</Text>
-        </Text>
+        </View>
       </Pressable>
       <AffiliateMention isAffiliate={isAffiliate} />
       {blockedUrl ? (
@@ -204,18 +235,27 @@ const styles = themedStyles(() => ({
   cardColumn: { width: "50%" },
   cardLeft: { paddingRight: 4 },
   cardRight: { paddingLeft: 4 },
-  marks: { flexDirection: "row", flexWrap: "wrap", columnGap: space.sm, marginTop: 4, alignItems: "center" },
+  // Rythme de la maquette 5 (lot « finitions de l'œil ») : environ 21 points d'axe à axe entre le prix et la
+  // mention, 24 entre la mention et « Voir chez … » ; les zones touchables (32 et 44 points) débordent sur
+  // l'espace vide de leurs voisines, sans les recouvrir.
+  marks: { flexDirection: "row", flexWrap: "wrap", columnGap: space.sm, marginTop: -5, marginBottom: -8, alignItems: "center" },
   markDot: { fontSize: 12, color: color.acier },
   fill: { width: "100%", height: "100%" },
   // Deux lignes réservées : les rangées restent alignées (minHeight, jamais height).
   cardName: { fontSize: font.secondary, lineHeight: 20, fontWeight: "500", color: color.encre, marginTop: 8, minHeight: 40 },
-  cardMeta: { fontSize: font.caption, lineHeight: 18, color: color.acier, marginTop: 2 },
+  cardMetaRow: { flexDirection: "row", marginTop: 2 },
+  cardMeta: { fontSize: font.caption, lineHeight: 18, color: color.acier },
+  cardShop: { flexShrink: 1 },
+  cardPrice: { flexShrink: 0 },
   // Ligne de la liste triée par prix : inchangée (aucune maquette).
   rowName: { fontSize: font.caption, color: color.encre, marginTop: 8, lineHeight: 17 },
   rowMeta: { fontSize: 12, color: color.acier, marginTop: 2 },
   shopLink: { minHeight: size.touchTarget, justifyContent: "center" },
-  shopLinkLabel: { ...lienSouligne, fontSize: font.caption, lineHeight: 17, color: color.vert, fontWeight: "400" },
-  shopLinkChevron: { fontSize: font.caption, lineHeight: 17, color: color.encre },
+  // Carte de grille : la zone de 44 points remonte sur l'espace vide de la ligne d'au-dessus.
+  shopLinkTight: { marginTop: -6 },
+  shopLinkLine: { flexDirection: "row", alignItems: "center" },
+  shopLinkLabel: { ...lienSouligne, fontSize: font.caption, lineHeight: 17, color: color.vert, fontWeight: "400", flexShrink: 1 },
+  shopLinkChevron: { fontSize: font.caption, lineHeight: 17, color: color.encre, flexShrink: 0 },
   blockedLink: { ...lienSouligne, fontSize: font.caption, color: color.vert, fontWeight: "600", marginBottom: space.xs },
   // Ligne de la liste triée par prix : vignette à gauche, texte et prix à droite, le lien sous le texte.
   row: { width: "100%", paddingVertical: space.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.filet },
@@ -229,4 +269,5 @@ const styles = themedStyles(() => ({
   // Pastille pleine : blanc sur vert (contraste AA vérifié, tests/contrast.test.ts).
   badge: { alignSelf: "flex-start", backgroundColor: color.vert, borderRadius: radius.full, paddingHorizontal: space.sm, paddingVertical: 2, marginTop: 4 },
   badgeLabel: { fontSize: 12, color: color.blanc, fontWeight: "600" },
+  badgeOnTile: { position: "absolute", top: space.sm, left: space.sm, marginTop: 0 },
 }));
