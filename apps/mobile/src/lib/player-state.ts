@@ -160,6 +160,10 @@ export function isBlankFrame(sample: FrameSample): boolean {
 // bords : un gros plan net d'un manteau uni, qui n'a que quelques bords,
 // mesure autant qu'une rue chargée. (L'ancienne mesure, variance du laplacien
 // sur variance des gris, refusait ces gros plans nets : ≈ 0,07.)
+// Mesure faite par tuile (3 × 3, tuile médiane) et sans les bandes noires du
+// haut et du bas : une ligne de sous-titre nette ou le bord d'une bande noire
+// ne font plus passer une vidéo floue (avant : capture 06 + sous-titre ≈ 14,
+// 06 entre bandes noires ≈ 3,7 ; maintenant ≈ 0,1).
 
 /** Seuil de départ, À CALIBRER sur l'iPhone (journal « [player] netteté » en
  * développement) ; repères mesurés sur des copies de 96 px : capture 06 floue
