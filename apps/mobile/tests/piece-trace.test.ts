@@ -622,6 +622,25 @@ describe("le dessin du tracé : poudre de lumière, la lumière suit la forme", 
     expect(code).toContain("left: imageBox.left, top: imageBox.top, width: imageBox.width, height: imageBox.height");
   });
 
+  it("un simple toucher éteint la lueur d'un coup ; un tracé refusé la laisse s'effacer en fondu", () => {
+    expect(code).toContain("if (!current || current.trace.length <= 1) glow.setValue(0);\n      else fade(glow, 0);");
+    // Refusé : le fondu sans condition, qui ferait luire le bout de l'ancien tracé.
+    expect(code).not.toMatch(/\n\s*fade\(glow, 0\);/);
+  });
+
+  it("la pastille ne grossit pas au-delà de 1,6 fois (grand texte, photo en largeur)", () => {
+    expect(code).toContain("const MESSAGE_MAX_FONT_SIZE_MULTIPLIER = 1.6;");
+    expect(code).toContain("<Text style={styles.messageLabel} maxFontSizeMultiplier={MESSAGE_MAX_FONT_SIZE_MULTIPLIER}");
+    // Refusé : la pastille sans plafond, dans le cadre qui la coupe.
+    expect(code).not.toMatch(/<Text style=\{styles\.messageLabel\}(?! maxFontSizeMultiplier)/);
+  });
+
+  it("« Utiliser toute l'image » est centré sous l'image, plus aligné à droite de toute la largeur", () => {
+    const views = readFileSync(join(__dirname, "../src/components/spot-launch-views.tsx"), "utf8");
+    expect(views).toMatch(/wholeImage: \{ alignSelf: "center"/);
+    expect(views).not.toMatch(/wholeImage: \{ alignSelf: "flex-end"/);
+  });
+
   it("ce que le composant remonte ne change pas : la zone de zoneFromTrace et le tracé", () => {
     expect(code).toContain("zoneFromTrace(current.trace, box)");
     expect(code).toContain("latest.current.onChange({ crop, trace: current.trace })");

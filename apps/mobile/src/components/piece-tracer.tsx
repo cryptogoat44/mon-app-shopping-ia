@@ -40,6 +40,11 @@ import { themedStyles } from "@/theme/themed-styles";
 const IMAGE_RADIUS = 14; // = radius.piece du lot « Vitrine » : jeton à l'assemblage
 /** Fondu du voile au lâcher, de la lueur, d'un tracé refusé. */
 const FADE_MS = 240;
+/** La pastille est dans le cadre, aussi bas que l'image : avec les grandes
+ * tailles de texte de l'iPhone, au-delà de 1,6 fois, elle dépasserait le
+ * cadre d'une photo en largeur (288 × 162 pt sur 320 pt) et cacherait
+ * l'image à entourer. */
+const MESSAGE_MAX_FONT_SIZE_MULTIPLIER = 1.6;
 const useNativeDriver = Platform.OS !== "web";
 
 // Site : ni défilement ni zoom du navigateur sous le doigt, aucun texte
@@ -182,7 +187,10 @@ export function PieceTracer({ uri, zone, onChange, onImageSize, onDragChange, he
         return;
       }
       // Refusé ou interrompu : la traînée s'efface en fondu, la zone d'avant reste.
-      fade(glow, 0);
+      // Un simple toucher (un point) ne laisse aucune traînée : la lueur
+      // s'éteint d'un coup, sinon elle s'effacerait au bout de l'ancien tracé.
+      if (!current || current.trace.length <= 1) glow.setValue(0);
+      else fade(glow, 0);
       if (current && current.trace.length > 1) {
         setFading(current.trace);
         trailFade.setValue(1);
@@ -272,7 +280,7 @@ export function PieceTracer({ uri, zone, onChange, onImageSize, onDragChange, he
   const messageView = message ? (
     <View pointerEvents="none" style={styles.messageRow}>
       <View style={styles.message}>
-        <Text style={styles.messageLabel} accessibilityLiveRegion="polite">
+        <Text style={styles.messageLabel} maxFontSizeMultiplier={MESSAGE_MAX_FONT_SIZE_MULTIPLIER} accessibilityLiveRegion="polite">
           {message}
         </Text>
       </View>

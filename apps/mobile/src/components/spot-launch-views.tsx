@@ -319,7 +319,8 @@ const styles = themedStyles(() => ({
   frameTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: serifLineHeight.title },
   caption: { fontSize: font.caption, color: color.acier, marginTop: 6, lineHeight: 18 },
   cropArea: { marginTop: space.md },
-  wholeImage: { alignSelf: "flex-end", minHeight: size.touchTarget, justifyContent: "center" },
+  // Centré sous l'image, elle-même centrée (le cadre a la forme de l'image).
+  wholeImage: { alignSelf: "center", minHeight: size.touchTarget, justifyContent: "center" },
   wholeImageLabel: { fontSize: font.secondary, color: color.acier, textDecorationLine: "underline" },
   body: { fontSize: font.secondary, color: color.encre, marginTop: space.md, lineHeight: 21 },
   // Contour « plein » de largeur nulle : remplace le cadre du navigateur (« auto », qui ignore la largeur).
