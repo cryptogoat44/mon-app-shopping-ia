@@ -31,6 +31,8 @@ export const fr = {
       zoomIn: "Zoomer",
       zoomOut: "Dézoomer",
     },
+    // Zoom à deux doigts sur place (retours du build 3) : pastille montrée la toute première fois seulement, sur iPhone.
+    zoomHint: "Pincez pour zoomer",
   },
   tabs: {
     feed: "Fil",

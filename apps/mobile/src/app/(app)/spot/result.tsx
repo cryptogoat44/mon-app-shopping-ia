@@ -55,6 +55,7 @@ import { useWishAlertsStatus } from "@/lib/use-wish-alerts-status";
 import { canReportResult, wishAlertsStatus, type StockReportTarget } from "@/lib/wish-alerts";
 import { Skeleton } from "@/components/skeleton";
 import { PieceTile } from "@/components/piece-tile";
+import type { ZoomState } from "@/components/image-viewer";
 import { ErrorMessage } from "@/components/error-message";
 import { NoPriceNotice } from "@/components/no-price-notice";
 import { CorrectionButtons, CorrectionsLink, CorrectionsSheet, useCorrections } from "@/components/spot-corrections";
@@ -192,6 +193,8 @@ export default function ResultScreen() {
   // Lot 2 : « Plus disponible ? » (lib/wish-alerts.ts), seulement avec les alertes du serveur.
   const alerts = useWishAlertsStatus();
   const [stockReport, setStockReport] = useState<StockReportTarget | null>(null);
+  // Zoom à deux doigts sur place de la grande carte (retours du build 3) : la page ne défile pas pendant le pincement.
+  const [zoomState, setZoomState] = useState<ZoomState>("idle");
   const { session } = useAuth();
   // Parcours 3 : « Vous l'avez achetée ? » au retour de la boutique, pour la
   // grande carte et tous les « Voir chez … » des cartes (lib/use-purchase-question.ts) ;
@@ -873,6 +876,7 @@ export default function ResultScreen() {
         // Trié par prix : la ligne regardée reste à sa place quand une boutique arrive au-dessus
         // (iPhone ; le navigateur le fait de lui-même). « Pertinence » : inchangé.
         maintainVisibleContentPosition={priceSort && Platform.OS !== "web" ? { minIndexForVisible: 0 } : undefined}
+        scrollEnabled={zoomState !== "zooming"}
       >
         {/* Le verdict : la phrase de tête, d'après les titres des boutiques ; rien quand le serveur ne sait pas (components/verdict-line.tsx).
             Sa boîte est toujours là, même vide (collapsable={false} : jamais aplatie), en premier : trié par prix sur
@@ -904,7 +908,16 @@ export default function ResultScreen() {
         {showBigCard ? (
           <>
             {/* La grande tuile « Écrin » (components/piece-tile.tsx) : coins doux, la photo entière sur une copie floue d'elle-même. */}
-            <PieceTile variant="hero" enlargeable hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} accessibilityLabel={piece.name} onLayout={heroReveal.onHeroLayout} />
+            <PieceTile
+              variant="hero"
+              enlargeable
+              hdUri={piece.imageHdUrl}
+              fallbackUri={piece.imageUrl}
+              accessibilityLabel={piece.name}
+              onLayout={heroReveal.onHeroLayout}
+              fullResolution
+              onZoomStateChange={setZoomState}
+            />
 
             <Text style={styles.rankLabel}>{bigCardLabelText(bigCardLabel(selectedIndex, bestIndex, firstAvailableIndex(result), allPieces(result)[selectedIndex]))}</Text>
             <Text style={styles.name} accessibilityRole="header">

@@ -70,3 +70,52 @@ export function pinchViewerZoom(startZoom: number, startDistance: number, distan
 export function isTap(dx: number, dy: number): boolean {
   return Math.hypot(dx, dy) < 8;
 }
+
+// Zoom à deux doigts SUR PLACE (retours du build 3, 25 novembre 2026 :
+// « qu'avec deux doigts seulement on puisse zoomer dessus sans cliquer » ;
+// « en relâchant simplement les deux doigts […] revenir au point de
+// départ »). iPhone seulement : la tuile de la fiche grandit sous les
+// doigts, autour du point entre eux, et revient à sa place au dernier doigt
+// levé (components/image-viewer.tsx, EnlargeableImage). Les fonctions
+// ci-dessus restent celles du plein écran (site et VoiceOver).
+
+/** Zoom sur place (iPhone) : bornes du pincement. */
+export const INPLACE_MIN_ZOOM = 1;
+export const INPLACE_MAX_ZOOM = 4; // = VIEWER_MAX_ZOOM
+
+/** Un point p de la tuile (mesuré depuis son centre) est affiché en scale·p + (x, y). */
+export interface InPlaceView {
+  scale: number;
+  x: number;
+  y: number;
+}
+
+export const INPLACE_START: InPlaceView = { scale: INPLACE_MIN_ZOOM, x: 0, y: 0 };
+
+/**
+ * Pincement autour du point entre les deux doigts (pas autour du centre).
+ * focal = milieu des deux doigts au début du pincement, mesuré depuis le
+ * CENTRE de la tuile (pt) ; moved = déplacement de ce milieu depuis ce
+ * début (pt) ; ratio = écart actuel / écart du début. `from` : la vue au
+ * début du pincement (INPLACE_START la plupart du temps ; la vue en cours
+ * quand le deuxième doigt se repose). Le point de l'image qui était sous
+ * les doigts reste sous les doigts. Ratio illisible (NaN, Infinity) : 1.
+ */
+export function pinchInPlace(
+  focal: { x: number; y: number },
+  moved: { dx: number; dy: number },
+  ratio: number,
+  from: InPlaceView = INPLACE_START
+): InPlaceView {
+  const safeRatio = Number.isFinite(ratio) ? ratio : 1;
+  const scale = clamp(from.scale * safeRatio, INPLACE_MIN_ZOOM, INPLACE_MAX_ZOOM);
+  // Le point de la tuile sous les doigts au début (depuis son centre).
+  const pointX = (focal.x - from.x) / from.scale;
+  const pointY = (focal.y - from.y) / from.scale;
+  return { scale, x: focal.x + (moved.dx || 0) - scale * pointX + 0, y: focal.y + (moved.dy || 0) - scale * pointY + 0 };
+}
+
+/** Un doigt levé : le zoom reste, le doigt restant déplace l'image (sans borne : elle revient au relâché). */
+export function panInPlace(from: InPlaceView, dx: number, dy: number): InPlaceView {
+  return { scale: from.scale, x: from.x + (dx || 0), y: from.y + (dy || 0) };
+}

@@ -11,6 +11,7 @@ import { ApiError, changeVaultItemPhoto, deleteVaultItem, fetchVaultItem, shareP
 import { importPhotoForSpotter } from "@/lib/image-import";
 import { PrivateAccountNote } from "@/components/private-account-note";
 import { PieceTile } from "@/components/piece-tile";
+import type { ZoomState } from "@/components/image-viewer";
 import { PRIVACY_LEVELS } from "@/lib/vault-labels";
 import { VerifiedIcon } from "@/components/icons";
 import { useToast } from "@/lib/toast-context";
@@ -68,6 +69,8 @@ export default function VaultItemDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Zoom à deux doigts sur place (retours du build 3) : la page ne défile pas pendant le pincement.
+  const [zoomState, setZoomState] = useState<ZoomState>("idle");
   const [changingPhoto, setChangingPhoto] = useState(false);
   const { profile } = useAuth();
   const [sharePrivacy, setSharePrivacy] = useState<PrivacyLevel>(profile?.defaultPrivacy ?? "followers");
@@ -219,7 +222,12 @@ export default function VaultItemDetailScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        scrollEnabled={zoomState !== "zooming"}
+      >
         <Pressable
           onPress={safeBack}
           hitSlop={12}
@@ -233,7 +241,15 @@ export default function VaultItemDetailScreen() {
         {error ? <ErrorMessage style={styles.banner}>{error}</ErrorMessage> : null}
 
         {/* Image entière, en haute définition quand elle existe, dans la grande tuile « Écrin » (components/piece-tile.tsx). */}
-        <PieceTile variant="hero" enlargeable hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} accessibilityLabel={item.title} />
+        <PieceTile
+          variant="hero"
+          enlargeable
+          hdUri={item.imageHdUrl}
+          fallbackUri={item.imageUrl}
+          accessibilityLabel={item.title}
+          fullResolution
+          onZoomStateChange={setZoomState}
+        />
         <Pressable
           onPress={handleChangePhoto}
           disabled={changingPhoto || busy}

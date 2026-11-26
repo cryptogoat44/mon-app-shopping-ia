@@ -24,6 +24,7 @@ import { lienSouligne } from "@/theme/accent";
 import { acceptLanguage, getActiveLocale, t } from "@/i18n";
 import { PrivateAccountNote } from "@/components/private-account-note";
 import { ProductFrame } from "@/components/product-frame";
+import type { ZoomState } from "@/components/image-viewer";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
 import { ErrorMessage } from "@/components/error-message";
 import { WishBoughtButton } from "@/components/wish-bought-button";
@@ -79,6 +80,8 @@ export default function WishlistItemScreen() {
   const [alertState, setAlertState] = useState<WishAlertState | null>(null);
   const [alertSheet, setAlertSheet] = useState(false);
   const [stockReport, setStockReport] = useState<StockReportTarget | null>(null);
+  // Zoom à deux doigts sur place (retours du build 3) : la page ne défile pas pendant le pincement.
+  const [zoomState, setZoomState] = useState<ZoomState>("idle");
   // Parcours 3 : « Vous l'avez achetée ? » au retour de la boutique, depuis le
   // bouton principal d'une Envie qui a sa proposition d'origine
   // (lib/use-purchase-question.ts) ; jamais pour une pièce déjà au Vault
@@ -217,8 +220,8 @@ export default function WishlistItemScreen() {
           )}
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.content}>
-          <ProductFrame hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} accessibilityLabel={item.title} enlargeable />
+        <ScrollView contentContainerStyle={styles.content} scrollEnabled={zoomState !== "zooming"}>
+          <ProductFrame hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} accessibilityLabel={item.title} fullResolution onZoomStateChange={setZoomState} enlargeable />
           <Text style={styles.title} accessibilityRole="header">{item.title}</Text>
           <Text style={styles.meta}>{[item.merchantName, displayPrice(item)].filter(Boolean).join(" · ")}</Text>
           {(() => {
