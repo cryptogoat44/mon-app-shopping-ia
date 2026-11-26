@@ -472,6 +472,14 @@ describe("Réglages (maquette 7)", () => {
     }
   );
 
+  // Relecture du lot : la ligne de l'essayage garde son filet après « Retirer » (consentement retiré).
+  it("extra-data-settings.web.tsx : un filet en tête de chaque état affiché, retiré compris ; refusé : l'état retiré sans filet", () => {
+    const source = code("components/extra-data-settings.web.tsx");
+    const withdrawn = source.slice(source.indexOf('if (phase === "withdrawn") {'), source.indexOf("if (!canWithdrawConsent("));
+    expect(withdrawn).toMatch(/<>\s*<View style=\{settingsGroup\.divider\} \/>\s*<Text style=\{styles\.title\}>/);
+    expect(source.match(/<View style=\{settingsGroup\.divider\} \/>/g)).toHaveLength(2);
+  });
+
   it.each(["components/discoverable-setting.tsx", "components/read-receipts-setting.tsx", "components/message-push-setting.tsx", "components/wish-alerts-setting.tsx"])(
     "%s : la vue extérieure est la carte ; refusé : la marge du bas de 24 (40 pt entre deux cartes)",
     (path) => {
