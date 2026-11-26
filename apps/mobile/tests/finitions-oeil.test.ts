@@ -214,20 +214,57 @@ describe("5 · le prix n'est jamais coupé ; 4 · le rythme d'« Autres proposit
     expect(style("shopLinkChevron")).not.toContain("lienSouligne");
   });
 
-  it("« Le moins cher » posé sur la photo (les lignes de la carte ne bougent plus) ; ailleurs, la pastille d'avant", () => {
+  it("« Le moins cher » posé sur la photo (les lignes de la carte ne bougent plus), bornée à la tuile ; ailleurs, la pastille d'avant", () => {
     expect(card).toContain("{cheapest ? <CheapestBadge onTile /> : null}");
-    expect(style("badgeOnTile")).toContain('position: "absolute"');
+    // Refusé (correctif) : une pastille absolue sans bord droit, qui débordait de la tuile au grand texte.
+    expect(style("badgeOnTile")).not.toContain('position: "absolute"');
+    // Permis : une zone posée à 8 points des deux bords, la pastille à sa largeur de contenu dedans.
+    expect(style("badgeOnTileZone")).toContain('position: "absolute", top: space.sm, left: space.sm, right: space.sm, alignItems: "flex-start"');
+    expect(style("badgeOnTile")).toContain('maxWidth: "100%"');
+    expect(card).toContain('<View style={styles.badgeOnTileZone} pointerEvents="none">');
     // La ligne triée par prix garde sa pastille sous le prix.
     expect(card).toContain("{cheapest ? <CheapestBadge /> : null}");
   });
 
-  it("rythme : mention remontée vers le prix, lien vers la mention ; rangée des mentions absente quand il n'y a rien à dire", () => {
+  it("rythme : mention remontée vers le prix, lien vers la mention ; rangée des mentions absente quand il n'y a rien à dire (ni chez la voisine)", () => {
     expect(style("marks")).toContain("marginTop: -5, marginBottom: -8");
     expect(style("shopLinkTight")).toContain("marginTop: -6");
-    expect(card).toContain('{piece.offerMark || typeof piece.inStock === "boolean" ? (\n        <View style={styles.marks}>');
-    expect(card).toContain("<ShopLink piece={piece} placement={placement} tight />");
+    expect(card).toContain("{marksRow ? (\n        <View style={styles.marks}>");
+    expect(card).toContain("const marksRow = hasMarks(piece) || rowHasMarks === true;");
+    // Correctif : la marge négative du lien seulement sans rangée de mentions au-dessus.
+    expect(card).toContain("<ShopLink piece={piece} placement={placement} tight={!marksRow} />");
     // Zones touchables gardées.
     expect(style("shopLink")).toContain("minHeight: size.touchTarget");
+  });
+
+  it("refusé (correctif) : « Voir chez … » qui recouvre le texte de « En stock » ; permis : les marges négatives restent dans le vide sous ce texte", () => {
+    // Mentions de 32 points, texte de 12 centré : environ 8 points vides sous le texte.
+    const noteHeight = 32;
+    const labelLine = 12 * 1.25;
+    const emptyBelow = (noteHeight - labelLine) / 2;
+    const marksBottom = Number(style("marks").match(/marginBottom: (-?\d+)/)?.[1]);
+    const linkTop = card.includes("tight={!marksRow}") ? 0 : Number(style("shopLinkTight").match(/marginTop: (-?\d+)/)?.[1]);
+    expect(-(marksBottom + linkTop)).toBeLessThanOrEqual(emptyBelow);
+    expect(read("src/components/stock-note.tsx")).toContain('minHeight: 32 }');
+    // L'ancien cumul (-8 puis -6) aurait mordu sur le texte.
+    expect(8 + 6).toBeGreaterThan(emptyBelow);
+  });
+
+  it("deux cartes d'une rangée : la rangée des mentions réservée dans les deux dès que l'une en a (cartes alignées)", () => {
+    const none = {};
+    const stock = { inStock: true };
+    // Permis : la voisine en a une, la rangée est réservée chez les deux (0 et 1) ; refusé : une rangée sans aucune mention.
+    expect(rowHasMarksAt([stock, none, none, none], 1)).toBe(true);
+    expect(rowHasMarksAt([stock, none, none, none], 0)).toBe(true);
+    expect(rowHasMarksAt([stock, none, none, none], 2)).toBe(false);
+    expect(rowHasMarksAt([stock, none, none, none], 3)).toBe(false);
+    // Carte seule en fin de grille.
+    expect(rowHasMarksAt([none, none, none], 2)).toBe(false);
+    expect(rowHasMarksAt([none, none, { inStock: false }], 2)).toBe(true);
+    expect(style("marks")).toContain("minHeight: 32");
+    for (const path of ["src/app/(app)/spot/result.tsx", "src/components/result-complement.tsx", "src/components/no-price-section.tsx"]) {
+      expect(read(path), path).toContain("rowHasMarks={rowHasMarksAt(list.map((entry) => entry.piece), i)}");
+    }
   });
 });
 

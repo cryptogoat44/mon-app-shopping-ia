@@ -107,7 +107,8 @@ const styles = themedStyles(() => ({
   name: { fontSize: font.secondary, lineHeight: 20, fontWeight: "500", color: color.encre, marginTop: space.sm },
   metaRow: { flexDirection: "row", marginTop: 2 },
   meta: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
-  metaDay: { flexShrink: 0 },
+  // maxWidth : la boutique disparaît d'abord, puis la date se raccourcit DANS la case (grand texte, année affichée).
+  metaDay: { flexShrink: 0, maxWidth: "100%" },
   metaShop: { flexShrink: 1 },
   searchBar: {
     flexDirection: "row",
