@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Platform, View } from "react-native";
+import { View } from "react-native";
 import { Tabs, usePathname, useRouter } from "expo-router";
 import { color, radius } from "@/theme/tokens";
 import { t } from "@/i18n";
@@ -73,14 +73,9 @@ export default function TabsLayout() {
         animation: reduceMotion ? "none" : "shift",
         tabBarActiveTintColor: color.encre,
         tabBarInactiveTintColor: color.acier,
-        tabBarStyle: {
-          backgroundColor: color.porcelaine,
-          borderTopColor: color.filet,
-          // Sur le site, les libellés étaient légèrement coupés en bas
-          // (constaté sur les captures du Lot F).
-          ...(Platform.OS === "web" ? { height: 62, paddingBottom: 8 } : null),
-        },
-        tabBarLabelStyle: { fontSize: 10.5, fontWeight: "600" },
+        // Retours du build 3 (point 5) : la barre flottante gère elle-même sa forme,
+        // son fond et sa hauteur, site compris (components/tab-bar.tsx, lib/tab-bar-metrics.ts) ;
+        // icônes seules, plus de style de libellé.
       }}
     >
       <Tabs.Screen
@@ -105,19 +100,19 @@ export default function TabsLayout() {
           tabBarAccessibilityLabel: t.profile.publish,
           // Lot « couleurs et logo » : la seule touche de couleur de l'app, aux
           // couleurs du logo et la même dans les deux thèmes — disque vert
-          // anglais, cercle fin et « + » dorés.
+          // anglais, cercle fin et « + » dorés. Retours du build 3 : disque de
+          // 46 points (maquettes « Écrin »), centré dans la pilule.
           tabBarIcon: () => (
             <View
               style={{
-                width: 34,
-                height: 34,
+                width: 46,
+                height: 46,
                 borderRadius: radius.full,
                 backgroundColor: color.vertAnglais,
                 borderWidth: 1.5,
                 borderColor: color.dorure,
                 alignItems: "center",
                 justifyContent: "center",
-                marginBottom: -6,
               }}
             >
               <PlusIcon size={18} tint={color.dorure} />
