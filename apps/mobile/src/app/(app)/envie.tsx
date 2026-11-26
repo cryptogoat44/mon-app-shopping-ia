@@ -256,8 +256,10 @@ export default function WishlistItemScreen() {
                   {meta}
                   <Text style={styles.alertDetails}>
                     {details.lastPrice ? (
+                      // Lot « finitions de l'œil » (maquette 6) : le libellé en gris, la valeur en clair.
                       <Text style={styles.alertDetail} testID="dernier-prix-vu">
-                        {details.lastPrice}
+                        {lastSeenParts(details.lastPrice).label ? <Text style={styles.alertDetailLabel}>{lastSeenParts(details.lastPrice).label}</Text> : null}
+                        {lastSeenParts(details.lastPrice).value}
                       </Text>
                     ) : null}
                     {details.lastPrice && details.stock ? <Text style={styles.alertDetail}>{" · "}</Text> : null}
@@ -446,6 +448,13 @@ export default function WishlistItemScreen() {
   return <ShopWatchContext.Provider value={purchase.watch}>{screen}</ShopWatchContext.Provider>;
 }
 
+/** « Dernier prix vu : 240 € » en deux parties : le libellé (le texte de la phrase sans le prix) et la valeur.
+ * Phrase d'une autre forme : tout en valeur, comme avant. */
+function lastSeenParts(text: string): { label: string | null; value: string } {
+  const label = t.wishAlerts.lastSeenPrice("");
+  return label && text.startsWith(label) && text.length > label.length ? { label, value: text.slice(label.length) } : { label: null, value: text };
+}
+
 const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   nav: { height: 44, flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 8 },
@@ -462,6 +471,7 @@ const styles = themedStyles(() => ({
   meta: { fontSize: font.caption, lineHeight: 18, color: color.acier },
   alertDetails: { fontSize: font.caption, lineHeight: 18 },
   alertDetail: { fontSize: font.caption, lineHeight: 18, color: color.encre },
+  alertDetailLabel: { color: color.acier },
   alertSoldOut: { fontWeight: "600" },
   // Parcours 3 : « Baisse de prix », en vert (le seul accent).
   priceDrop: { fontSize: font.caption, color: color.vert, fontWeight: "600", marginTop: 4 },

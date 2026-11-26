@@ -490,6 +490,8 @@ export const en: Catalog = {
       notHere: "The video couldn't be played here: the AI can look for the piece for you.",
       snapshot: `${BRAND} couldn't take the frame of this moment: the AI can look for the piece for you.`,
     },
+    // "Finishing touches" batch: short placeholder when the field is narrow or the text is enlarged.
+    placeholderShort: "e.g. the beige leather jacket",
   },
   visualSearchTip: {
     title: "Tip",

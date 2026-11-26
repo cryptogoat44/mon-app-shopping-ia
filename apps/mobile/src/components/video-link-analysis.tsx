@@ -80,7 +80,10 @@ export function LinkAskView({
         autoFocus
         testID="video-link-query"
         placeholder={t.videoLinkAuto.placeholder}
+        shortPlaceholder={t.videoLinkAuto.placeholderShort}
         label={t.videoLinkAuto.title}
+        // Lot « finitions de l'œil » : le champ en bloc plein des autres écrans (plus le champ souligné).
+        boxed
       />
       <Text style={styles.help}>{t.videoLinkAuto.help}</Text>
       {problem ? <ErrorMessage style={styles.message}>{queryProblemMessage(problem)}</ErrorMessage> : null}
@@ -146,7 +149,10 @@ function LinkAskWithPieces({
         autoFocus={focusQuery}
         testID="video-link-query"
         placeholder={t.videoLinkAuto.placeholder}
+        shortPlaceholder={t.videoLinkAuto.placeholderShort}
         label={t.videoLinkAuto.title}
+        // Lot « finitions de l'œil » : le champ en bloc plein des autres écrans (plus le champ souligné).
+        boxed
       />
       {problem ? <ErrorMessage style={styles.message}>{queryProblemMessage(problem)}</ErrorMessage> : null}
       <Pressable

@@ -984,7 +984,8 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
 const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   scroll: { flexGrow: 1, paddingBottom: space.xxl },
-  content: { paddingHorizontal: space.lg, gap: space.md, maxWidth: 480, alignSelf: "center", width: "100%" },
+  // Lot « finitions de l'œil » : la gouttière de 16 points des autres écrans (24 avant).
+  content: { paddingHorizontal: space.md, gap: space.md, maxWidth: 480, alignSelf: "center", width: "100%" },
   playerContent: { alignItems: "center", paddingHorizontal: space.md, gap: space.sm, maxWidth: 480, alignSelf: "center", width: "100%" },
   centered: { flex: 1, justifyContent: "center", paddingHorizontal: space.xl, gap: space.lg },
   center: { textAlign: "center" },

@@ -520,6 +520,8 @@ export const fr = {
       notHere: "La vidéo n'a pas pu être lue ici : l'IA peut chercher la pièce pour vous.",
       snapshot: `${BRAND} n'a pas pu prendre l'image de ce moment : l'IA peut chercher la pièce pour vous.`,
     },
+    // Lot « finitions de l'œil » : texte d'attente court quand le champ est étroit ou le texte agrandi.
+    placeholderShort: "ex. la veste en cuir beige",
   },
   // Recherche d'image d'iOS (iOS 26 et suivants) : carte montrée une fois.
   visualSearchTip: {

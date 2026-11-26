@@ -315,7 +315,8 @@ describe("7 · l'accueil : la date courte des cases, le maillon du lien", () => 
 describe("8 · Réglages : les choix cohérents (maquette 7)", () => {
   const blocks = ["src/components/messages-from-setting.tsx", "src/components/mentions-from-setting.tsx", "src/components/piece-sends-setting.tsx"];
   const values = (source: string) => [...source.matchAll(/\{ value: "(everyone|following|nobody)", label: ([^ }]+) \}/g)].map((m) => [m[1], m[2]] as const);
-  const labelOf = (catalog: typeof fr, path: string) => path.split(".").slice(1).reduce((node: any, key) => node[key], catalog) as string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const labelOf = (catalog: any, path: string) => path.split(".").slice(1).reduce((node: any, key) => node[key], catalog) as string;
 
   it("même ordre dans chaque bloc « Qui peut… » : du plus ouvert au plus fermé (refusé : « Comptes que je suis » en premier)", () => {
     for (const path of blocks) {
@@ -354,5 +355,32 @@ describe("8 · Réglages : les choix cohérents (maquette 7)", () => {
     expect(choice).toContain("row: g.row");
     // Les explications restent, en pied de carte.
     expect(read("src/components/messages-from-setting.tsx")).toContain("<Text style={styles.hint}>{t.settings.messagesFromHint}</Text>");
+  });
+});
+
+describe("9 · la famille visuelle", () => {
+  it("l'analyse d'un lien (iPhone aussi, components/video-link-analysis.tsx) : champ en bloc plein ; gouttière de 16 points (refusé : 24)", () => {
+    const analysis = read("src/components/video-link-analysis.tsx");
+    expect(analysis.match(/testID="video-link-query"[\s\S]*?\/>/g)?.every((field) => field.includes("boxed"))).toBe(true);
+    // Son texte d'attente court, comme les autres champs (6).
+    expect(analysis.match(/shortPlaceholder=\{t\.videoLinkAuto\.placeholderShort\}/g)).toHaveLength(2);
+    expect([fr.videoLinkAuto.placeholderShort, en.videoLinkAuto.placeholderShort]).toEqual(["ex. la veste en cuir beige", "e.g. the beige leather jacket"]);
+    const lecteur = read("src/app/(app)/spot/lecteur.tsx");
+    expect(lecteur).toMatch(/\n  content: \{ paddingHorizontal: space\.md,/);
+    expect(lecteur).not.toMatch(/\n  content: \{ paddingHorizontal: space\.lg,/);
+  });
+
+  it("« Voir chez … » : la même taille (17 points) sur le Résultat et sur la fiche d'une envie", () => {
+    expect(read("src/app/(app)/spot/result.tsx")).toMatch(/\n  primaryLabel: \{[^}]*fontSize: font\.body/);
+    expect(read("src/components/merchant-link-button.tsx")).toMatch(/\n  primaryLabel: \{[^}]*fontSize: font\.body/);
+  });
+
+  it("« Dernier prix vu » : le libellé en gris, la valeur en clair ; phrase d'une autre forme : tout en valeur", () => {
+    const envie = read("src/app/(app)/envie.tsx");
+    expect(envie).toContain("<Text style={styles.alertDetailLabel}>{lastSeenParts(details.lastPrice).label}</Text>");
+    expect(envie).toMatch(/\n  alertDetailLabel: \{ color: color\.acier \}/);
+    expect(envie).toContain('const label = t.wishAlerts.lastSeenPrice("");');
+    // Le libellé est bien le début de la phrase, en français et en anglais.
+    for (const catalog of [fr, en]) expect(catalog.wishAlerts.lastSeenPrice("240 €").startsWith(catalog.wishAlerts.lastSeenPrice(""))).toBe(true);
   });
 });
