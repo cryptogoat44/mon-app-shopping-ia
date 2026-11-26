@@ -228,7 +228,9 @@ function PinchInPlace({
     let startDistance = 0;
     let startMid = { x: 0, y: 0 };
     let panStart = { x: 0, y: 0 };
-    const show = (next: InPlaceView) => {
+    let pending = 0;
+    let grantCount = 0;
+    const show =(next: InPlaceView) => {
       view = next;
       scale.setValue(next.scale);
       tx.setValue(next.x);
@@ -237,6 +239,9 @@ function PinchInPlace({
     const twoFingers = (event: GestureResponderEvent) => event.nativeEvent.touches.length >= 2;
     const giveBack = () => {
       mode = null;
+      // Doigts levés avant les valeurs : on n'en a plus besoin, le retour repart d'où la tuile est.
+      grantCount += 1;
+      pending = 0;
       changeStateRef.current("returning");
       const values: [Animated.Value, number][] = [
         [scale, 1],
@@ -263,15 +268,23 @@ function PinchInPlace({
       onPanResponderGrant: () => {
         changeStateRef.current("zooming");
         hideHintRef.current();
-        // Un retour en cours s'arrête là où il en est.
-        let stopped = { ...view };
-        scale.stopAnimation((value) => (stopped = { ...stopped, scale: value }));
-        tx.stopAnimation((value) => (stopped = { ...stopped, x: value }));
-        ty.stopAnimation((value) => (stopped = { ...stopped, y: value }));
-        view = stopped;
+        // Un retour en cours s'arrête là où il en est. Piloté en natif, l'iPhone ne rend ces
+        // valeurs qu'un instant plus tard : le pincement attend les trois avant de partir de là.
+        const grant = ++grantCount;
+        pending = 3;
+        const got = (patch: Partial<InPlaceView>) => {
+          if (grant !== grantCount) return; // réponse d'un toucher précédent
+          view = { ...view, ...patch };
+          pending -= 1;
+        };
         mode = null;
+        scale.stopAnimation((value) => got({ scale: value }));
+        tx.stopAnimation((value) => got({ x: value }));
+        ty.stopAnimation((value) => got({ y: value }));
       },
       onPanResponderMove: (event) => {
+        // Valeurs du retour interrompu pas encore arrivées : partir de là ferait sauter la tuile.
+        if (pending > 0) return;
         const touches = event.nativeEvent.touches;
         if (twoFingers(event)) {
           const distance = touchDistance(touches[0]!, touches[1]!);

@@ -163,6 +163,22 @@ describe("le zoom sur place dans EnlargeableImage (lecture du code)", () => {
     expect(inPlace).toContain('if (finished) changeStateRef.current("idle")');
   });
 
+  it("repincer pendant le retour : la tuile repart d'où elle est, sans saut", () => {
+    const grant = inPlace.slice(inPlace.indexOf("onPanResponderGrant"), inPlace.indexOf("onPanResponderMove"));
+    const move = inPlace.slice(inPlace.indexOf("onPanResponderMove"), inPlace.indexOf("onPanResponderRelease"));
+    // Permis : les valeurs rendues (plus tard, en natif) vont dans la vue elle-même, et le geste les attend.
+    expect(grant).toContain("pending = 3;");
+    expect(grant).toContain("view = { ...view, ...patch };");
+    expect(grant).toContain("scale.stopAnimation((value) => got({ scale: value }));");
+    expect(grant).toContain("tx.stopAnimation((value) => got({ x: value }));");
+    expect(grant).toContain("ty.stopAnimation((value) => got({ y: value }));");
+    expect(move.indexOf("if (pending > 0) return;")).toBeGreaterThan(-1);
+    expect(move.indexOf("if (pending > 0) return;")).toBeLessThan(move.indexOf("base = view"));
+    // Refusé : recopier une copie locale dans la vue avant l'arrivée des valeurs natives.
+    expect(grant).not.toContain("view = stopped");
+    expect(grant).not.toMatch(/stopAnimation\(\(value\) => \(stopped/);
+  });
+
   it("toute la tuile grandit et passe devant le titre et les boutons pendant le zoom", () => {
     expect(inPlace).toContain("<Animated.View style={{ transform: [{ translateX: tx }, { translateY: ty }, { scale }] }}>");
     expect(inPlace).toContain('style={[style, zoomState !== "idle" ? styles.lifted : null]}');
