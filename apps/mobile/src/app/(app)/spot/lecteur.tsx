@@ -27,6 +27,15 @@
 // Lecteur impossible, en échec ou refusé : l'analyse (si elle est allumée,
 // afterPlayerFailure), sinon l'écran de secours, comme avant. Le site ne
 // change pas.
+// Retours du build 3 (26 novembre 2026) : les commandes de TikTok cachées par
+// ses paramètres officiels et NOTRE barre de lecture sous la vidéo
+// (components/player-controls.tsx), repli sur les siennes si elle ne parle
+// pas ; vidéo aux coins arrondis ; la vidéo prend la place qui reste après la
+// zone d'actions MESURÉE (les deux actions visibles sans défiler) ; plus
+// d'écran d'accord : le bouton Lecture vaut accord (étape « firstPlay » : rien
+// n'est chargé chez TikTok ni chez Instagram avant cet appui) ; « Spotter ce
+// moment » demande l'image du moment au serveur (TikTok, `frame: true`), et
+// l'instantané contrôlé (noir, blanc, flou) reste le secours.
 // Lot « propositions » (Parcours 2, 21 novembre 2026) : si le serveur dit
 // aussi `pieces` (valeur exacte `true`), la question propose d'abord « Voir
 // les propositions de l'IA » ; sinon elle reste celle d'avant.
@@ -34,7 +43,7 @@
 // serveur et restent en mémoire. Le lien reste en attente 10 minutes
 // (lib/pending-video-link.ts).
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AccessibilityInfo, ActivityIndicator, AppState, Linking, Platform, Pressable, ScrollView, Text, View, findNodeHandle, useWindowDimensions } from "react-native";
+import { AccessibilityInfo, ActivityIndicator, AppState, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, findNodeHandle, useWindowDimensions } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import type { WebView } from "react-native-webview";
@@ -44,6 +53,7 @@ import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { PUBLIC_WEB_URL } from "@/constants/brand";
 import { EmbeddedPlayer } from "@/components/embedded-player";
+import { PlayIcon, PlayerControls, type PlayerSound } from "@/components/player-controls";
 import { ErrorMessage } from "@/components/error-message";
 import { ScreenshotHelp } from "@/components/screenshot-help";
 import { ConsentView } from "@/components/spot-launch-views";
@@ -51,7 +61,7 @@ import { VideoFallback } from "@/components/video-fallback";
 import { LinkAskView, LinkFailureView, LinkMomentsView, LinkWaitingView } from "@/components/video-link-analysis";
 import { VideoProducts } from "@/components/video-products";
 import { track } from "@/lib/analytics";
-import { fetchInstagramEmbed, fetchVideoLinkAnalysisStatus, lookupVideoLink } from "@/lib/api";
+import { fetchInstagramEmbed, fetchVideoLinkAnalysisStatus, fetchVideoLinkFrame, lookupVideoLink } from "@/lib/api";
 import { features } from "@/lib/features";
 import { importPhotoForSpotter, type ImportResult } from "@/lib/image-import";
 import { useImageDrop } from "@/lib/image-drop";
@@ -60,10 +70,23 @@ import { detectLink } from "@/lib/link-detection";
 import { grantPlayerConsent, readPlayerConsent } from "@/lib/player-access";
 import { afterPlayerFailure, decidePlayer, openingPath, playerOffered, type FallbackReason } from "@/lib/player-decision";
 import { instagramHostPage, tiktokHostPage } from "@/lib/player-host-page";
-import { isPlayerPlatform, playerBaseUrl, videoOpenUrl, type PlayerPlatform } from "@/lib/player-link";
-import { snapshotAvailable, snapshotPlayer } from "@/lib/player-snapshot";
-import { PLAYER_TIMINGS, embedHeight, isPlaybackSignal, isPlayerAnswer, momentSeconds, playerCommand, playerLayout, tiktokErrorAction, type HostMessage } from "@/lib/player-state";
-import { PLAYER_CONSENT_GATE } from "@/lib/spot-flags";
+import { TIKTOK_PLAYER_PARAMS_NATIVE, isPlayerPlatform, playerBaseUrl, videoOpenUrl, type PlayerPlatform } from "@/lib/player-link";
+import { snapshotAvailable, snapshotPlayer, type PlayerSnapshot } from "@/lib/player-snapshot";
+import {
+  PLAYER_TIMINGS,
+  embedHeight,
+  estimatedActionsHeight,
+  isPlaybackSignal,
+  isPlayerAnswer,
+  momentSeconds,
+  playerCommand,
+  playerLayout,
+  seekCommand,
+  tiktokErrorAction,
+  type HostMessage,
+} from "@/lib/player-state";
+import { PLAYER_CONSENT_BY_PLAY_BUTTON, PLAYER_CONSENT_GATE } from "@/lib/spot-flags";
+import { chooseSpotImage, frameFailureReason, frameSeconds, shouldAskServer, snapshotErrorCode, type ServerFrame, type SnapshotError } from "@/lib/spot-moment";
 import { beginFromPhoto } from "@/lib/spot-flow";
 import { closeSpotter } from "@/lib/spot-navigation";
 import { useVideoImport } from "@/lib/use-video-import";
@@ -78,8 +101,10 @@ type Stage =
   | { kind: "loading" }
   /** Lien qui ne mène à aucune vidéo reconnue : l'aide « capture d'écran d'abord ». */
   | { kind: "unknown" }
-  /** Accord préalable (une fois par plateforme) avant de charger le lecteur officiel. */
+  /** Accord préalable (une fois par plateforme) avant de charger le lecteur officiel (écran d'avant, PLAYER_CONSENT_BY_PLAY_BUTTON à false). */
   | { kind: "consent" }
+  /** Retours du build 3 : la toute première fois, rien n'est chargé ; le bouton Lecture vaut accord. */
+  | { kind: "firstPlay" }
   /** Code d'intégration Instagram demandé au serveur. */
   | { kind: "preparing" }
   | { kind: "player"; html: string }
@@ -92,11 +117,16 @@ type Stage =
 type Notice = "tap_to_play" | "leave" | "reloaded";
 
 const BASE_URL = playerBaseUrl(PUBLIC_WEB_URL);
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+/** Coins de la vidéo et du fond de la première fois : comme embedded-player.tsx. */
+const VIDEO_RADIUS = 14; // = radius.piece du lot « Vitrine » (tokens.ts) : à remplacer par le jeton à l'assemblage
+/** « Spotter ce moment » : après « pause », l'état « en pause » du lecteur, ou ce délai au plus (pour que le temps soit à jour). */
+const PAUSE_WAIT_MS = 400;
+/** Repli : 5 s après la première lecture sans aucun temps avec une durée, les commandes de TikTok reviennent. */
+const CONTROLS_FALLBACK_MS = 5_000;
 
 function fallbackLead(reason: FallbackReason): string {
   if (reason === "consent_refused") return t.videoLink.fallbackLead.refused;
-  if (reason === "snapshot_failed") return t.videoLink.fallbackLead.snapshot;
+  if (reason === "snapshot_failed" || reason === "snapshot_blurry") return t.videoLink.fallbackLead.snapshot;
   if (reason === "server_unknown") return t.videoLink.fallbackLead.unchecked;
   return t.videoLink.fallbackLead.notHere;
 }
@@ -127,9 +157,18 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const screen = useWindowDimensions();
-  const layout = playerLayout(screen.width, screen.height - insets.top - insets.bottom);
   const embedWidth = Math.floor(Math.min(screen.width - 2 * space.md, 400));
   const [stage, setStage] = useState<Stage>({ kind: "loading" });
+  // Zone d'actions sous la vidéo, mesurée (null avant la première mesure : estimée).
+  const [actionsHeight, setActionsHeight] = useState<number | null>(null);
+  // Notre barre de lecture (« ours »), ou les commandes de TikTok si elle ne reçoit aucun temps (repli).
+  const [controlsMode, setControlsMode] = useState<"ours" | "tiktok">("ours");
+  const controlsModeRef = useRef<"ours" | "tiktok">("ours");
+  const [playing, setPlaying] = useState(false);
+  const [sound, setSound] = useState<PlayerSound>("unknown");
+  const [progress, setProgress] = useState<{ currentTime: number; duration: number } | null>(null);
+  // Image du moment demandée au serveur (lot 1) : seule la valeur exacte `true` l'allume.
+  const [frameEnabled, setFrameEnabled] = useState(false);
   const [lookup, setLookup] = useState<VideoLookupResponse | null>(null);
   const [handle, setHandle] = useState<string | null>(null);
   const [generation, setGeneration] = useState(0);
@@ -158,12 +197,24 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
   const analysisRef = useRef(false);
   const lastTime = useRef<number | null>(null);
   const crashed = useRef(false);
+  // Une durée > 0 est arrivée du lecteur (notre barre marche) ; la première lecture a été vue.
+  const gotDuration = useRef(false);
+  const sawPlaying = useRef(false);
+  // « Spotter ce moment » attend l'état « en pause » (ou 400 ms) ; abandonné si l'écran est quitté.
+  const pauseWaiter = useRef<(() => void) | null>(null);
+  const spotAbort = useRef<AbortController | null>(null);
 
   const link: VideoLink | null = lookup?.link ?? null;
   const platform: PlayerPlatform | null = link?.platform ?? linkPlatform;
   const name = platform ? t.spotter.platformName[platform] : "";
   const openUrl = platform ? videoOpenUrl(url, platform, link) : null;
   const isTikTokPlayer = stage.kind === "player" && platform === "tiktok";
+  const ourControls = platform === "tiktok" && controlsMode === "ours";
+  const layout = playerLayout(
+    screen.width,
+    screen.height - insets.top - insets.bottom,
+    actionsHeight ?? estimatedActionsHeight({ analysis: analysisEnabled, firstPlay: stage.kind === "firstPlay", controls: ourControls })
+  );
   // « Regarder dans le lecteur » seulement s'il peut vraiment s'ouvrir : vidéo
   // reconnue par le serveur (sans elle, decide() tombe sur l'écran de secours)
   // et même décision que decide() pour le reste (lib/player-decision.ts).
@@ -187,6 +238,9 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
   useEffect(
     () => () => {
       alive.current = false;
+      // Écran quitté pendant « Spotter ce moment » : la demande au serveur est abandonnée.
+      spotAbort.current?.abort();
+      pauseWaiter.current?.();
     },
     []
   );
@@ -210,11 +264,16 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
   async function startPlayer(video: VideoLink) {
     readyRef.current = false;
     answered.current = false;
+    gotDuration.current = false;
+    sawPlaying.current = false;
     setReady(false);
     setEmbedSize(null);
+    setPlaying(false);
+    setProgress(null);
     const title = t.player.frameTitle(t.spotter.platformName[video.platform]);
     if (video.platform === "tiktok") {
-      const html = tiktokHostPage(video.videoKey, title);
+      // Commandes de TikTok cachées (notre barre dessous), ou les siennes après le repli.
+      const html = tiktokHostPage(video.videoKey, title, controlsModeRef.current === "tiktok" ? TIKTOK_PLAYER_PARAMS_NATIVE : undefined);
       return html ? setStage({ kind: "player", html }) : fallback("player_error");
     }
     setStage({ kind: "preparing" });
@@ -249,7 +308,8 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
     });
     if (decision.kind === "web") return setStage({ kind: "web" });
     if (decision.kind === "fallback") return fallback(decision.reason);
-    if (decision.kind === "consent") return setStage({ kind: "consent" });
+    // Retours du build 3 : le bouton Lecture vaut accord ; l'écran d'accord d'avant reste joignable par la constante.
+    if (decision.kind === "consent") return setStage(PLAYER_CONSENT_BY_PLAY_BUTTON ? { kind: "firstPlay" } : { kind: "consent" });
     if (video) void startPlayer(video);
     else fallback("server_unknown");
   }
@@ -266,6 +326,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
     analysisRef.current = enabled;
     setAnalysisEnabled(enabled);
     setPiecesEnabled(status.pieces);
+    setFrameEnabled(status.frame);
     if (response?.link) {
       setHandle(response.link.creatorHandle);
       void pendingVideoLinks.learn(url, { url: response.link.canonicalUrl, creatorHandle: response.link.creatorHandle });
@@ -346,7 +407,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
   // s'affiche vraiment au-dessus de la question (jamais sur un ancien échec de l'analyse).
   const playerLeadShown = playerBroken !== null && stage.kind === "auto" && auto.phase.kind === "ask";
   useEffect(() => {
-    if (playerLeadShown && playerBroken) AccessibilityInfo.announceForAccessibility(playerBroken === "snapshot_failed" ? t.videoLinkAuto.playerLead.snapshot : t.videoLinkAuto.playerLead.notHere);
+    if (playerLeadShown && playerBroken) AccessibilityInfo.announceForAccessibility(playerBroken === "snapshot_failed" || playerBroken === "snapshot_blurry" ? t.videoLinkAuto.playerLead.snapshot : t.videoLinkAuto.playerLead.notHere);
   }, [playerLeadShown, playerBroken]);
 
   function markReady() {
@@ -367,9 +428,68 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
       if (tiktokErrorAction(hostMessage.code) === "tap_to_play") return setNotice("tap_to_play");
       return fallback("player_error");
     }
-    if (hostMessage.kind === "time") lastTime.current = hostMessage.currentTime;
+    if (hostMessage.kind === "state") {
+      const nowPlaying = hostMessage.state === "playing" || hostMessage.state === "buffering";
+      setPlaying(nowPlaying);
+      if (hostMessage.state === "playing") sawPlaying.current = true;
+      if (hostMessage.state === "paused") pauseWaiter.current?.();
+    }
+    if (hostMessage.kind === "muted") setSound(hostMessage.muted ? "muted" : "on");
+    if (hostMessage.kind === "time") {
+      lastTime.current = hostMessage.currentTime;
+      if (hostMessage.duration > 0) {
+        gotDuration.current = true;
+        setProgress({ currentTime: hostMessage.currentTime, duration: hostMessage.duration });
+      }
+    }
     if (hostMessage.kind === "embedReady" || isPlaybackSignal(hostMessage)) markReady();
   }
+
+  // ---- Notre barre de lecture : les commandes officielles du lecteur TikTok (relayées par la page hôte) ----
+
+  function sendCommand(command: string) {
+    webRef.current?.postMessage(command);
+  }
+
+  /** Lecture : marche même avant le premier signal (il relance une lecture automatique refusée, 3002). */
+  function playVideo() {
+    sendCommand(playerCommand("play"));
+  }
+
+  function pauseVideo() {
+    sendCommand(playerCommand("pause"));
+  }
+
+  function seekVideo(seconds: number) {
+    sendCommand(seekCommand(seconds));
+    // Le moment choisi par la personne, même si le lecteur en pause ne redonne pas son temps.
+    lastTime.current = seconds;
+    setProgress((current) => (current ? { ...current, currentTime: seconds } : current));
+  }
+
+  /** Son : inconnu → activé, activé → coupé, coupé → activé ; suit onMute s'il arrive, sinon notre dernière commande. */
+  function toggleSound() {
+    const next: PlayerSound = sound === "on" ? "muted" : "on";
+    sendCommand(playerCommand(next === "muted" ? "mute" : "unMute"));
+    setSound(next);
+  }
+
+  // Repli honnête : 5 s après la première lecture, toujours aucun temps avec une durée → le lecteur est
+  // rechargé UNE fois avec ses propres commandes (comme au build 3), et notre barre se retire.
+  useEffect(() => {
+    if (!isTikTokPlayer || controlsMode !== "ours" || !ready || !link) return;
+    const video = link;
+    const timer = setTimeout(() => {
+      if (!alive.current || gotDuration.current || !sawPlaying.current || controlsModeRef.current !== "ours") return;
+      if (__DEV__) console.info("[player] repli sur les commandes de TikTok");
+      controlsModeRef.current = "tiktok";
+      setControlsMode("tiktok");
+      setGeneration((value) => value + 1);
+      void startPlayer(video);
+    }, CONTROLS_FALLBACK_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTikTokPlayer, controlsMode, ready, generation, link]);
 
   function onCrash() {
     // Un seul redémarrage ; au second arrêt, l'écran de secours.
@@ -420,47 +540,86 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
     useCallback(() => setMessage(t.videoLink.notAnImage), [])
   );
 
-  /** « Spotter ce moment » : pause, instantané de la vue (rien d'autre), puis « Entourez la pièce ». */
+  /** Après « pause » : l'état « en pause » du lecteur, ou PAUSE_WAIT_MS au plus (pour que le temps soit à jour). */
+  function waitForPause(): Promise<void> {
+    return new Promise((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        if (pauseWaiter.current === done) pauseWaiter.current = null;
+        resolve();
+      };
+      const timer = setTimeout(done, PAUSE_WAIT_MS);
+      pauseWaiter.current = done;
+    });
+  }
+
+  /** « Spotter ce moment » (retours du build 3) : pause ; puis, pour TikTok quand le serveur le permet et que
+   * le temps est connu, l'image du moment demandée au serveur EN MÊME TEMPS que l'instantané de la vue ;
+   * l'image du serveur d'abord, sinon l'instantané s'il a passé le contrôle (ni noir, ni blanc, ni flou),
+   * sinon le secours (lib/spot-moment.ts). Puis « Entourez la pièce ». */
   async function spotMoment() {
     if (!platform || busy) return;
     setMessage(null);
     setBusy("spot");
+    AccessibilityInfo.announceForAccessibility(t.player.taking);
+    const controller = new AbortController();
+    spotAbort.current = controller;
+    let shot: PlayerSnapshot | null = null;
     try {
       if (isTikTokPlayer && readyRef.current) {
         webRef.current?.postMessage(playerCommand("pause"));
-        await sleep(PLAYER_TIMINGS.pauseSettleMs);
+        await waitForPause();
       }
+      if (!alive.current) return;
+      const time = lastTime.current;
+      const video = link;
+      const askServer = video !== null && time !== null && shouldAskServer({ platform, frame: frameEnabled, lastTime: time });
       const tag = frameRef.current ? findNodeHandle(frameRef.current) : null;
-      if (tag === null) return fallback("snapshot_failed");
-      let shot;
-      try {
-        shot = await snapshotPlayer(tag);
-      } catch {
-        return fallback("snapshot_failed");
+      const [snapshotResult, serverResult] = await Promise.allSettled([
+        tag === null ? Promise.reject(new Error("no_view")) : snapshotPlayer(tag),
+        askServer && video && time !== null ? fetchVideoLinkFrame({ url: video.canonicalUrl, atSeconds: frameSeconds(time) }, controller.signal) : Promise.resolve(null),
+      ]);
+      shot = snapshotResult.status === "fulfilled" ? snapshotResult.value : null;
+      const snapshotError: SnapshotError | null = snapshotResult.status === "rejected" ? snapshotErrorCode(snapshotResult.reason) : null;
+      const server: ServerFrame | null = serverResult.status === "fulfilled" ? serverResult.value : null;
+      // Écran quitté pendant l'attente : rien ne part, l'instantané est effacé (finally).
+      if (!alive.current || controller.signal.aborted) return;
+      if (serverResult.status === "rejected") track("player_frame_failed", { reason: frameFailureReason(serverResult.reason), link_platform: platform });
+      const choice = chooseSpotImage({ server, snapshot: shot, snapshotError });
+      if (choice.source === "none") return fallback(choice.reason);
+      const videoContext = {
+        url: link?.canonicalUrl ?? url,
+        platform,
+        creatorHandle: handle,
+        source: platform === "tiktok" ? ("tiktok_player" as const) : ("instagram_player" as const),
+        momentSeconds: platform === "tiktok" ? momentSeconds(time) : null,
+      };
+      track("player_spot", { platform, image_source: choice.source, link_platform: platform });
+      // L'image du serveur reste en mémoire (« data: ») et suit le chemin d'une photo ; l'instantané n'a pas servi.
+      if (choice.source === "server") beginFromPhoto(choice.image, { width: choice.width, height: choice.height }, { video: videoContext });
+      if (choice.source === "snapshot") {
+        // Règle n° 4 : l'instantané est effacé dès que la recherche est partie.
+        beginFromPhoto(choice.uri, { width: choice.width, height: choice.height }, { video: videoContext, discardImageAfterSearch: true });
+        shot = null;
       }
-      if (!alive.current) return discardLocalFile(shot.uri);
-      track("player_spot", { platform, link_platform: platform });
-      beginFromPhoto(
-        shot.uri,
-        { width: shot.width, height: shot.height },
-        {
-          video: {
-            url: link?.canonicalUrl ?? url,
-            platform,
-            creatorHandle: handle,
-            source: platform === "tiktok" ? "tiktok_player" : "instagram_player",
-            momentSeconds: platform === "tiktok" ? momentSeconds(lastTime.current) : null,
-          },
-          // Règle n° 4 : l'instantané est effacé dès que la recherche est partie.
-          discardImageAfterSearch: true,
-        }
-      );
-      // Plan B en un geste : la description écrite pour l'analyse suit aussi l'instantané du lecteur.
+      // Plan B en un geste : la description écrite pour l'analyse suit aussi l'image du moment.
       keepDescriptionInDraft(queryRef.current);
       router.push({ pathname: "/spot/lancer", params: { source: "photo" } });
     } finally {
+      // Instantané qui n'a pas servi (image du serveur choisie, écran quitté, secours) : effacé.
+      if (shot) discardLocalFile(shot.uri);
+      if (spotAbort.current === controller) spotAbort.current = null;
       if (alive.current) setBusy(null);
     }
+  }
+
+  /** Retours du build 3 : le premier appui sur Lecture vaut accord (retenu par plateforme, retirable dans
+   * Réglages), puis le lecteur se charge. Rien n'est demandé à TikTok, à Meta ni à notre serveur avant. */
+  async function firstPlay() {
+    if (!platform) return;
+    track("player_consent", { platform, choice: "play", link_platform: platform });
+    await grantPlayerConsent(platform);
+    if (alive.current) void decide(lookup, true);
   }
 
   async function acceptConsent() {
@@ -594,7 +753,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
       autoBody = <LinkFailureView info={phase.info} mode={phase.mode} keptDescription={keptQuery !== ""} onDescribe={auto.describeInstead} platformName={name || undefined} platform={platform} onRetry={auto.retry} onEditQuery={auto.editQuery} onCapture={showCapture} />;
     } else {
       // Lecteur en échec juste avant : une phrase dit pourquoi l'analyse prend le relais.
-      const playerLead = playerBroken === null ? null : playerBroken === "snapshot_failed" ? t.videoLinkAuto.playerLead.snapshot : t.videoLinkAuto.playerLead.notHere;
+      const playerLead = playerBroken === null ? null : playerBroken === "snapshot_failed" || playerBroken === "snapshot_blurry" ? t.videoLinkAuto.playerLead.snapshot : t.videoLinkAuto.playerLead.notHere;
       autoBody = (
         <>
           {playerLead ? <Text style={styles.body}>{playerLead}</Text> : null}
@@ -675,9 +834,67 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
         {errorLine}
       </View>
     );
+  } else if (stage.kind === "firstPlay") {
+    // La toute première fois (retours du build 3) : RIEN n'est chargé chez TikTok ni chez Instagram (ni image,
+    // ni cadre, ni code d'intégration demandé au serveur) : un fond sobre au format du lecteur, notre bouton de
+    // lecture au centre, une phrase dessous. Le premier appui vaut accord (firstPlay).
+    const isEmbed = platform === "instagram";
+    const lineLabel = `${t.player.firstPlay.lineLead(name)}${t.player.firstPlay.lineLink}${t.player.firstPlay.lineEnd}`;
+    body = (
+      <View style={styles.playerContent}>
+        <Pressable
+          onPress={() => void firstPlay()}
+          style={[styles.poster, { width: isEmbed ? embedWidth : layout.width, height: layout.height }]}
+          accessibilityRole="button"
+          accessibilityLabel={t.player.firstPlay.play(name)}
+          accessibilityHint={t.player.firstPlay.hint}
+        >
+          <View style={styles.playDisc}>
+            <PlayIcon size={28} fill={color.surNuit} />
+          </View>
+        </Pressable>
+        <View style={styles.actions} onLayout={(event) => setActionsHeight(Math.ceil(event.nativeEvent.layout.height))}>
+          {/* Notre barre au repos (TikTok) : la place est gardée, rien ne saute à l'arrivée du lecteur. */}
+          {platform === "tiktok" ? (
+            <PlayerControls width={layout.width} duration={null} currentTime={null} playing={false} sound="unknown" onPlay={() => void firstPlay()} onPause={() => void firstPlay()} onSeek={() => {}} onSound={() => {}} idle />
+          ) : null}
+          <Pressable onPress={() => router.push("/settings")} style={styles.consentLine} accessibilityRole="link" accessibilityLabel={lineLabel}>
+            <Text style={styles.consentText}>
+              {t.player.firstPlay.lineLead(name)}
+              <Text style={styles.consentLink}>{t.player.firstPlay.lineLink}</Text>
+              {t.player.firstPlay.lineEnd}
+            </Text>
+          </Pressable>
+          <View style={styles.captionRow}>
+            <Text style={styles.caption} numberOfLines={1}>
+              {videoLabel}
+            </Text>
+            {openUrl ? (
+              <Pressable onPress={openVideo} hitSlop={8} style={styles.link} accessibilityRole="link">
+                <Text style={styles.linkLabel}>{t.player.openIn(name)}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+          {/* « Spotter ce moment » grisé tant que la vidéo n'est pas lancée. */}
+          <Pressable style={[styles.primary, styles.primaryDisabled]} disabled accessibilityRole="button" accessibilityState={{ disabled: true }}>
+            <Text style={[styles.primaryLabel, styles.primaryLabelDisabled]}>{t.player.spot}</Text>
+          </Pressable>
+          {analysisEnabled ? (
+            <Pressable style={styles.secondary} onPress={playerToAuto} accessibilityRole="button">
+              <Text style={styles.secondaryLabel}>{t.videoLinkAuto.backToAuto}</Text>
+            </Pressable>
+          ) : (
+            captureLink
+          )}
+        </View>
+        {errorLine}
+        {memory}
+      </View>
+    );
   } else {
     const isEmbed = platform === "instagram";
     const embedBox = embedHeight(embedSize, layout.height);
+    const spotDisabled = !ready || busy !== null;
     body = (
       <View style={styles.playerContent}>
         <EmbeddedPlayer
@@ -694,33 +911,50 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
           onLoadFailure={() => fallback("webview_error")}
           onCrash={onCrash}
         />
-        <View style={styles.captionRow}>
-          <Text style={styles.caption} numberOfLines={1}>
-            {videoLabel}
-          </Text>
-          {openUrl ? (
-            <Pressable onPress={openVideo} hitSlop={8} style={styles.link} accessibilityRole="link">
-              <Text style={styles.linkLabel}>{t.player.openIn(name)}</Text>
+        {/* Zone d'actions, mesurée : la vidéo prend la place qui reste, les deux actions restent visibles sans défiler. */}
+        <View style={styles.actions} onLayout={(event) => setActionsHeight(Math.ceil(event.nativeEvent.layout.height))}>
+          {isTikTokPlayer && controlsMode === "ours" ? (
+            <PlayerControls
+              width={layout.width}
+              duration={progress?.duration ?? null}
+              currentTime={progress?.currentTime ?? null}
+              playing={playing}
+              sound={sound}
+              onPlay={playVideo}
+              onPause={pauseVideo}
+              onSeek={seekVideo}
+              onSound={toggleSound}
+            />
+          ) : null}
+          <View style={styles.captionRow}>
+            <Text style={styles.caption} numberOfLines={1}>
+              {videoLabel}
+            </Text>
+            {openUrl ? (
+              <Pressable onPress={openVideo} hitSlop={8} style={styles.link} accessibilityRole="link">
+                <Text style={styles.linkLabel}>{t.player.openIn(name)}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+          {announced ? <Text style={styles.notice}>{announced}</Text> : null}
+          <Pressable
+            style={[styles.primary, spotDisabled ? styles.primaryDisabled : null]}
+            onPress={() => void spotMoment()}
+            disabled={spotDisabled}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: spotDisabled, busy: busy === "spot" }}
+          >
+            {busy === "spot" ? <ActivityIndicator color={color.surInactif} /> : null}
+            <Text style={[styles.primaryLabel, spotDisabled ? styles.primaryLabelDisabled : null]}>{busy === "spot" ? t.player.taking : t.player.spot}</Text>
+          </Pressable>
+          {analysisEnabled ? (
+            <Pressable style={styles.secondary} onPress={playerToAuto} accessibilityRole="button">
+              <Text style={styles.secondaryLabel}>{t.videoLinkAuto.backToAuto}</Text>
             </Pressable>
           ) : null}
         </View>
-        {announced ? <Text style={styles.notice}>{announced}</Text> : null}
-        <Pressable
-          style={[styles.primary, !ready || busy !== null ? styles.primaryDisabled : null]}
-          onPress={() => void spotMoment()}
-          disabled={!ready || busy !== null}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: !ready || busy !== null, busy: busy === "spot" }}
-        >
-          {busy === "spot" ? <ActivityIndicator color={color.blanc} /> : null}
-          <Text style={styles.primaryLabel}>{busy === "spot" ? t.player.taking : t.player.spot}</Text>
-        </Pressable>
-        {analysisEnabled ? (
-          <Pressable style={styles.secondary} onPress={playerToAuto} accessibilityRole="button">
-            <Text style={styles.secondaryLabel}>{t.videoLinkAuto.backToAuto}</Text>
-          </Pressable>
-        ) : null}
-        <Text style={styles.privacy}>{t.player.privacy(name)}</Text>
+        {/* L'image vient de notre serveur (TikTok, interrupteur allumé) : la phrase le dit ; sinon celle d'avant. */}
+        <Text style={styles.privacy}>{frameEnabled && platform === "tiktok" ? t.player.privacyFrame(name) : t.player.privacy(name)}</Text>
         {errorLine}
         {memory}
       </View>
@@ -763,10 +997,28 @@ const styles = themedStyles(() => ({
   notice: { fontSize: font.caption, color: color.acier, lineHeight: 18, alignSelf: "stretch", textAlign: "center" },
   primary: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 52, flexDirection: "row", gap: space.sm, alignItems: "center", justifyContent: "center", paddingHorizontal: space.md, alignSelf: "stretch" },
   primaryDisabled: { backgroundColor: color.inactif },
+  primaryLabelDisabled: { color: color.surInactif },
   primaryLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600", textAlign: "center", flexShrink: 1 },
   secondary: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, minHeight: 48, alignItems: "center", justifyContent: "center", alignSelf: "stretch", paddingHorizontal: space.md },
   secondaryLabel: { color: color.encre, fontSize: font.body, fontWeight: "500", textAlign: "center" },
   message: { fontSize: font.caption, lineHeight: 18, alignSelf: "stretch" },
   privacy: { fontSize: font.caption, color: color.acier, lineHeight: 18, textAlign: "center" },
   keptNote: { fontSize: font.caption, color: color.acier, lineHeight: 18, alignSelf: "stretch" },
+  // Retours du build 3 : zone d'actions mesurée sous la vidéo, et la toute première fois.
+  actions: { alignSelf: "stretch", alignItems: "center", gap: space.sm },
+  poster: { backgroundColor: color.nuit, borderRadius: VIDEO_RADIUS, borderCurve: "continuous", alignItems: "center", justifyContent: "center" },
+  playDisc: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: color.voileImage,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: color.surNuit,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingLeft: 3,
+  },
+  consentLine: { minHeight: 44, justifyContent: "center", alignSelf: "stretch" },
+  consentText: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
+  consentLink: { ...lienSouligne, color: color.encre },
 }));

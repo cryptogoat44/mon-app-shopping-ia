@@ -25,7 +25,9 @@ describe("écran « vidéo partagée » : la vidéo d'abord sur iPhone", () => {
     expect(screen).toContain('if (alive.current && !answered.current) fallback("no_answer");');
     expect(screen).not.toContain('if (alive.current && !readyRef.current) fallback("no_answer");');
     expect(screen).toContain("if (isPlayerAnswer(hostMessage)) answered.current = true;");
-    expect(screen).toContain("disabled={!ready || busy !== null}");
+    // Retours du build 3 : la même règle, nommée (spotDisabled).
+    expect(screen).toContain("const spotDisabled = !ready || busy !== null;");
+    expect(screen).toContain("disabled={spotDisabled}");
     // Remis à zéro avec un nouveau lecteur et au redémarrage de la vue web.
     expect(screen.match(/answered\.current = false;/g)).toHaveLength(2);
   });
@@ -34,7 +36,8 @@ describe("écran « vidéo partagée » : la vidéo d'abord sur iPhone", () => {
     const player = screen.slice(screen.indexOf("<EmbeddedPlayer"));
     const spot = player.indexOf("onPress={() => void spotMoment()}");
     const auto = player.indexOf("onPress={playerToAuto}");
-    const privacy = player.indexOf("{t.player.privacy(name)}");
+    // Retours du build 3 : la phrase de confidentialité d'avant, ou celle de l'image du moment par le serveur.
+    const privacy = player.indexOf("t.player.privacy(name)}");
     expect(spot).toBeGreaterThan(-1);
     expect(auto).toBeGreaterThan(spot);
     expect(privacy).toBeGreaterThan(auto);
@@ -62,9 +65,10 @@ describe("écran « vidéo partagée » : la vidéo d'abord sur iPhone", () => {
   });
 
   it("l'écran de l'analyse dit pourquoi il prend le relais, et ne repropose pas le lecteur qui vient d'échouer", () => {
-    expect(screen).toContain('playerBroken === "snapshot_failed" ? t.videoLinkAuto.playerLead.snapshot : t.videoLinkAuto.playerLead.notHere');
+    // Retours du build 3 : l'instantané flou (snapshot_blurry) dit la même phrase que l'instantané en échec.
+    expect(screen).toContain('playerBroken === "snapshot_failed" || playerBroken === "snapshot_blurry" ? t.videoLinkAuto.playerLead.snapshot : t.videoLinkAuto.playerLead.notHere');
     expect(screen).toContain("const playerButton = withPlayer && playerBroken === null ? (");
-    expect(screen).toContain("AccessibilityInfo.announceForAccessibility(playerBroken === \"snapshot_failed\"");
+    expect(screen).toContain("AccessibilityInfo.announceForAccessibility(playerBroken === \"snapshot_failed\" || playerBroken === \"snapshot_blurry\"");
   });
 
   it("refusé : lecteur en échec après un échec de l'analyse, ni l'ancien échec réaffiché ni « l'IA peut chercher » dit par VoiceOver ; permis : la phrase dite quand la question s'affiche", () => {

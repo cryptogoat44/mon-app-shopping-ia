@@ -7,3 +7,8 @@
 // officiel, qui peut déposer ses propres traceurs. Choix mémorisé par
 // plateforme, retirable dans Réglages (components/player-consent-setting.tsx).
 export const PLAYER_CONSENT_GATE = true;
+// Retours du build 3 (fondateur, 26 novembre 2026) : le bouton Lecture vaut
+// accord (fond sobre, rien de chargé avant le premier appui, une phrase
+// dessous). false : l'écran d'accord d'avant (stage « consent »), inchangé,
+// si l'avocat le demande à la relecture juridique.
+export const PLAYER_CONSENT_BY_PLAY_BUTTON = true;

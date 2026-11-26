@@ -9,6 +9,7 @@ import { color, font, space } from "@/theme/tokens";
 import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { isPlayerAvailable, readPlayerConsent, withdrawPlayerConsent } from "@/lib/player-access";
+import { PLAYER_CONSENT_BY_PLAY_BUTTON } from "@/lib/spot-flags";
 import { themedStyles } from "@/theme/themed-styles";
 
 export function PlayerConsentSetting() {
@@ -29,7 +30,7 @@ export function PlayerConsentSetting() {
   return (
     <>
       <Text style={styles.title}>{t.player.settings.title}</Text>
-      <Text style={styles.body}>{state === "given" ? t.player.settings.on : t.player.settings.withdrawn}</Text>
+      <Text style={styles.body}>{state === "given" ? t.player.settings.on : PLAYER_CONSENT_BY_PLAY_BUTTON ? t.player.settings.withdrawnPlay : t.player.settings.withdrawn}</Text>
       {state === "given" ? (
         <Pressable onPress={() => void withdraw()} accessibilityRole="button" style={styles.link}>
           <Text style={styles.linkLabel}>{t.player.settings.withdraw}</Text>
