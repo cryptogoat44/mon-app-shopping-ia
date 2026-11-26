@@ -188,8 +188,8 @@ export function powderBands(points: readonly Point[], layer: PowderLayer, widthS
   return paths;
 }
 
-/** Pseudo-aléatoire déterministe (Park-Miller) : le même tracé donne les
- * mêmes grains, le dessin ne « grésille » pas d'un rendu à l'autre. */
+/** Pseudo-aléatoire déterministe (Park-Miller) : la même graine donne les
+ * mêmes tirages, le dessin ne « grésille » pas d'un rendu à l'autre. */
 function random(seed: number): () => number {
   let state = (Math.abs(Math.floor(seed)) % 2147483646) + 1;
   return () => {
@@ -200,12 +200,16 @@ function random(seed: number): () => number {
 
 const GRAIN_GROUPS = 4;
 const GRAIN_MAX_OPACITY = 0.53;
+/** Graine fixe, et non le nombre de points : pendant le geste, ce nombre
+ * change à presque chaque mouvement et redistribuerait tous les grains. */
+const GRAIN_SEED = 1;
 
 /** Les grains de poudre (POWDER.grains au plus, rayon 0,5 à 1 pt) : plus
  * denses et plus vifs vers la tête, plus épars, décalés vers l'extérieur et
- * l'arrière dans la queue. Regroupés en 4 chemins par opacité. Graine : le
- * nombre de points. */
-export function powderGrains(points: readonly Point[], seed: number = points.length): PowderPath[] {
+ * l'arrière dans la queue. Regroupés en 4 chemins par opacité. Graine fixe :
+ * chaque grain garde sa place (t, écart, rayon) d'un rendu à l'autre et ne
+ * glisse que doucement quand la traînée s'allonge. */
+export function powderGrains(points: readonly Point[], seed: number = GRAIN_SEED): PowderPath[] {
   const count = points.length - 1;
   if (count < 1) return [];
   const nrm = normals(points);

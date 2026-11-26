@@ -121,6 +121,29 @@ describe("les grains de poudre", () => {
     expect(powderGrains(trail, 7)).not.toEqual(powderGrains(trail, 8));
   });
 
+  it("stables pendant le geste : un point de plus ne redistribue pas les grains (plus de « grésille »)", () => {
+    /** Les centres des grains, groupe par groupe (un disque = « M x y a… »). */
+    const centres = (points: { x: number; y: number }[]) =>
+      powderGrains(resample(points)).map((grain) => [...grain.d.matchAll(/M(-?[\d.]+) (-?[\d.]+)a/g)].map((match) => ({ x: Number(match[1]), y: Number(match[2]) })));
+    // Un tour qui s'allonge de 4 pt par point (TRACE_STEP), comme sous le doigt.
+    const growing = (count: number) =>
+      Array.from({ length: count }, (_, index) => ({ x: 200 + 80 * Math.cos(index * 0.05), y: 250 + 80 * Math.sin(index * 0.05) }));
+    for (const count of [40, 41, 80, 100]) {
+      const before = centres(growing(count));
+      const after = centres(growing(count + 1));
+      // Les mêmes groupes, le même nombre de grains, chacun à quelques points de sa place.
+      expect(after.map((group) => group.length)).toEqual(before.map((group) => group.length));
+      before.forEach((group, g) =>
+        group.forEach((point, k) => expect(Math.hypot(point.x - after[g][k].x, point.y - after[g][k].y)).toBeLessThan(6))
+      );
+    }
+  });
+
+  it("refusé : une graine qui change avec le nombre de points (graine fixe par défaut)", () => {
+    expect(powderGrains(trail)).toEqual(powderGrains(trail, 1));
+    expect(powderGrains(trail)).not.toEqual(powderGrains(trail, trail.length));
+  });
+
   it("au plus 4 chemins, au plus POWDER.grains grains, rayons de 0,5 à 1 pt", () => {
     const grains = powderGrains(trail);
     expect(grains.length).toBeGreaterThan(0);
