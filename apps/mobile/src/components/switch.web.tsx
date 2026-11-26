@@ -11,7 +11,10 @@ import { themedStyles } from "@/theme/themed-styles";
 // (piste allumée en accent, éteinte en filet ; curseur `blanc` du thème
 // allumé, blanc éteint). Annoncé comme un interrupteur (rôle, aria-checked) ;
 // une zone de 44 points ; le curseur glisse en 150 ms, sans animation si
-// « Réduire les animations » est demandé.
+// « Réduire les animations » est demandé. Clavier : Entrée (géré par
+// Pressable) ET la barre d'espace, comme tout interrupteur du web (motif
+// « switch » du W3C) : react-native-web ne traite l'espace que pour un rôle
+// « button » ; sans `onKeyDown`, l'espace ferait défiler la page.
 const TRACK = { width: 51, height: 31 };
 const THUMB = 25;
 // Un filet de 1 pt fait le tour de la piste (allumée : de sa couleur ; éteinte : visible sur la carte) : le
@@ -33,10 +36,20 @@ export function Switch({ value = false, onValueChange, disabled = false, accessi
     if (reduceMotion) left.setValue(to);
     else Animated.timing(left, { toValue: to, duration: 150, useNativeDriver: false }).start();
   }, [value, reduceMotion, left]);
+  // `onKeyDown` existe dans le Pressable de react-native-web, pas dans les types de React Native.
+  const webKeys = {
+    onKeyDown: (event: { key: string; repeat?: boolean; preventDefault: () => void }) => {
+      if (event.key !== " " && event.key !== "Spacebar") return;
+      event.preventDefault();
+      // Touche maintenue : un seul basculement.
+      if (!disabled && !event.repeat) onValueChange?.(!value);
+    },
+  } as object;
   const track: ColorValue = (value ? trackColor?.true : trackColor?.false) ?? (value ? color.vert : color.filet);
   return (
     <Pressable
       onPress={() => onValueChange?.(!value)}
+      {...webKeys}
       disabled={disabled}
       accessibilityRole="switch"
       accessibilityState={{ checked: value, disabled }}

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
-import type { IndexedPiece } from "@/lib/result-sections";
+import { rowHasMarksAt, type IndexedPiece } from "@/lib/result-sections";
 import { withoutPriceShown, type ClickPlacement } from "@/lib/price-first";
 import { ProposalCard } from "@/components/proposal-card";
 import { themedStyles } from "@/theme/themed-styles";
@@ -62,8 +62,8 @@ export function NoPriceSection({
         <>
           {caption ? <Text style={styles.caption}>{t.result.noPriceText}</Text> : null}
           <View style={styles.grid}>
-            {visible.map(({ piece, index }, i) => (
-              <ProposalCard key={piece.id} piece={piece} onSelect={() => onSelect(index)} placement={placements.get(index)} column={i % 2 === 0 ? "left" : "right"} />
+            {visible.map(({ piece, index }, i, list) => (
+              <ProposalCard key={piece.id} piece={piece} onSelect={() => onSelect(index)} placement={placements.get(index)} column={i % 2 === 0 ? "left" : "right"} rowHasMarks={rowHasMarksAt(list.map((entry) => entry.piece), i)} />
             ))}
           </View>
           {hiddenCount > 0 ? (

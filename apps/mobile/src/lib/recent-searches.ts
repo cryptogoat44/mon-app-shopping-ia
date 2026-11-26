@@ -76,14 +76,29 @@ function startOfDay(date: Date): number {
  * puis « lundi 2 novembre » — l'année seulement si ce n'est pas l'année en
  * cours. Une date un peu en avance (horloge de l'appareil) reste « Aujourd'hui ». */
 export function recentDayLabel(iso: string, locale: Locale, now: Date = new Date()): string {
+  return dayLabel(iso, locale, now, "long");
+}
+
+/** Lot « finitions de l'œil » (maquette « Écrin » 1) : la date courte écrite sur
+ * les cases de « Récemment spottées », pour que la boutique reste lisible :
+ * « Aujourd'hui », « Hier », puis « Lun. 23 nov. » (en anglais « Mon, Nov 23 »),
+ * l'année seulement si ce n'est pas l'année en cours. VoiceOver lit la date
+ * entière (recentDayLabel). */
+export function recentDayShort(iso: string, locale: Locale, now: Date = new Date()): string {
+  return dayLabel(iso, locale, now, "short");
+}
+
+function dayLabel(iso: string, locale: Locale, now: Date, form: "long" | "short"): string {
   const date = new Date(iso);
   // Arrondi : un jour de changement d'heure dure 23 ou 25 heures.
   const daysAgo = Math.round((startOfDay(now) - startOfDay(date)) / DAY_MS);
   if (daysAgo <= 0) return t.retrouverPieces.today;
   if (daysAgo === 1) return t.retrouverPieces.yesterday;
   const sameYear = date.getFullYear() === now.getFullYear();
-  const text = date.toLocaleDateString(INTL[locale], { weekday: "long", day: "numeric", month: "long", ...(sameYear ? {} : { year: "numeric" }) });
-  return locale === "fr" && date.getDate() === 1 ? text.replace(/ 1 /, " 1er ") : text;
+  const text = date.toLocaleDateString(INTL[locale], { weekday: form, day: "numeric", month: form, ...(sameYear ? {} : { year: "numeric" }) });
+  const withFirst = locale === "fr" && date.getDate() === 1 ? text.replace(/ 1 /, " 1er ") : text;
+  // Forme courte : « lun. » prend sa majuscule (« Lun. 23 nov. »), comme la maquette.
+  return form === "short" ? withFirst.charAt(0).toUpperCase() + withFirst.slice(1) : withFirst;
 }
 
 /** Paramètres de l'écran Résultat pour rouvrir une recherche depuis

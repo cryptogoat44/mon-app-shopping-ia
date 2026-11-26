@@ -32,7 +32,7 @@ La **première** capture compte le plus : c'est elle qu'on voit dans les résult
 
 | # | Écran | Ce qu'on doit y voir | Légende FR | Légende EN |
 |---|---|---|---|---|
-| 1 | **Spotter** (accueil) | les boutons « Ajouter une vidéo », « Ajouter une photo », « Prendre une photo », et des pièces dans « Récemment spottées » | Vue dans une vidéo ? Retrouvez-la. | Saw it in a video? Find it. |
+| 1 | **Spotter** (accueil) | les boutons « Vidéo », « Photo », « Appareil photo » (en anglais « Video », « Photo », « Camera »), et des pièces dans « Récemment spottées » | Vue dans une vidéo ? Retrouvez-la. | Saw it in a video? Find it. |
 | 2 | **Entourez la pièce** | une capture d'écran de vidéo, la pièce entourée au doigt | Entourez la pièce, c'est tout. | Just circle the piece. |
 | 3 | **Résultats** | « Meilleure proposition avec prix », avec le prix et « Voir chez … » | Où l'acheter, prix en tête. | Where to buy it, prices first. |
 | 4 | **Partager vers Spotto** | la feuille de partage d'iOS ouverte sur une photo, avec l'icône de Spotto (le « S » en or poli sur fond vert anglais) | Partagez vers Spotto depuis Photos. | Share to Spotto from Photos. |

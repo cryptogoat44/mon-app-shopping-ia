@@ -1,10 +1,12 @@
-import { Pressable, Text, TextInput, View } from "react-native";
+import { useState } from "react";
+import { Pressable, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { color, font, getActiveScheme, radius, size, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import type { Piece } from "@/api/types";
 import { ClockIcon, SearchIcon } from "@/components/icons";
 import { PieceTile } from "@/components/piece-tile";
-import { recentDayLabel } from "@/lib/recent-searches";
+import { recentDayLabel, recentDayShort } from "@/lib/recent-searches";
+import { placeholderFor } from "@/lib/text-fit";
 import { themedStyles } from "@/theme/themed-styles";
 
 /** Une recherche récente : sa meilleure proposition et son jour. */
@@ -24,13 +26,15 @@ export interface RecentSearch {
  * nette), comme les grilles des Envies et du Vault. */
 export function RecentSearchTile({ entry, column, onOpen }: { entry: RecentSearch; column: "left" | "right"; onOpen: () => void }) {
   const { piece } = entry;
-  const meta = [recentDayLabel(entry.createdAt, getActiveLocale()), piece.merchantName].filter(Boolean).join(" · ");
+  // Lu par VoiceOver : la date entière ; écrite : la date courte (« Lun. 23 nov. · Le Quai »), lot « finitions de l'œil ».
+  const spoken = [recentDayLabel(entry.createdAt, getActiveLocale()), piece.merchantName].filter(Boolean).join(", ");
+  const day = recentDayShort(entry.createdAt, getActiveLocale());
   return (
     <Pressable
       style={({ pressed }) => [styles.cell, column === "left" ? styles.cellLeft : styles.cellRight, pressed ? styles.pressed : null]}
       onPress={onOpen}
       accessibilityRole="button"
-      accessibilityLabel={`${piece.name}, ${meta}`}
+      accessibilityLabel={`${piece.name}, ${spoken}`}
     >
       {piece.imageUrl ? (
         <PieceTile variant="grid" size="card" hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} edgeColor={piece.edgeColor} recyclingKey={entry.searchId} />
@@ -42,9 +46,17 @@ export function RecentSearchTile({ entry, column, onOpen }: { entry: RecentSearc
       <Text style={styles.name} numberOfLines={1}>
         {piece.name}
       </Text>
-      <Text style={styles.meta} numberOfLines={1}>
-        {meta}
-      </Text>
+      {/* À 320 points, la boutique est raccourcie avant la date, jamais l'inverse. */}
+      <View style={styles.metaRow}>
+        <Text style={[styles.meta, styles.metaDay]} numberOfLines={1}>
+          {piece.merchantName ? `${day} ·\u00a0` : day}
+        </Text>
+        {piece.merchantName ? (
+          <Text style={[styles.meta, styles.metaShop]} numberOfLines={1}>
+            {piece.merchantName}
+          </Text>
+        ) : null}
+      </View>
     </Pressable>
   );
 }
@@ -53,6 +65,9 @@ export function RecentSearchTile({ entry, column, onOpen }: { entry: RecentSearc
  * section, caché tant que l'historique est vide. Les mots partent au serveur
  * pour filtrer vos propres recherches ; ils ne sont gardés nulle part. */
 export function HistorySearchField({ value, onChangeText, onClear }: { value: string; onChangeText: (value: string) => void; onClear: () => void }) {
+  // Lot « finitions de l'œil » : champ étroit ou texte agrandi, le texte d'attente court (jamais coupé au milieu d'une lettre).
+  const { fontScale } = useWindowDimensions();
+  const [inputWidth, setInputWidth] = useState(0);
   return (
     <View style={styles.searchBar}>
       <View style={styles.searchIcon}>
@@ -62,7 +77,8 @@ export function HistorySearchField({ value, onChangeText, onClear }: { value: st
         style={styles.searchInput}
         value={value}
         onChangeText={onChangeText}
-        placeholder={t.retrouverPieces.historySearchPlaceholder}
+        placeholder={placeholderFor(t.retrouverPieces.historySearchPlaceholder, t.retrouverPieces.historySearchPlaceholderShort, inputWidth, font.secondary, fontScale)}
+        onLayout={(event) => setInputWidth(event.nativeEvent.layout.width)}
         placeholderTextColor={color.acier}
         accessibilityLabel={t.retrouverPieces.historySearchLabel}
         autoCapitalize="none"
@@ -89,7 +105,11 @@ const styles = themedStyles(() => ({
   tileEmpty: { width: "100%", aspectRatio: 4 / 5, backgroundColor: color.plinthe, borderRadius: radius.pieceGrid, borderCurve: "continuous", alignItems: "center", justifyContent: "center" },
   // Une ligne (le nom entier est dans l'étiquette VoiceOver de la case) : même hauteur pour toutes les cases.
   name: { fontSize: font.secondary, lineHeight: 20, fontWeight: "500", color: color.encre, marginTop: space.sm },
-  meta: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginTop: 2 },
+  metaRow: { flexDirection: "row", marginTop: 2 },
+  meta: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
+  // maxWidth : la boutique disparaît d'abord, puis la date se raccourcit DANS la case (grand texte, année affichée).
+  metaDay: { flexShrink: 0, maxWidth: "100%" },
+  metaShop: { flexShrink: 1 },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",

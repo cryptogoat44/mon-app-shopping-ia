@@ -19,8 +19,10 @@ import { themedStyles } from "@/theme/themed-styles";
 // être analysée (lib/latest-video-state.ts).
 
 /** Lot « fidélité aux maquettes » : libellé visible court (`label`), phrase
- * entière lue par VoiceOver (`accessibilityLabel`), qui contient toujours le
- * libellé visible (Commande vocale d'iOS agit sur le nom lu : « Toucher Photo »). */
+ * entière lue par VoiceOver (`accessibilityLabel`), qui COMMENCE par le
+ * libellé visible (Commande vocale d'iOS agit sur le nom lu : « Toucher
+ * Photo ») : « Vidéo, Ajouter une vidéo », « Photo, Ajouter une photo »,
+ * « Appareil photo, Prendre une photo ». */
 function Tile({
   icon,
   label,
@@ -39,9 +41,8 @@ function Tile({
   return (
     <Pressable style={styles.tile} onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={accessibilityLabel} accessibilityState={{ busy, disabled }}>
       {busy ? <ActivityIndicator color={color.vert} /> : icon}
-      <Text style={styles.tileLabel} numberOfLines={2}>
-        {label}
-      </Text>
+      {/* Aucune limite de lignes : au grand texte, le libellé passe à la ligne et la tuile grandit (minHeight). */}
+      <Text style={styles.tileLabel}>{label}</Text>
     </Pressable>
   );
 }
@@ -69,7 +70,7 @@ export function EntryTiles({
       <Tile
         icon={<VideoIcon size={24} tint={color.vert} />}
         label={t.spotter.tileVideo}
-        accessibilityLabel={videoLabel}
+        accessibilityLabel={`${t.spotter.tileVideo}, ${videoLabel}`}
         onPress={onVideo}
         busy={busy === "video"}
         disabled={busy !== null}
@@ -77,7 +78,7 @@ export function EntryTiles({
       <Tile
         icon={<CameraIcon size={24} tint={color.vert} />}
         label={t.spotter.tilePhoto}
-        accessibilityLabel={t.spotter.addPhoto}
+        accessibilityLabel={`${t.spotter.tilePhoto}, ${t.spotter.addPhoto}`}
         onPress={onPhoto}
         busy={busy === "photo"}
         disabled={busy !== null}

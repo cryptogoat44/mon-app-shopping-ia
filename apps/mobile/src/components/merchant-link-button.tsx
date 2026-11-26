@@ -106,7 +106,8 @@ const styles = themedStyles(() => ({
   buttonLabel: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
   // Variante pleine (maquette « Écrin » 6) : 52 pt, la flèche à côté du libellé.
   primary: { backgroundColor: color.vert, borderColor: color.vert, minHeight: 52, flexDirection: "row", gap: 8 },
-  primaryLabel: { color: color.blanc, flexShrink: 1 },
+  // Lot « finitions de l'œil » : la taille du bouton « Voir chez … » de la grande carte du Résultat (17 points).
+  primaryLabel: { color: color.blanc, flexShrink: 1, fontSize: font.body },
   compact: { minHeight: 32, justifyContent: "center" },
   compactLabel: { ...lienSouligne, fontSize: 11.5, color: color.vert, fontWeight: "600" },
   blocked: { ...lienSouligne, fontSize: font.caption, color: color.vert, marginTop: 6 },

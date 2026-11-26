@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ActivityIndicator, Platform, Pressable, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, Text, TextInput, useWindowDimensions, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { color, font, getActiveScheme, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
@@ -8,6 +8,7 @@ import { ErrorMessage } from "@/components/error-message";
 import { detectLink, type LinkDetection } from "@/lib/link-detection";
 import { linkRefusal, linkStep } from "@/lib/link-step";
 import { useLinkEntry } from "@/lib/use-link-entry";
+import { placeholderFor } from "@/lib/text-fit";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Champ de lien du Spotter (mission « liens vidéo »), sur l'app iPhone comme
@@ -40,6 +41,8 @@ function DetectionCard({ detection }: { detection: LinkDetection }) {
 /** `onHelp` : le lien ne peut pas être lu — le Spotter montre l'aide « capture d'écran d'abord ». */
 export function LinkEntry({ onHelp }: { onHelp: () => void }) {
   const label = t.player.linkLabel;
+  const { fontScale } = useWindowDimensions();
+  const [inputWidth, setInputWidth] = useState(0);
   const openLink = useLinkEntry();
   const [link, setLink] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -106,7 +109,8 @@ export function LinkEntry({ onHelp }: { onHelp: () => void }) {
 
   return (
     <>
-      {/* Lot « fidélité aux maquettes » : un bloc plein ; le libellé devient le texte d'attente et reste le nom lu (VoiceOver, aria-label du site). */}
+      {/* Lot « fidélité aux maquettes » : un bloc plein ; le libellé devient le texte d'attente et reste le nom lu (VoiceOver, aria-label du site).
+          Lot « finitions de l'œil » : champ étroit ou texte agrandi, un texte d'attente court (le nom lu reste le libellé entier). */}
       <View style={styles.field}>
         <View accessible={false}>
           <LinkIcon size={18} tint={color.acier} />
@@ -118,7 +122,8 @@ export function LinkEntry({ onHelp }: { onHelp: () => void }) {
             setLink(text);
             setMessage(null);
           }}
-          placeholder={label}
+          placeholder={placeholderFor(label, t.player.linkPlaceholderShort, inputWidth, INPUT_FONT_SIZE, fontScale)}
+          onLayout={(event) => setInputWidth(event.nativeEvent.layout.width)}
           placeholderTextColor={color.acier}
           autoCapitalize="none"
           autoCorrect={false}
@@ -158,6 +163,9 @@ export function LinkEntry({ onHelp }: { onHelp: () => void }) {
   );
 }
 
+/** Taille du texte du champ (16 sur le site : en dessous, Safari agrandit la page au toucher). */
+const INPUT_FONT_SIZE = Platform.OS === "web" ? 16 : font.secondary;
+
 const styles = themedStyles(() => ({
   hint: { fontSize: font.caption, lineHeight: 18, color: color.acier, marginTop: space.sm },
   field: {
@@ -176,7 +184,7 @@ const styles = themedStyles(() => ({
     marginTop: space.md,
   },
   // 16 sur le site : Safari sur iPhone zoome toute la page quand un champ de moins de 16 px prend le curseur.
-  input: { flex: 1, minWidth: 0, fontSize: Platform.OS === "web" ? 16 : font.secondary, color: color.encre, paddingVertical: 12 },
+  input: { flex: 1, minWidth: 0, fontSize: INPUT_FONT_SIZE, color: color.encre, paddingVertical: 12 },
   clearButton: { minWidth: 32, minHeight: 44, alignItems: "center", justifyContent: "center" },
   clearLabel: { fontSize: 22, lineHeight: 24, color: color.acier },
   // Un bouton encadré (plus un lien) : la maquette dit 40 de haut, on garde la cible de 44, qui tient dans 52.

@@ -773,7 +773,13 @@ describe("politique de confidentialité : retours du build 3 (lot du 2026-11-26)
     expect(fr.settings.latestVideoTitle).toBe("Proposer ma dernière vidéo");
     expect(en.settings.latestVideoTitle).toBe("Suggest my latest video");
     const device = section(privacyPolicy, "Sur votre téléphone ou dans votre navigateur");
-    expect(device).toContain("le fait que vous avez replié la carte « Votre dernière vidéo »");
+    // Relecture du lot « fidélité aux maquettes » : l'app garde « 1 » (repliée) OU « 0 » (dépliée), FR et EN.
+    expect(device).toContain("le fait que vous avez replié ou déplié la carte « Votre dernière vidéo »");
+    expect(section(privacyPolicyEn, "On your phone or in your browser")).toContain("the fact that you collapsed or expanded the “Your latest video” card");
+    expect(readFileSync(join(__dirname, "../src/lib/latest-video.ts"), "utf8")).toContain('reduced ? "1" : "0"');
+    // Refusé : la phrase qui ne parlait que de la carte repliée.
+    expect(frText).not.toContain("le fait que vous avez replié la carte");
+    expect(enText).not.toContain("the fact that you collapsed the “Your latest video” card");
     expect(device).toContain("le fait que l'aide « Pincez pour zoomer » vous a déjà été montrée");
     expect(fr.common.zoomHint).toBe("Pincez pour zoomer");
     expect(en.common.zoomHint).toBe("Pinch to zoom");

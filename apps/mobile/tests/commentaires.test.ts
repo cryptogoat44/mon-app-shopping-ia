@@ -377,7 +377,8 @@ describe("réglage « Qui peut me mentionner »", () => {
     expect(DEFAULT_MENTIONS_FROM).toBe("following");
     expect(setting).toContain("const stored = profile?.mentionsFrom;");
     expect(setting).toContain("if (stored === undefined) return null;");
-    expect(setting).toContain("<SegmentedChoice");
+    // Lot « finitions de l'œil » : la liste à cocher des Réglages (components/settings-choice.tsx), même groupe radio.
+    expect(setting).toContain("<SettingsChoice");
     for (const value of ["everyone", "following", "nobody"]) expect(setting, value).toContain(`{ value: "${value}", label: t.commentThreads.${value} }`);
     expect(setting).toContain("<Text style={styles.hint}>{t.commentThreads.settingHelp}</Text>");
   });
@@ -387,7 +388,7 @@ describe("réglage « Qui peut me mentionner »", () => {
     expect(choose.indexOf("setValue(next);")).toBeLessThan(choose.indexOf("await updateMentionsFrom(next);"));
     expect(choose).toContain("setValue(previous);");
     expect(choose).toContain("setError(true);");
-    expect(setting).toContain("{error ? <ErrorMessage style={styles.hint}>{t.commentThreads.settingError}</ErrorMessage> : null}");
+    expect(setting).toContain("{error ? <ErrorMessage style={styles.error}>{t.commentThreads.settingError}</ErrorMessage> : null}");
     expect(read("lib/api.ts")).toContain('await authorizedFetch("/api/me/mentions-from", { method: "PUT", body: JSON.stringify(payload) });');
   });
 });
@@ -432,7 +433,8 @@ describe("textes", () => {
     expect(fr.commentThreads.mentionHint).toBe("Tapez @ pour mentionner un membre");
     expect(fr.commentThreads.settingTitle).toBe("Qui peut me mentionner");
     expect(fr.commentThreads.settingHelp).toBe("Dans un commentaire ou sur une photo.");
-    expect([fr.commentThreads.everyone, fr.commentThreads.following, fr.commentThreads.nobody]).toEqual(["Tout le monde", "Les comptes que je suis", "Personne"]);
+    // Lot « finitions de l'œil » : « Comptes que je suis », la même forme que les autres blocs « Qui peut… ».
+    expect([fr.commentThreads.everyone, fr.commentThreads.following, fr.commentThreads.nobody]).toEqual(["Tout le monde", "Comptes que je suis", "Personne"]);
     expect(fr.commentThreads.removeMyMention).toBe("Retirer ma mention");
 
     expect(en.commentThreads.reply).toBe("Reply");

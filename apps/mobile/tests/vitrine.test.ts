@@ -112,10 +112,11 @@ describe("une seule vitrine", () => {
 describe("la tuile de pièce (components/piece-tile.tsx)", () => {
   const tile = read("src/components/piece-tile.tsx");
 
-  it("fond : la copie floue de la vignette, jamais lue par VoiceOver ; ou la couleur des bords donnée", () => {
-    expect(tile).toContain("blurRadius={24}");
-    expect(tile).toMatch(/blurRadius=\{24\}\s+cachePolicy="memory-disk"\s+recyclingKey=\{recyclingKey\}\s+accessible=\{false\}/);
-    expect(tile).toContain("transform: [{ scale: 1.2 }]");
+  it("fond : les bords prolongés (lot « finitions de l'œil »), jamais lus par VoiceOver ; ou la couleur des bords donnée", () => {
+    // Refusé : la copie floue et agrandie d'avant (couture et halo). Permis : une bande par côté libre (tests/finitions-oeil.test.ts).
+    expect(tile).not.toContain("blurRadius={24}");
+    expect(tile).not.toContain("transform: [{ scale: 1.2 }]");
+    expect(tile).toMatch(/blurRadius=\{band\.blur\}\s+cachePolicy="memory-disk"\s+recyclingKey=\{recyclingKey\}\s+accessible=\{false\}/);
     expect(tile).toContain("const background = edgeColorApplies(naturalSize, frame, variant) ? edgeBackground(edgeColor) : null;");
     expect(tile).toContain("{ backgroundColor: background }");
   });
@@ -138,12 +139,14 @@ describe("la tuile de pièce (components/piece-tile.tsx)", () => {
   });
 
   it("premier plan : remplie quand fillsTile, sinon la taille honnête, centrée", () => {
-    // Lot « fidélité aux maquettes » : la tolérance des grilles (26 %) seulement en grille et sans couleur de fond ; jamais en grand.
-    expect(tile).toContain('const tolerance = variant === "grid" && !background ? GRID_FILL_TOLERANCE : FILL_TOLERANCE;');
-    expect(tile).toContain("fillsTile(naturalSize, frame, variant, tolerance)");
-    expect(tile).not.toMatch(/variant === "hero"[^;\n]*GRID_FILL_TOLERANCE/);
+    // Lot « fidélité aux maquettes », corrigé à la relecture : remplir dépend du ratio seul (lib/piece-image.ts) ;
+    // refusé : un cadrage qui dépend de la couleur de fond (il changerait quand la couleur arrive à la relecture).
+    expect(tile).toContain("if (fillsTile(naturalSize, frame, variant)) foreground");
+    expect(tile).not.toMatch(/fillsTile\([^)]*background/);
+    expect(tile).not.toMatch(/background \?[^;\n]*TOLERANCE/);
+    expect(tile).not.toMatch(/!background[^;\n]*TOLERANCE/);
     expect(tile).toContain("honestSize(naturalSize, frame, variant)");
-    expect(tile).toContain("onImageSize={(measured) => setNatural({ uri: imageKey, size: measured })}");
+    expect(tile).toContain("onImageSize={(measured, shown) => setNatural({ uri: imageKey, size: measured, shown })}");
     // Agrandissable : le libellé est porté une seule fois, par le bouton.
     expect(tile).toContain("accessibilityLabel={enlargeable ? undefined : accessibilityLabel}");
   });
@@ -155,14 +158,14 @@ describe("la tuile de pièce (components/piece-tile.tsx)", () => {
     expect(tile).toContain("const naturalSize = natural?.uri === imageKey ? natural.size : null;");
   });
 
-  it("refusé : le flou visible à travers un détourage transparent ; permis : le flou dans les bandes", () => {
+  it("refusé : les bandes visibles à travers un détourage transparent ; permis : les bandes autour de la photo", () => {
     // Taille connue : les deux boîtes du premier plan sont opaques.
     expect(tile).toContain('foreground = { style: [StyleSheet.absoluteFill, { backgroundColor: color.plinthe }], fit: "cover" };');
     expect(tile).toMatch(/top: \(frame\.height - shown\.height\) \/ 2, backgroundColor: color\.plinthe \}/);
-    // Taille inconnue : pas de fond, pour ne pas cacher le flou pendant le chargement.
+    // Taille inconnue : pas de fond (la plinthe de la tuile, aucune bande tant que la taille n'est pas connue).
     expect(tile).toContain('let foreground: { style: StyleProp<ImageStyle>; fit: "contain" | "cover" } = { style: StyleSheet.absoluteFill, fit: "contain" };');
-    // Le flou reste sous toute la tuile.
-    expect(tile).toContain("style={styles.blur}");
+    // Les bandes sont sous la photo (dessinées avant elle).
+    expect(tile.indexOf("bands.map(")).toBeLessThan(tile.indexOf("      {image}"));
   });
 
   it("aucune couleur en dur, aucune dépendance nouvelle", () => {
@@ -171,10 +174,12 @@ describe("la tuile de pièce (components/piece-tile.tsx)", () => {
     expect(imports.filter((name) => !name.startsWith("@/"))).toEqual(["react", "react-native", "expo-image"]);
   });
 
-  it("SpotImage rapporte la taille de l'image réellement affichée, sans changer le reste", () => {
+  it("SpotImage rapporte la taille (et l'adresse) de l'image réellement affichée, sans changer le reste", () => {
     const image = read("src/components/spot-image.tsx");
-    expect(image).toContain("onImageSize?: (size: ImageNaturalSize) => void;");
-    expect(image).toContain('useReportSize(showHd && current.hd === "loaded" ? current.hdSize : showThumb ? current.thumbSize : null, onImageSize);');
+    // Lot « finitions de l'œil » : l'adresse en plus, copiée dans les bords prolongés de la tuile.
+    expect(image).toContain("onImageSize?: (size: ImageNaturalSize, uri: string) => void;");
+    expect(image).toContain('const hdOnTop = showHd && current.hd === "loaded";');
+    expect(image).toContain("useReportSize(hdOnTop ? current.hdSize : showThumb ? current.thumbSize : null, hdOnTop ? hd : showThumb ? thumb : null, onImageSize);");
     // Les cases qui ne demandent rien ne se redessinent pas au chargement.
     expect(image).toContain("onLoad={onImageSize ? (event) => setLoaded({ uri, size: naturalSize(event.source) }) : undefined}");
   });
@@ -251,7 +256,8 @@ describe("la grande carte et l'écran des résultats, resserrés", () => {
   });
 
   it("rythme de la grande carte et de la grille", () => {
-    expect(styleOf(screen, "rankLabel")).toContain("marginTop: 12");
+    // Lot « finitions de l'œil » : resserré (8 au lieu de 12) pour que la rangée d'actions tienne sans défiler.
+    expect(styleOf(screen, "rankLabel")).toContain("marginTop: space.sm");
     // Lot « fidélité aux maquettes » : « Voir chez … » de 52, la rangée d'actions soudée (sans écart), les marges du titre sur sa ligne.
     expect(styleOf(screen, "primary")).toContain("minHeight: 52");
     expect(styleOf(screen, "primary")).toContain("marginTop: 12");
@@ -264,8 +270,13 @@ describe("la grande carte et l'écran des résultats, resserrés", () => {
   });
 
   it("barre de tri : résumé seul, puis les deux pastilles sur une ligne ; testID conservés", () => {
-    expect(styleOf(bar, "bar")).toContain("marginBottom: 12");
-    expect(styleOf(bar, "filters")).toContain('flexDirection: "row", flexWrap: "wrap", gap: space.sm');
+    // Lot « finitions de l'œil » : resserrée (4 au lieu de 12), sans marge au-dessus des pastilles.
+    expect(styleOf(bar, "bar")).toContain("marginBottom: space.xs");
+    expect(styleOf(bar, "filters")).not.toContain("marginTop");
+    // Lot « finitions de l'œil » : une seule rangée qui défile sur le côté (refusé : une pastille seule sur une deuxième rangée).
+    expect(styleOf(bar, "filters")).toContain('flexDirection: "row", gap: space.sm');
+    expect(styleOf(bar, "filters")).not.toContain("flexWrap");
+    expect(bar).toContain('<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters} testID="sort-chips">');
     expect(bar).not.toContain("stockLine");
     for (const id of ['testID="result-sort-bar"', 'testID="with-price-only"', 'testID="in-stock-only"', 'testID="price-summary"']) expect(bar).toContain(id);
     expect(screen).toContain('testID="verdict-place"');
@@ -284,7 +295,12 @@ describe("zones tactiles intactes", () => {
     // Lot « fidélité aux maquettes » : la pastille du tri et les filtres, des pastilles de 32 dans une zone de 44.
     expect(styleOf(bar, "chipZone")).toContain("minHeight: size.touchTarget");
     expect(bar.match(/style=\{styles\.chipZone\}/g)).toHaveLength(3);
-    expect(styleOf(bar, "chip")).toContain("height: 32");
+    // Relecture du lot : grand texte, la pastille grandit et passe à la ligne ; refusé : une hauteur fixe, un libellé coupé.
+    expect(styleOf(bar, "chip")).toContain("minHeight: 32,");
+    expect(styleOf(bar, "chip")).not.toMatch(/\bheight: 32/);
+    expect(styleOf(bar, "chipZone")).toContain("flexShrink: 1, maxWidth: \"100%\"");
+    expect(styleOf(bar, "chipLabel")).toContain("flexShrink: 1");
+    expect(bar).not.toMatch(/styles\.chipLabel[^>]*numberOfLines/);
     expect(read("src/components/proposal-card.tsx")).toMatch(/shopLink: \{ minHeight: size\.touchTarget/);
     for (const path of ["src/components/send-to-friend-link.tsx", "src/components/stock-report-sheet.tsx", "src/components/spot-corrections.tsx"]) {
       expect(read(path), path).toMatch(/minHeight: (44|size\.touchTarget)/);

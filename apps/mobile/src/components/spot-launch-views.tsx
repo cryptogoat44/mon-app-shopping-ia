@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { ActivityIndicator, Platform, Pressable, Text, TextInput, View, type StyleProp, type TextStyle } from "react-native";
+import { ActivityIndicator, Platform, Pressable, Text, TextInput, useWindowDimensions, View, type StyleProp, type TextStyle } from "react-native";
 import { Image } from "expo-image";
 import { SEARCH_QUERY_MAX_LENGTH } from "@monapp/shared-types";
 import { color, font, getActiveScheme, radius, serifFont, serifLineHeight, size, space } from "@/theme/tokens";
@@ -10,6 +10,7 @@ import { VideoIcon } from "@/components/icons";
 import { LinkNotice } from "@/components/link-notice";
 import { PieceTracer } from "@/components/piece-tracer";
 import type { Size } from "@/lib/crop-geometry";
+import { placeholderFor } from "@/lib/text-fit";
 import { WHOLE_IMAGE_ZONE, type PieceZone } from "@/lib/piece-trace";
 import type { FramePreview } from "@/lib/video-timeline";
 import { themedStyles } from "@/theme/themed-styles";
@@ -115,6 +116,7 @@ export function QueryInput({
   testID,
   style,
   placeholder = t.launch.placeholder,
+  shortPlaceholder,
   label = t.launch.title,
   boxed = false,
 }: {
@@ -125,17 +127,25 @@ export function QueryInput({
   testID: string;
   style?: StyleProp<TextStyle>;
   placeholder?: string;
+  /** Lot « finitions de l'œil » : le texte d'attente court, quand le long ne tient pas dans la largeur du champ. */
+  shortPlaceholder?: string;
   label?: string;
   /** Un bloc plein (photo, maquette « Écrin » 3) au lieu du champ souligné (question des vidéos). */
   boxed?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
+  const { fontScale } = useWindowDimensions();
+  const [inputWidth, setInputWidth] = useState(0);
+  // Bloc plein : 14 points de marge intérieure de chaque côté.
+  const shownPlaceholder =
+    placeholder && shortPlaceholder ? placeholderFor(placeholder, shortPlaceholder, inputWidth - (boxed ? 28 : 0), boxed ? BOXED_FONT_SIZE : font.body, fontScale) : placeholder;
   return (
     <TextInput
       style={boxed ? [styles.inputBoxed, focused ? styles.inputBoxedFocused : null, style] : [styles.input, focused ? styles.inputFocused : null, style]}
       value={value}
       onChangeText={onChangeText}
-      placeholder={placeholder}
+      placeholder={shownPlaceholder}
+      onLayout={shortPlaceholder ? (event) => setInputWidth(event.nativeEvent.layout.width) : undefined}
       placeholderTextColor={color.acier}
       maxLength={SEARCH_QUERY_MAX_LENGTH}
       autoFocus={autoFocus}
@@ -201,6 +211,7 @@ export function AskView(p: AskProps) {
             onSubmit={() => p.canLaunch && p.onLaunch()}
             testID="spot-photo-words"
             placeholder={`${t.launch.photoLabel} · ${t.launch.photoPlaceholder}`}
+            shortPlaceholder={t.launch.photoLabel}
             label={t.launch.photoLabel}
             boxed
           />
@@ -309,6 +320,9 @@ export function FallbackView({ title, text, failure, actions }: { title: string;
   );
 }
 
+/** Taille du texte du champ en bloc plein (16 sur le site : en dessous, Safari agrandit la page au toucher). */
+const BOXED_FONT_SIZE = Platform.OS === "web" ? 16 : font.secondary;
+
 const styles = themedStyles(() => ({
   preview: { borderRadius: radius.sm, overflow: "hidden", backgroundColor: color.plinthe },
   fill: { width: "100%", height: "100%" },
@@ -350,7 +364,7 @@ const styles = themedStyles(() => ({
     borderWidth: getActiveScheme() === "light" ? 1 : 0,
     borderColor: color.filet,
     marginTop: space.sm,
-    fontSize: Platform.OS === "web" ? 16 : font.secondary,
+    fontSize: BOXED_FONT_SIZE,
     color: color.encre,
     outlineStyle: "solid",
     outlineWidth: 0,

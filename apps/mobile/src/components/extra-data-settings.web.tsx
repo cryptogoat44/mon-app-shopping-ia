@@ -47,6 +47,7 @@ export function ExtraDataSettings() {
   if (phase === "withdrawn") {
     return (
       <>
+        <View style={settingsGroup.divider} />
         <Text style={styles.title}>{tryonText.settings.title}</Text>
         <Text style={styles.body} accessibilityLiveRegion="polite">
           {tryonText.settings.withdrawn}

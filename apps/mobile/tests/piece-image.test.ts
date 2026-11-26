@@ -6,7 +6,8 @@ import {
   edgeColorApplies,
   FILL_TOLERANCE,
   fillsTile,
-  GRID_FILL_TOLERANCE,
+  GRID_TALL_FILL_TOLERANCE,
+  GRID_WIDE_FILL_TOLERANCE,
   HERO_MAX_POINTS_PER_PIXEL,
   honestSize,
   imageAfterErrors,
@@ -221,6 +222,7 @@ describe("grilles de publications : la miniature d'abord, jamais la photo entiè
 describe("tuile de pièce : remplir, taille honnête, couleur des bords", () => {
   const HERO = { width: 358, height: 447.5 };
   const GRID = { width: 170, height: 212.5 };
+  const CELL_4_5 = { width: 175, height: 219 };
 
   it("constantes : 4:5, 12 %, un point par pixel", () => {
     expect(TILE_RATIO).toBe(4 / 5);
@@ -233,9 +235,8 @@ describe("tuile de pièce : remplir, taille honnête, couleur des bords", () => 
     expect(fillsTile({ width: 1200, height: 1500 }, GRID, "grid")).toBe(true);
   });
 
-  it("refusé : une photo carrée (écart de 25 %) ne remplit pas, elle se pose sur son fond", () => {
+  it("refusé : une grande photo carrée (écart de 25 %) ne remplit pas, elle se pose sur son fond", () => {
     expect(fillsTile({ width: 1000, height: 1000 }, HERO, "hero")).toBe(false);
-    expect(fillsTile({ width: 1000, height: 1000 }, GRID, "grid")).toBe(false);
   });
 
   it("photo presque 4:5 (0,85, écart 6 %) mais petite (200 px) : refusé en grand, permis en grille", () => {
@@ -247,21 +248,31 @@ describe("tuile de pièce : remplir, taille honnête, couleur des bords", () => 
   it("dimensions inconnues ou nulles : ne remplit pas", () => {
     expect(fillsTile(null, HERO, "hero")).toBe(false);
     expect(fillsTile({ width: 0, height: 0 }, GRID, "grid")).toBe(false);
-    expect(fillsTile(null, GRID, "grid", GRID_FILL_TOLERANCE)).toBe(false);
+    expect(fillsTile(null, CELL_4_5, "grid")).toBe(false);
   });
 
-  // Lot « fidélité aux maquettes » (décision 9) : en grille, sans couleur de fond connue, une photo carrée remplit la tuile.
-  describe("grilles sans couleur de fond : règle « recadrée » des maquettes (26 %)", () => {
-    const CELL = { width: 175, height: 219 };
-    it("permis : une photo carrée remplit la case (rognée de 10 % au plus de chaque côté)", () => {
-      expect(GRID_FILL_TOLERANCE).toBe(0.26);
-      expect(fillsTile({ width: 1000, height: 1000 }, CELL, "grid", GRID_FILL_TOLERANCE)).toBe(true);
+  // Lot « fidélité aux maquettes » (décision 9), corrigée à la relecture : en grille, une photo plus large que la
+  // tuile, jusqu'au carré, la remplit ; une photo plus haute n'est rognée que de 12 % au plus ; selon le ratio seul.
+  describe("grilles : règle « recadrée » des maquettes, tolérance asymétrique (26 % en largeur, 12 % en hauteur)", () => {
+    const CELL = CELL_4_5;
+    it("constantes : 26 % pour une photo plus large, 12 % pour une photo plus haute", () => {
+      expect(GRID_WIDE_FILL_TOLERANCE).toBe(0.26);
+      expect(GRID_TALL_FILL_TOLERANCE).toBe(0.12);
     });
-    it("refusé : la même photo avec une couleur de fond connue (tolérance de 12 %) se pose entière sur son fond", () => {
-      expect(fillsTile({ width: 1000, height: 1000 }, CELL, "grid", FILL_TOLERANCE)).toBe(false);
+    it("permis : une photo carrée remplit la case (rognée de 10 % au plus de chaque côté)", () => {
+      expect(fillsTile({ width: 1000, height: 1000 }, CELL, "grid")).toBe(true);
+      expect(fillsTile({ width: 1000, height: 1000 }, GRID, "grid")).toBe(true);
+    });
+    it("permis : une photo 3:4 (un peu plus haute que la case, écart 6 %) la remplit", () => {
+      expect(fillsTile({ width: 1500, height: 2000 }, CELL, "grid")).toBe(true);
+    });
+    it("refusé : une photo en pied 2:3 (écart 17 %) n'est pas rognée : ni tête ni pieds coupés", () => {
+      expect(fillsTile({ width: 1000, height: 1500 }, CELL, "grid")).toBe(false);
+      // Ratio 0,6 (écart 25 %, sous les 26 % du côté large) : toujours entière.
+      expect(fillsTile({ width: 600, height: 1000 }, CELL, "grid")).toBe(false);
     });
     it("refusé : une photo 16:9 (au-delà de 26 %) n'est jamais recadrée, même en grille", () => {
-      expect(fillsTile({ width: 1600, height: 900 }, CELL, "grid", GRID_FILL_TOLERANCE)).toBe(false);
+      expect(fillsTile({ width: 1600, height: 900 }, CELL, "grid")).toBe(false);
     });
     it("refusé : une grande image carrée dans une tuile 4:5 (358 × 448) n'est pas recadrée", () => {
       expect(fillsTile({ width: 1000, height: 1000 }, { width: 358, height: 448 }, "hero")).toBe(false);

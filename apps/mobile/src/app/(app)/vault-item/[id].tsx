@@ -54,7 +54,7 @@ export default function VaultItemDetailScreen() {
       const updated = await changeVaultItemPhoto(item.id, picked.uri);
       setItem((current) => {
         if (!current) return current;
-        // Nouvelle photo : la couleur des bords de l'ancienne vignette ne vaut plus (lot « couleur des bords ») ; la copie floue de la nouvelle photo reprend.
+        // Nouvelle photo : la couleur des bords de l'ancienne vignette ne vaut plus (lot « couleur des bords ») ; les bords prolongés de la nouvelle photo reprennent.
         const { edgeColor: _oldEdgeColor, ...rest } = current;
         return { ...rest, ...updated };
       });

@@ -45,8 +45,9 @@ export function SpotImage({
    * la réduction (mémoire). */
   fullResolution?: boolean;
   /** Taille naturelle (pixels) de l'image réellement affichée : la vignette,
-   * puis l'originale si elle la remplace (tuile de pièce, piece-tile.tsx). */
-  onImageSize?: (size: ImageNaturalSize) => void;
+   * puis l'originale si elle la remplace (tuile de pièce, piece-tile.tsx), avec son adresse
+   * (copiée dans les bords prolongés de la tuile). */
+  onImageSize?: (size: ImageNaturalSize, uri: string) => void;
 }) {
   const twoStep = twoStepSources(size, hdUri, fallbackUri);
   if (twoStep) return <TwoStepImage {...twoStep} style={style} fit={fit} accessibilityLabel={accessibilityLabel} recyclingKey={recyclingKey} fullResolution={fullResolution} onImageSize={onImageSize} />;
@@ -60,15 +61,15 @@ function naturalSize(source: { width?: number; height?: number } | undefined): I
   return source && source.width && source.height ? { width: source.width, height: source.height } : null;
 }
 
-/** Appelle `onImageSize` quand la taille affichée change (une fois par taille). */
-function useReportSize(displayed: ImageNaturalSize | null, onImageSize: ((size: ImageNaturalSize) => void) | undefined) {
+/** Appelle `onImageSize` quand la taille ou l'adresse affichées changent (une fois par image). */
+function useReportSize(displayed: ImageNaturalSize | null, uri: string | null, onImageSize: ((size: ImageNaturalSize, uri: string) => void) | undefined) {
   const report = useRef(onImageSize);
   report.current = onImageSize;
   const width = displayed?.width ?? 0;
   const height = displayed?.height ?? 0;
   useEffect(() => {
-    if (width > 0 && height > 0) report.current?.({ width, height });
-  }, [width, height]);
+    if (width > 0 && height > 0 && uri) report.current?.({ width, height }, uri);
+  }, [width, height, uri]);
 }
 
 /** Deux temps : la vignette tout de suite, l'originale par-dessus, en fondu,
@@ -95,7 +96,7 @@ function TwoStepImage({
   accessibilityLabel?: string;
   recyclingKey?: string;
   fullResolution: boolean;
-  onImageSize?: (size: ImageNaturalSize) => void;
+  onImageSize?: (size: ImageNaturalSize, uri: string) => void;
 }) {
   const key = `${thumb}\n${hd}`;
   type Local = TwoStepState & { key: string; hdSize: ImageNaturalSize | null; thumbSize: ImageNaturalSize | null };
@@ -115,7 +116,8 @@ function TwoStepImage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, fading]);
   // L'image du dessus : l'originale arrivée et gardée, sinon la vignette.
-  useReportSize(showHd && current.hd === "loaded" ? current.hdSize : showThumb ? current.thumbSize : null, onImageSize);
+  const hdOnTop = showHd && current.hd === "loaded";
+  useReportSize(hdOnTop ? current.hdSize : showThumb ? current.thumbSize : null, hdOnTop ? hd : showThumb ? thumb : null, onImageSize);
   return (
     <View style={style as StyleProp<ViewStyle>} accessible={Boolean(accessibilityLabel)} accessibilityRole={accessibilityLabel ? "image" : undefined} accessibilityLabel={accessibilityLabel}>
       {showThumb ? (
@@ -167,7 +169,7 @@ function OneImage({
   recyclingKey?: string;
   size: PieceImageSize;
   fullResolution: boolean;
-  onImageSize?: (size: ImageNaturalSize) => void;
+  onImageSize?: (size: ImageNaturalSize, uri: string) => void;
 }) {
   const sources = imageSources(size, hdUri, fallbackUri);
   const key = sources.join("\n");
@@ -176,7 +178,7 @@ function OneImage({
   const [errors, setErrors] = useState({ key, count: 0 });
   const uri = imageAfterErrors(sources, errors.key === key ? errors.count : 0);
   const [loaded, setLoaded] = useState<{ uri: string | null; size: ImageNaturalSize | null }>({ uri: null, size: null });
-  useReportSize(loaded.uri === uri ? loaded.size : null, onImageSize);
+  useReportSize(loaded.uri === uri ? loaded.size : null, uri, onImageSize);
 
   return (
     <Image

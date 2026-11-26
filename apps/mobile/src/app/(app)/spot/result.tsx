@@ -19,7 +19,7 @@ import { addVaultItemFromMatch, fetchMessagesStatus, fetchSearch, fetchShops, fe
 import { openMerchantLink } from "@/lib/merchant-links";
 import { chooseInitialResult, hdRereadDue, pieceTitle, withHdImages, withoutTextPrompt, withTextSearch, type InitialResultState } from "@/lib/spot-result";
 import { afterShops, requestShops, shopsPending } from "@/lib/spot-shops";
-import { allPieces, merchantContextFor, merchantMarkFor, opensOfferPage } from "@/lib/result-sections";
+import { allPieces, merchantContextFor, merchantMarkFor, opensOfferPage, rowHasMarksAt } from "@/lib/result-sections";
 import {
   bestProposalIndex,
   bigCardLabel,
@@ -75,7 +75,8 @@ import { useHeroReveal } from "@/lib/use-hero-reveal";
 import { ForeignShopNote } from "@/components/foreign-shop-note";
 import { OfferMarkNote } from "@/components/offer-mark";
 import { StockNote } from "@/components/stock-note";
-import { VerdictLine } from "@/components/verdict-line";
+import { VerdictLine, verdictLineShown } from "@/components/verdict-line";
+import { actionsInTwoRows } from "@/lib/text-fit";
 import { verdictToTrack } from "@/lib/verdict";
 import { LuxuryResaleEntry } from "@/components/luxury-resale";
 import { luxuryResaleToTrack } from "@/lib/luxury-resale";
@@ -145,6 +146,8 @@ export default function ResultScreen() {
   const [categoryTarget, setCategoryTarget] = useState<Piece | null>(null);
   const [reportTarget, setReportTarget] = useState<Piece | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // Grande carte : où sont « Ce n'est pas la bonne pièce ? » (bord gauche) et la fin de la rangée des mentions
+  // (bord droit), mesurés ; les mentions ne remontent sur la ligne du prix que si elles ne sont pas sous le lien.
   // La page look (lot « page look ») : « Partager le look » quand le serveur
   // le permet, une feuille de confirmation, puis la feuille de partage.
   const lookStatus = useLookPagesStatus();
@@ -161,9 +164,9 @@ export default function ResultScreen() {
   // Voie B (lot c) : seconde recherche avec les mots refusée, sans leurs propositions pour l'instant.
   const [textSearchUsed, setTextSearchUsed] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
-  // Grand texte : la rangée d'actions passe en deux rangées de deux (lot « fidélité aux maquettes »).
-  const { fontScale } = useWindowDimensions();
-  const wideText = fontScale > 1.3;
+  // La rangée d'actions passe en deux rangées de deux dès que « Je l'ai achetée » ne tient plus sur une ligne
+  // dans sa case : selon la largeur ET la taille du texte (lot « finitions de l'œil », lib/text-fit.ts).
+  const { fontScale, width: windowWidth } = useWindowDimensions();
   const heroReveal = useHeroReveal(scrollRef);
   // Pour amener l'écran sur une section (relecture E2, ORD-5).
   const noPriceSection = useRef<View>(null);
@@ -712,14 +715,27 @@ export default function ResultScreen() {
 
   // Lot « fidélité aux maquettes » (décision 13) : en titre, le nombre de propositions que l'écran peut montrer ;
   // la requête reste dans le nom lu par VoiceOver. À droite, la case vide de 44 équilibre le titre (décision 12).
+  // Grand texte : le titre s'écarte de « Fermer » mesuré (jamais par-dessus) et ne prend jamais ses touchers.
+  const [closeWidth, setCloseWidth] = useState(0);
+  const titleInset = Math.max(NAV_TITLE_INSET, closeWidth + 8);
+  // Lot « finitions de l'œil » : quand « Fermer » grandit (grand texte, petit écran), le titre n'est plus centré
+  // à tout prix : il prend la place libre jusqu'au bord droit (la case de droite est vide) plutôt que d'être coupé.
+  const titleRight = titleInset > NAV_TITLE_INSET ? space.md : titleInset;
   const renderNav = (title: string, label?: string) => (
     <View style={styles.nav}>
-      <Pressable onPress={() => closeSpotter(router)} style={styles.navSide} accessibilityRole="button">
+      <Pressable
+        onPress={() => closeSpotter(router)}
+        onLayout={(event) => setCloseWidth(event.nativeEvent.layout.width + event.nativeEvent.layout.x)}
+        style={styles.navSide}
+        accessibilityRole="button"
+      >
         <Text style={styles.close}>{t.spotter.close}</Text>
       </Pressable>
-      <Text style={styles.navTitle} numberOfLines={1} accessibilityRole="header" accessibilityLabel={label}>
-        {title}
-      </Text>
+      <View style={[styles.navTitleZone, { left: titleInset, right: titleRight }]} pointerEvents="none">
+        <Text style={styles.navTitle} numberOfLines={1} accessibilityRole="header" accessibilityLabel={label}>
+          {title}
+        </Text>
+      </View>
       <View style={styles.navSide} />
     </View>
   );
@@ -875,6 +891,11 @@ export default function ResultScreen() {
   // Cases de la rangée d'actions : filet à gauche des cases 2 à 4 ; grand texte, deux rangées de deux
   // (filet en haut des cases 3 et 4, pas à gauche de la case 3) ; avec trois cases, la troisième prend toute la largeur.
   const actionCount = piece.real ? 4 : 3;
+  // Les libellés de départ (jamais ceux d'après un toucher : la rangée ne change pas de forme sous le doigt), ceux qui
+  // doivent tenir sur une ligne. « Partager le look » n'en est pas (correctif du lot « finitions de l'œil ») : il passe
+  // à la ligne dans sa case (contenu calé en haut), au lieu de mettre toute la rangée sur deux rangées à 390 points.
+  const actionLabels = [t.result.keep, t.result.markAsBought, t.result.share, ...(piece.real ? [t.result.moreShort] : [])];
+  const wideText = actionsInTwoRows(windowWidth, fontScale, actionLabels, actionCount);
   const actionCell = (position: number) =>
     wideText
       ? [
@@ -901,14 +922,12 @@ export default function ResultScreen() {
         maintainVisibleContentPosition={priceSort && Platform.OS !== "web" ? { minIndexForVisible: 0 } : undefined}
         scrollEnabled={zoomState !== "zooming"}
       >
-        {/* Le verdict : la phrase de tête, d'après les titres des boutiques ; rien quand le serveur ne sait pas (components/verdict-line.tsx).
-            Sa boîte est toujours là, même vide (collapsable={false} : jamais aplatie), en premier : trié par prix sur
-            iPhone, la phrase arrivée avec les boutiques grandit vers le bas, visible, au lieu de passer au-dessus de l'écran.
-            minHeight 1 : vide, une boîte de hauteur 0 en haut de la liste n'est pas « visible » pour iOS ni Android
-            (y + hauteur > défilement), qui prendraient alors la ligne d'après comme repère et cacheraient la phrase. */}
-        <View collapsable={false} testID="verdict-place" style={styles.verdictPlace}>
-          <VerdictLine verdict={result.verdict} />
-        </View>
+        {/* Le repère du haut de la liste : une boîte toujours là, vide (collapsable={false} : jamais aplatie), en premier :
+            trié par prix sur iPhone, la phrase du verdict arrivée avec les boutiques (sous les pastilles, lot « finitions
+            de l'œil ») grandit vers le bas, visible, au lieu de faire passer le haut de la liste au-dessus de l'écran.
+            minHeight 1 : une boîte de hauteur 0 en haut de la liste n'est pas « visible » pour iOS ni Android
+            (y + hauteur > défilement), qui prendraient alors la ligne d'après comme repère. */}
+        <View collapsable={false} testID="verdict-place" style={styles.verdictPlace} />
         {/* Voie C : le décompte, le tri et l'absence de prix parlent de la recherche visuelle seule.
             Prix d'abord : « aucun prix » quand la recherche visuelle n'en a aucun et que la grande carte
             d'office n'en a pas non plus (sinon elles sont toutes repliées en bas, avec le même texte). */}
@@ -916,7 +935,15 @@ export default function ResultScreen() {
         {wordsLine ? <Text style={styles.count}>{wordsLine}</Text> : null}
         {/* Tri des résultats : en haut de la liste, la ligne des prix avec ; « En stock seulement » à côté
             de « Avec prix seulement », quand une offre dit son stock (ou qu'il est déjà choisi). */}
-        <ResultSortBar view={view} onChange={changeView} summary={summaryText} stockShown={stockFilterShown(result, view)} />
+        {/* Lot « finitions de l'œil » : sous les pastilles, une seule ligne grise : le verdict (d'après les titres des boutiques ;
+            rien quand le serveur ne sait pas, components/verdict-line.tsx), sinon le résumé des prix. */}
+        <ResultSortBar
+          view={view}
+          onChange={changeView}
+          summary={summaryText}
+          stockShown={stockFilterShown(result, view)}
+          verdict={verdictLineShown(result.verdict) ? <VerdictLine verdict={result.verdict} /> : null}
+        />
         {layout.emptyWithFilter ? <WithPriceOnlyEmpty onShowAll={() => changeView({ ...view, withPriceOnly: false })} /> : null}
         {/* Stock affiché : « En stock seulement » ne laisse plus rien ; un seul geste retire les deux filtres. */}
         {layout.emptyWithStockFilter ? <FiltersEmpty onShowAll={() => changeView({ ...view, withPriceOnly: false, inStockOnly: false })} /> : null}
@@ -926,7 +953,7 @@ export default function ResultScreen() {
         {/* Tri par prix : pas de grande carte, sauf une carte touchée dans la liste ; « Avec prix seulement » : pas sans prix. */}
         {showBigCard ? (
           <>
-            {/* La grande tuile « Écrin » (components/piece-tile.tsx) : coins doux, la photo entière sur une copie floue d'elle-même. */}
+            {/* La grande tuile « Écrin » (components/piece-tile.tsx) : coins doux, la photo entière, entourée de ses bords prolongés. */}
             <PieceTile
               variant="hero"
               enlargeable
@@ -945,20 +972,34 @@ export default function ResultScreen() {
               {piece.name}
             </Text>
             {/* Juste sous la proposition, visible sans défilement (décision du fondateur, lot 4 ter) : sur la ligne du prix (maquette « Écrin » 4). */}
-            <View style={styles.metaRow}>
-              <Text style={styles.meta}>
-                {[piece.merchantName, displayPrice(piece)].filter(Boolean).join(" · ")}
-              </Text>
-              {sheetActions.length > 0 ? <CorrectionsLink style={styles.notRight} onPress={() => setCorrectionsOpen(true)} /> : null}
+            {/* Au-dessus des mentions (zIndex) : leur zone touchable remonte de 8 points sur cette ligne, le lien y gagne ;
+                box-none : le vide de la ligne laisse passer le toucher vers les mentions (correctif, aucune hauteur de plus). */}
+            <View style={styles.metaRow} pointerEvents="box-none">
+              {/* Le texte du prix ne prend aucun toucher (une vue « none » : la propriété est peu fiable sur un Text d'iPhone) :
+                  sous lui aussi, la zone de 44 points des mentions reste entière ; seul le lien gagne le recouvrement. */}
+              <View pointerEvents="none">
+                <Text style={styles.meta}>
+                  {[piece.merchantName, displayPrice(piece)].filter(Boolean).join(" · ")}
+                </Text>
+              </View>
+              {/* Correctif du lot « finitions de l'œil » : le lien ne compte que pour la hauteur du texte (18 points) ;
+                  sa zone de 44 points déborde vers le haut, sur le nom (components/spot-corrections.tsx). */}
+              {sheetActions.length > 0 ? (
+                <CorrectionsLink inline onPress={() => setCorrectionsOpen(true)} />
+              ) : null}
             </View>
-            {selectedIndex === cheapest ? <CheapestBadge /> : null}
             <ForeignShopNote piece={piece} />
-            <View style={styles.marks}>
-              {/* Boutiques douteuses : « Boutique connue » ou « Prix inhabituellement bas » (components/offer-mark.tsx). */}
-              <OfferMarkNote piece={piece} />
-              {/* Stock affiché : « En stock » ou « Épuisée » d'après Google, au moment de la recherche (components/stock-note.tsx). */}
-              <StockNote piece={piece} />
-            </View>
+            {/* Rien à dire (ni pastille, ni mention, ni stock) : pas de rangée, sa marge négative ne tire pas le bouton sur le prix.
+                « Le moins cher » est sur la rangée des mentions (correctif du lot « finitions de l'œil » : pas de ligne de plus). */}
+            {selectedIndex === cheapest || piece.offerMark || typeof piece.inStock === "boolean" ? (
+              <View style={[styles.marks, selectedIndex === cheapest ? styles.marksWithBadge : null]}>
+                {selectedIndex === cheapest ? <CheapestBadge inline /> : null}
+                {/* Boutiques douteuses : « Boutique connue » ou « Prix inhabituellement bas » (components/offer-mark.tsx). */}
+                <OfferMarkNote piece={piece} />
+                {/* Stock affiché : « En stock » ou « Épuisée » d'après Google, au moment de la recherche (components/stock-note.tsx). */}
+                <StockNote piece={piece} />
+              </View>
+            ) : null}
 
             {piece.merchantUrl ? (
               <Pressable style={styles.primary} onPress={handleOpenMerchant} accessibilityRole="link">
@@ -1056,7 +1097,7 @@ export default function ResultScreen() {
                 </View>
                 <View style={styles.grid}>
                   {/* Cartes (image, nom, boutique, prix, « Voir chez … ») : components/proposal-card.tsx. Deux colonnes à 8 pt. */}
-                  {visibleOthers.map(({ piece: p, index }, i) => (
+                  {visibleOthers.map(({ piece: p, index }, i, list) => (
                     <ProposalCard
                       key={p.id}
                       piece={p}
@@ -1064,6 +1105,7 @@ export default function ResultScreen() {
                       placement={placements.get(index)}
                       cheapest={index === cheapest}
                       column={i % 2 === 0 ? "left" : "right"}
+                      rowHasMarks={rowHasMarksAt(list.map((entry) => entry.piece), i)}
                     />
                   ))}
                 </View>
@@ -1250,24 +1292,37 @@ function FailureView({
   );
 }
 
+/** Écart minimal du titre de la barre à chaque bord ; plus grand quand « Fermer » mesuré est plus large (grand texte). */
+const NAV_TITLE_INSET = 76;
+
 const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   nav: { height: 44, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 8 },
   navSide: { minHeight: 44, minWidth: 44, paddingHorizontal: 8, justifyContent: "center" },
   close: { fontSize: font.body, fontWeight: "400", color: color.encre },
   // Centré sur l'écran comme la maquette (« Fermer » est plus large que la case vide de droite) ; jamais sous les deux côtés.
-  navTitle: { position: "absolute", left: 76, right: 76, textAlign: "center", fontSize: font.secondary, fontWeight: "500", color: color.encre },
+  navTitleZone: { position: "absolute", top: 0, bottom: 0, left: NAV_TITLE_INSET, right: NAV_TITLE_INSET, justifyContent: "center" },
+  // Même taille que « Fermer » (maquette 4) : les deux lignes de base sont alignées (lot « finitions de l'œil »).
+  navTitle: { textAlign: "center", fontSize: font.body, fontWeight: "500", color: color.encre },
   content: { paddingHorizontal: space.md, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   count: { fontSize: font.caption, lineHeight: 18, color: color.acier, marginBottom: space.xs },
   verdictPlace: { minHeight: 1 },
   heroSkeleton: { width: "100%", aspectRatio: 1, borderRadius: radius.piece, borderCurve: "continuous" },
-  rankLabel: { ...surtitre, color: color.acier, marginTop: 12 },
+  // Lot « finitions de l'œil » : marges resserrées pour que la rangée d'actions tienne sans défiler (390 × 844, titre de deux lignes).
+  rankLabel: { ...surtitre, color: color.acier, marginTop: space.sm },
   name: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: serifLineHeight.title, marginTop: 4 },
-  metaRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", columnGap: space.md, marginTop: space.xs },
+  // zIndex : la ligne du prix passe au-dessus des mentions (ordre du toucher sur l'iPhone et le site), sans changer de hauteur.
+  metaRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", columnGap: space.md, marginTop: space.xs, zIndex: 1 },
   meta: { fontSize: font.caption, lineHeight: 18, color: color.acier },
   // Sans grande carte, le lien garde sa place (à gauche, en haut de la liste).
   notRight: { alignItems: "flex-start", marginTop: 0 },
-  marks: { flexDirection: "row", flexWrap: "wrap", columnGap: space.sm, alignItems: "center" },
+  // Les mentions (zones touchables de 32 points pour un texte de 16) ne réservent plus leur marge vide à l'œil :
+  // leur zone déborde sur l'espace de la ligne du prix et du bouton, sans les recouvrir (la ligne du prix est au-dessus :
+  // sous le lien, c'est lui qui reçoit le toucher). alignSelf : la rangée a la largeur de son contenu ; minHeight :
+  // « Le moins cher » seul y reste centré.
+  marks: { flexDirection: "row", flexWrap: "wrap", columnGap: space.sm, alignItems: "center", alignSelf: "flex-start", minHeight: 32, marginVertical: -8 },
+  // Avec « Le moins cher » (une pastille pleine de 19 points, centrée) : 2 points de moins vers le prix, pour qu'elle ne le touche pas.
+  marksWithBadge: { marginTop: -6 },
   primary: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: 12 },
   primaryLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600", flexShrink: 1 },
   secondary: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: space.sm },
@@ -1278,8 +1333,10 @@ const styles = themedStyles(() => ({
   // Rangée soudée : un seul cadre, des filets entre les cases ; minHeight (jamais height) : un libellé long passe à la ligne.
   actions: { flexDirection: "row", marginTop: space.sm, minHeight: 56, borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, borderCurve: "continuous", overflow: "hidden" },
   actionsWrap: { flexWrap: "wrap" },
-  action: { flex: 1, minHeight: 56, alignItems: "center", justifyContent: "center", gap: 4, paddingHorizontal: 2, paddingVertical: 6 },
-  actionHalf: { width: "50%", minHeight: 56, alignItems: "center", justifyContent: "center", gap: 4, paddingHorizontal: 2, paddingVertical: 6 },
+  // Lot « finitions de l'œil » : contenu calé en haut (pictogrammes sur une même ligne, libellés alignés entre eux
+  // même quand l'un passe sur deux lignes) ; aucune marge sur les côtés (lib/text-fit.ts, actionsInTwoRows).
+  action: { flex: 1, minHeight: 56, alignItems: "center", justifyContent: "flex-start", gap: 4, paddingHorizontal: 0, paddingTop: 10, paddingBottom: 8 },
+  actionHalf: { width: "50%", minHeight: 56, alignItems: "center", justifyContent: "flex-start", gap: 4, paddingHorizontal: 0, paddingTop: 10, paddingBottom: 8 },
   actionFull: { width: "100%" },
   actionDivider: { borderLeftWidth: 1, borderLeftColor: color.filet },
   actionTopDivider: { borderTopWidth: 1, borderTopColor: color.filet },
