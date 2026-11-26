@@ -160,16 +160,32 @@ export function isBlankFrame(sample: FrameSample): boolean {
 // bords : un gros plan net d'un manteau uni, qui n'a que quelques bords,
 // mesure autant qu'une rue chargée. (L'ancienne mesure, variance du laplacien
 // sur variance des gris, refusait ces gros plans nets : ≈ 0,07.)
-// Mesure faite par tuile (3 × 3, tuile médiane) et sans les bandes noires du
-// haut et du bas : une ligne de sous-titre nette ou le bord d'une bande noire
-// ne font plus passer une vidéo floue (avant : capture 06 + sous-titre ≈ 14,
-// 06 entre bandes noires ≈ 3,7 ; maintenant ≈ 0,1).
+// Mesure faite par tuile (3 × 3) et sans les bandes noires du haut et du
+// bas (le bord franc d'une bande noire ne fait plus passer une vidéo floue :
+// 06 entre bandes noires ≈ 0,3). L'image est jugée sur sa tuile la PLUS
+// NETTE : un sujet net sur un fond flou (silhouette en pied au milieu, mode
+// portrait) n'occupe souvent qu'une colonne de tuiles, et la tuile médiane le
+// refusait. Le doute profite au membre : un refus à tort (plus de spot depuis
+// une image nette) est pire qu'une acceptation à tort (ce que donnait le
+// build 3). Limite assumée : 06 avec une ligne de sous-titre nette passe.
+// Aucune tuile avec un vrai bord (gros plan d'un tissu uni ou très fin, que
+// la copie de 96 px rend lisse) : rien à juger, l'image n'est PAS refusée.
+// Limite connue de la mesure : un tissu uni à plis doux (satin, maille) d'un
+// contraste ordinaire, net, mesure comme une image floue (≈ 0,02 à 0,37,
+// autant que 06), et aucun seuil ne les sépare. Le refus pour flou n'est donc
+// appliqué qu'à l'instantané de TikTok, où le fond flou (06) a été vu
+// (player-snapshot.ts, blurCheckApplies) ; pour Instagram, seul le contrôle
+// noir ou blanc. Sur TikTok, quand l'image du serveur manque, un tel gros
+// plan sans aucun bord peut encore être refusé à tort (limite de la mesure,
+// pas une décision du fondateur) : ce refus ne retire donc jamais le lecteur
+// (player-decision.ts, playerStaysOffered), la personne peut revenir à la
+// vidéo et spotter un autre moment.
 
 /** Seuil de départ, À CALIBRER sur l'iPhone (journal « [player] netteté » en
  * développement) ; repères mesurés sur des copies de 96 px : capture 06 floue
- * ≈ 0,1 ; 05 nette ≈ 2, et autant assombrie ; gros plans unis nets (manteau
- * sombre sur la moitié de l'image, en buste, silhouette) ≈ 1,5 à 2, les mêmes
- * floutés ≈ 0,2 à 0,4. */
+ * ≈ 0,37 ; 05 nette ≈ 3,2, et autant assombrie ; sujets nets (manteau
+ * uni, silhouette étroite sur fond flou, logo) ≥ 2 ; les mêmes floutés ≤ 0,3
+ * (un flou gaussien d'un pixel ≈ 0,25 : refusé ; 05 floutée σ 0,8 ≈ 0,4). */
 export const BLUR_LIMITS = { minSharpness: 0.5 } as const;
 
 /** Part des pixels au plus fort gradient sur laquelle on juge les bords. */
@@ -186,21 +202,21 @@ const SHARPNESS_MIN_EDGE = 3;
  * d'un plan sombre (net) n'est pas une bande. */
 const SHARPNESS_BAND_MARGIN = 2;
 /** La zone (sans les bandes noires) est coupée en 3 × 3 tuiles : l'image est
- * jugée sur la tuile MÉDIANE (la plus basse des deux du milieu) parmi celles
- * qui ont des bords. Quelques bords nets (une ligne de sous-titre incrustée,
- * nette même quand la caméra bouge) ne suffisent plus à faire passer une
- * vidéo floue. */
+ * jugée sur la tuile la PLUS NETTE parmi celles qui ont des bords (un sujet
+ * net sur une seule colonne de tuiles, fond flou, suffit). */
 const SHARPNESS_TILES = 3;
 
 /** Netteté des bords de la zone examinée (rectangle BLANK_ZONE sans
- * BLANK_HOLE, sans les bandes noires du bord) : médiane des tuiles qui ont
- * des bords. Seuls comptent les pixels dont le pixel et ses quatre voisins
+ * BLANK_HOLE, sans les bandes noires du bord) : score de la tuile la plus
+ * nette parmi celles qui ont des bords. Seuls comptent les pixels dont le pixel et ses quatre voisins
  * sont dans la zone et hors du trou (aucun bord inventé au bord du trou ni
- * lu dans la colonne de TikTok). Zone unie : 0. Exportée pour le journal de
+ * lu dans la colonne de TikTok). Aucune tuile avec un vrai bord, image trop
+ * petite, ou trop peu de lignes une fois les bandes noires retirées : null
+ * (rien à juger, pas refusée). Exportée pour le journal de
  * développement (calibrage). */
-export function frameSharpness(sample: FrameSample): number {
+export function frameSharpness(sample: FrameSample): number | null {
   const { width, height, gray } = sample;
-  if (width < 3 || height < 3) return 0;
+  if (width < 3 || height < 3) return null;
   let left = Math.floor(BLANK_ZONE.left * width);
   let right = Math.ceil(BLANK_ZONE.right * width);
   let top = Math.floor(BLANK_ZONE.top * height);
@@ -217,7 +233,8 @@ export function frameSharpness(sample: FrameSample): number {
   while (top < bottom && rowBlack(bottom - 1)) bottom -= 1;
   if (top > zoneTop) top += SHARPNESS_BAND_MARGIN;
   if (bottom < zoneBottom) bottom -= SHARPNESS_BAND_MARGIN;
-  if (right - left < 3 || bottom - top < 3) return 0;
+  // Plan sombre dont seule une mince bande est claire (fenêtres éclairées) : rien à juger, pas flou.
+  if (right - left < 3 || bottom - top < 3) return null;
   const isHole = (x: number, y: number) => inside((x + 0.5) / width, (y + 0.5) / height, BLANK_HOLE);
   const tileScores: number[] = [];
   for (let ty = 0; ty < SHARPNESS_TILES; ty += 1) {
@@ -230,9 +247,9 @@ export function frameSharpness(sample: FrameSample): number {
       if (score !== null) tileScores.push(score);
     }
   }
-  if (tileScores.length === 0) return 0;
+  if (tileScores.length === 0) return null;
   tileScores.sort((a, b) => a - b);
-  return tileScores[Math.floor((tileScores.length - 1) / 2)]!;
+  return tileScores[tileScores.length - 1]!;
 
   /** Score des bords d'une tuile, ou null si la tuile n'a aucun vrai bord. Les
    * voisins restent dans la zone (sans bandes) : x de left+1 à right-2. */
@@ -273,9 +290,18 @@ export function frameSharpness(sample: FrameSample): number {
   }
 }
 
-/** Image floue : netteté des bords de la zone sous BLUR_LIMITS.minSharpness. */
+/** Image floue : netteté des bords de la zone sous BLUR_LIMITS.minSharpness.
+ * Rien à juger (null) : pas floue, le doute profite au membre. */
 export function isBlurryFrame(sample: FrameSample): boolean {
-  return frameSharpness(sample) < BLUR_LIMITS.minSharpness;
+  const score = frameSharpness(sample);
+  return score !== null && score < BLUR_LIMITS.minSharpness;
+}
+
+/** Le refus pour flou ne vaut que pour l'instantané du lecteur TikTok (fond
+ * flou de la capture 06) ; Instagram : seul le contrôle noir ou blanc (un
+ * gros plan net d'un tissu uni à plis doux y mesurerait comme flou). */
+export function blurCheckApplies(platform: PlayerPlatform): boolean {
+  return platform === "tiktok";
 }
 
 // ---- Commandes au lecteur TikTok (relayées par la page hôte) ----
