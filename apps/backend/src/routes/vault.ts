@@ -28,9 +28,10 @@ const VAULT_CATEGORIES: VaultCategory[] = [
 // Le Vault est privé (décision 5 du Lot Q) : chaque route ci-dessous filtre
 // sur user_id, seul son propriétaire s'en sert. Aucune confidentialité par
 // pièce ; un champ « privacy » encore envoyé par un ancien client est
-// simplement ignoré. Seule exception, choisie par le membre lui-même
-// (« Montrer mon Vault à mes amis », éteint au départ, migration 0058) : ses
-// amis le voient en lecture seule par GET /api/users/:userId/vault
+// simplement ignoré. Seule exception : « Montrer mon Vault à mes amis »
+// (migration 0058), allumé au départ, que le membre peut éteindre ; rien
+// n'est montré avant qu'il ait vu l'information dans l'app. Ses amis le
+// voient alors en lecture seule par GET /api/users/:userId/vault
 // (routes/users.ts, lib/friendShelves.ts).
 const vaultOptionalFieldsSchema = z.object({
   productMatchId: z.guid().optional(),
