@@ -11,7 +11,9 @@ import { Asset, AssetField, MediaType, Query, getPermissionsAsync, requestPermis
 import {
   galleryAccessFrom,
   latestVideoChoiceKey,
+  latestVideoReducedKey,
   parseLatestVideoChoice,
+  parseLatestVideoReduced,
   type GalleryAccess,
   type LatestVideo,
   type LatestVideoChoice,
@@ -58,6 +60,17 @@ export async function loadLatestVideo(userId: string | null): Promise<LatestVide
  * le chargement suivant (loadLatestVideo) fait demander l'accès par iOS. */
 export async function saveLatestVideoChoice(userId: string, choice: LatestVideoChoice): Promise<void> {
   await AsyncStorage.setItem(latestVideoChoiceKey(userId), choice);
+}
+
+/** Carte repliée ou non (préférence d'affichage, sur l'appareil, pour ce
+ * compte). Ne demande rien à iOS et ne lit pas la galerie. */
+export async function loadLatestVideoReduced(userId: string): Promise<boolean> {
+  return parseLatestVideoReduced(await AsyncStorage.getItem(latestVideoReducedKey(userId)));
+}
+
+export async function saveLatestVideoReduced(userId: string, reduced: boolean): Promise<void> {
+  if (reduced) await AsyncStorage.setItem(latestVideoReducedKey(userId), "1");
+  else await AsyncStorage.removeItem(latestVideoReducedKey(userId));
 }
 
 /** Adresse du fichier, au « Lancer » (téléchargé depuis iCloud si besoin). */
