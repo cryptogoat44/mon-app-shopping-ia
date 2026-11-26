@@ -369,7 +369,7 @@ export const en: Catalog = {
       lineLink: "Settings",
       lineEnd: ".",
     },
-    privacyFrame: (platform: string) => `Video played by ${platform}. For the image of this moment, our server requests the public video from ${platform}, without your identity, and does not keep it. Failing that, only the frame taken on your phone is sent, then deleted.`,
+    privacyFrame: (platform: string) => `Video played by ${platform}. For the image of this moment, our server requests the public video from ${platform}, without your identity, and does not keep it. Failing that, only the frame taken on your phone is sent, then deleted from your phone.`,
   },
   videoLink: {
     fallbackTitle: "Spot this video",

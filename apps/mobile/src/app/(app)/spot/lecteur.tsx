@@ -265,6 +265,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
     readyRef.current = false;
     answered.current = false;
     gotDuration.current = false;
+    lastTime.current = null;
     sawPlaying.current = false;
     setReady(false);
     setEmbedSize(null);
@@ -576,7 +577,8 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
       if (!alive.current) return;
       const time = lastTime.current;
       const video = link;
-      const askServer = video !== null && time !== null && shouldAskServer({ platform, frame: frameEnabled, lastTime: time });
+      // Même fait que la phrase de confidentialité (progress !== null) : une durée arrivée.
+      const askServer = video !== null && time !== null && gotDuration.current && shouldAskServer({ platform, frame: frameEnabled, lastTime: time });
       const tag = frameRef.current ? findNodeHandle(frameRef.current) : null;
       const [snapshotResult, serverResult] = await Promise.allSettled([
         tag === null ? Promise.reject(new Error("no_view")) : snapshotPlayer(tag),

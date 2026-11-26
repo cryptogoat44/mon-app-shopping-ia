@@ -149,15 +149,31 @@ describe("le lecteur : actions visibles, barre de lecture sous la vidéo", () =>
 
   it("phrase de confidentialité : celle du serveur seulement quand il sera vraiment demandé (TikTok, temps du lecteur arrivé) ; sinon celle d'avant", () => {
     const branch = playerBranch();
-    // Permis : interrupteur allumé, lecteur TikTok, un temps arrivé (comme shouldAskServer).
+    // Permis : interrupteur allumé, lecteur TikTok, une durée arrivée (comme la demande au serveur).
     expect(branch).toContain("{frameEnabled && isTikTokPlayer && progress !== null ? t.player.privacyFrame(name) : t.player.privacy(name)}");
     // Refusé : la phrase du serveur pour toute vidéo TikTok, temps arrivé ou non (repli sans temps, « Spotter » trop tôt).
     expect(branch).not.toContain('{frameEnabled && platform === "tiktok" ? t.player.privacyFrame(name)');
   });
 
-  it("phrase du serveur : elle dit aussi le secours (l'image prise sur le téléphone, envoyée puis effacée), FR et EN", () => {
-    expect(read("src/i18n/fr.ts")).toContain("et ne la garde pas. À défaut, seule l'image prise sur votre téléphone est envoyée, puis effacée.`");
-    expect(read("src/i18n/en.ts")).toContain("and does not keep it. Failing that, only the frame taken on your phone is sent, then deleted.`");
+  it("phrase du serveur : elle dit aussi le secours (l'image prise sur le téléphone, envoyée puis effacée DE VOTRE TÉLÉPHONE), FR et EN", () => {
+    const fr = read("src/i18n/fr.ts");
+    const en = read("src/i18n/en.ts");
+    // Permis : l'effacement borné au téléphone (Google Lens garde sa copie ; celle de Spotto part au plus tard en une heure).
+    expect(fr).toContain("et ne la garde pas. À défaut, seule l'image prise sur votre téléphone est envoyée, puis effacée de votre téléphone.`");
+    expect(en).toContain("and does not keep it. Failing that, only the frame taken on your phone is sent, then deleted from your phone.`");
+    // Refusé : « puis effacée » sans portée, qui promettrait l'effacement partout.
+    expect(fr).not.toContain("est envoyée, puis effacée.`");
+    expect(en).not.toContain("is sent, then deleted.`");
+  });
+
+  it("phrase du serveur et demande au serveur lisent le même fait : une durée arrivée du lecteur rechargé", () => {
+    const screen = code(SCREEN);
+    // Permis : la demande exige la durée (gotDuration, posée avec progress) et le temps est remis à zéro à chaque lecteur.
+    expect(screen).toContain("const askServer = video !== null && time !== null && gotDuration.current && shouldAskServer(");
+    expect(screen).toMatch(/gotDuration\.current = false;\s*lastTime\.current = null;/);
+    expect(screen).toMatch(/gotDuration\.current = true;\s*setProgress\(\{ currentTime: hostMessage\.currentTime, duration: hostMessage\.duration \}\);/);
+    // Refusé : une demande sur le seul temps (un temps de durée 0, ou resté d'un lecteur précédent), phrase d'avant à l'écran.
+    expect(screen).not.toContain("const askServer = video !== null && time !== null && shouldAskServer(");
   });
 
   it("« Trouver la pièce automatiquement » pendant l'attente de l'image du moment : la demande est abandonnée (rien ne part par-dessus l'analyse)", () => {

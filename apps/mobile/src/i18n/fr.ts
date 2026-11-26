@@ -388,7 +388,7 @@ export const fr = {
       lineLink: "Réglages",
       lineEnd: ".",
     },
-    privacyFrame: (platform: string) => `Vidéo lue par ${platform}. Pour l'image de ce moment, notre serveur demande la vidéo publique à ${platform}, sans votre identité, et ne la garde pas. À défaut, seule l'image prise sur votre téléphone est envoyée, puis effacée.`,
+    privacyFrame: (platform: string) => `Vidéo lue par ${platform}. Pour l'image de ce moment, notre serveur demande la vidéo publique à ${platform}, sans votre identité, et ne la garde pas. À défaut, seule l'image prise sur votre téléphone est envoyée, puis effacée de votre téléphone.`,
   },
   // Mission « liens vidéo » : écran de secours, pièces déjà repérées par
   // d'autres membres (jamais qui), lien en attente. TEXTES À VALIDER.
