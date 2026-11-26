@@ -116,6 +116,21 @@ describe("Spotter (maquettes 1-accueil)", () => {
     expect(tiles).not.toContain("accessibilityLabel={t.cameraCapture.takePhoto}");
   });
 
+  // Relecture du lot : le nom lu commence par le mot visible, sur les trois tuiles (comme « Plus, Signaler… »).
+  it("le nom lu des tuiles Vidéo et Photo commence par leur libellé visible ; refusé : la phrase seule", () => {
+    expect(tiles).toContain("accessibilityLabel={`${t.spotter.tileVideo}, ${videoLabel}`}");
+    expect(tiles).toContain("accessibilityLabel={`${t.spotter.tilePhoto}, ${t.spotter.addPhoto}`}");
+    expect(tiles).not.toContain("accessibilityLabel={videoLabel}");
+    expect(tiles).not.toContain("accessibilityLabel={t.spotter.addPhoto}");
+  });
+
+  it("grand texte : le libellé d'une tuile n'est jamais coupé (refusé : numberOfLines) ; la tuile grandit (minHeight, pas height)", () => {
+    expect(tiles).toContain("<Text style={styles.tileLabel}>{label}</Text>");
+    expect(tiles).not.toMatch(/<Text style=\{styles\.tileLabel\}[^>]*numberOfLines/);
+    expect(styleOf(tiles, "tile")).toContain("minHeight: 76,");
+    expect(styleOf(tiles, "tile")).not.toMatch(/\bheight:/);
+  });
+
   it("les phrases qui nommaient les tuiles suivent leur nouveau nom ; refusé : l'ancien nom entre guillemets", () => {
     const anciens = ["« Ajouter une vidéo »", "« Ajouter une photo »", "« Prendre une photo »", "“Add a video”", "“Add a photo”", "“Take a photo”"];
     // Espaces insécables ramenés à des espaces : « » s'écrivent des deux façons dans les catalogues.
