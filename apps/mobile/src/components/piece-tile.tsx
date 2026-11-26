@@ -3,7 +3,7 @@ import { StyleSheet, View, type ImageStyle, type LayoutChangeEvent, type StylePr
 import { Image } from "expo-image";
 import { SpotImage, type ImageNaturalSize } from "@/components/spot-image";
 import { EnlargeableImage } from "@/components/image-viewer";
-import { edgeBackground, fillsTile, honestSize, type PieceImageSize, type PieceTileVariant } from "@/lib/piece-image";
+import { edgeBackground, edgeColorApplies, fillsTile, honestSize, type PieceImageSize, type PieceTileVariant } from "@/lib/piece-image";
 import { color, getActiveScheme, radius } from "@/theme/tokens";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -66,7 +66,8 @@ export function PieceTile({
     onLayout?.(event);
   };
 
-  const background = edgeBackground(edgeColor);
+  // Fond uni seulement si la photo touche le cadre sur l'axe que le serveur n'a pas mesuré (lib/piece-image.ts).
+  const background = edgeColorApplies(naturalSize, frame, variant) ? edgeBackground(edgeColor) : null;
   // Taille inconnue : contenue sur toute la tuile ; sinon remplie, ou une
   // boîte centrée à la taille honnête.
   let foreground: { style: StyleProp<ImageStyle>; fit: "contain" | "cover" } = { style: StyleSheet.absoluteFill, fit: "contain" };

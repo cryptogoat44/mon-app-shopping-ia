@@ -50,7 +50,12 @@ export default function VaultItemDetailScreen() {
     setChangingPhoto(true);
     try {
       const updated = await changeVaultItemPhoto(item.id, picked.uri);
-      setItem((current) => (current ? { ...current, ...updated } : current));
+      setItem((current) => {
+        if (!current) return current;
+        // Nouvelle photo : la couleur des bords de l'ancienne vignette ne vaut plus (lot « couleur des bords ») ; la copie floue de la nouvelle photo reprend.
+        const { edgeColor: _oldEdgeColor, ...rest } = current;
+        return { ...rest, ...updated };
+      });
       showToast(t.vaultItem.photoChanged);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : t.vaultItem.changePhotoError);
