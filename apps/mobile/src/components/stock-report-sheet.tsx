@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Modal, Pressable, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { color, font, radius, serifFont, serifLineHeight, size, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { reportStockGone } from "@/lib/api";
 import { useToast } from "@/lib/toast-context";
@@ -100,7 +101,7 @@ export function StockReportSheet({ target, onClose, onReported }: { target: Stoc
 
 const styles = themedStyles(() => ({
   link: { minHeight: size.touchTarget, justifyContent: "center", alignSelf: "flex-start" },
-  linkLabel: { fontSize: font.caption, color: color.acier, fontWeight: "600", lineHeight: 17 },
+  linkLabel: { ...lienSouligne, fontSize: font.caption, lineHeight: 17, color: color.vert, fontWeight: "400" },
   backdrop: { flex: 1, backgroundColor: color.voile },
   sheet: {
     backgroundColor: color.porcelaine,

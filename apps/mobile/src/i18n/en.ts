@@ -99,7 +99,6 @@ export const en: Catalog = {
     title: "Spotter",
     close: "Close",
     lead: "Find a piece you saw in a video or a photo.",
-    linkPlaceholder: "Paste or type a link",
     paste: "Paste",
     pasteEmpty: "There's no link on your clipboard.",
     pasteDenied: "Paste the link directly into the field.",
@@ -115,9 +114,9 @@ export const en: Catalog = {
       `${BRAND} can show your gallery's latest video here, ready to be analyzed. iOS will then ask for access to your photos. The video stays on your iPhone: only a few frames leave it, when you tap “Search”.`,
     latestVideoYes: "Yes, suggest it",
     latestVideoNo: "No thanks",
-    latestVideoAskNote: "Your answer changes nothing else: “Add a video” is still available. You can change this anytime in Settings.",
+    latestVideoAskNote: "Your answer changes nothing else: “Video” is still available. You can change this anytime in Settings.",
     latestVideoNoAccess:
-      `Without full access to your photos, ${BRAND} can't find your latest video: choose it with “Add a video”. Access can be changed in the iPhone Settings.`,
+      `Without full access to your photos, ${BRAND} can't find your latest video: choose it with “Video”. Access can be changed in the iPhone Settings.`,
     latestVideoEmpty: "No video in your gallery yet: the most recent one will appear here.",
     latestVideoChoiceFailed: "Your answer couldn't be saved. Please try again.",
     recentlySpotted: "Recently spotted",
@@ -147,6 +146,10 @@ export const en: Catalog = {
     latestVideoReduce: "Collapse the “Your latest video” card",
     latestVideoReveal: "Shows the full card",
     latestVideoShow: "Show",
+    // "Matching the mockups" batch: short visible tile labels (VoiceOver still reads the full sentence).
+    tileVideo: "Video",
+    tilePhoto: "Photo",
+    tileCamera: "Camera",
   },
   video: {
     title: "Choose the frame",
@@ -230,6 +233,8 @@ export const en: Catalog = {
     yourVideo: "Your video",
     waitingVideo: `${BRAND} is finding the piece…`,
     usualVideo: "This usually takes 15 to 30 seconds.",
+    // "Matching the mockups" batch: the "Circle the piece" button, for a photo (a video keeps "Search").
+    searchPiece: "Search for this piece",
   },
   // Website (lot 4 ter): a tab left open offers the version now online.
   siteVersion: {
@@ -740,6 +745,11 @@ export const en: Catalog = {
       leave: `You're about to leave ${BRAND}: the site opens in your browser. None of these links is an affiliate link: ${BRAND} earns nothing on these purchases.`,
       close: "Close",
     },
+    // "Matching the mockups" batch: the sort pill, the short filter labels (contained in their spoken names), the "More" cell.
+    sortMenuLabel: (choice: string) => `Sort results: ${choice}`,
+    withPriceShort: "With a price",
+    inStockShort: "In stock",
+    moreShort: "More",
   },
   wishlistItem: {
     back: "Wishlist",
@@ -770,7 +780,7 @@ export const en: Catalog = {
     affiliateMention: "(affiliate link)",
   },
   retrouverPieces: {
-    recentLead: "Reopening a result doesn't count toward your daily searches.",
+    recentLead: "Reopening doesn't count toward your daily searches.",
     recentLoadError: "Unable to show your recent searches. Check your connection, then try again.",
     today: "Today",
     yesterday: "Yesterday",
@@ -1300,8 +1310,8 @@ export const en: Catalog = {
     latestVideoSwitchLabel: "Automatically suggest my latest video in Spotter",
     latestVideoOn: "On: Spotter suggests your gallery's latest video, ready to be analyzed.",
     latestVideoOnNoAccess:
-      `On, but ${BRAND} doesn't have full access to your photos: your latest video can't be found. You choose it with “Add a video”.`,
-    latestVideoOff: `Off: you choose the video with “Add a video”, without ${BRAND} reading your gallery.`,
+      `On, but ${BRAND} doesn't have full access to your photos: your latest video can't be found. You choose it with “Video” on Spotter.`,
+    latestVideoOff: `Off: you choose the video with “Video” on Spotter, without ${BRAND} reading your gallery.`,
     latestVideoAccessLeft: `${BRAND} still has access to your photos, without using it: you can remove it in the iPhone Settings.`,
     latestVideoOpenSettings: "Open iPhone Settings",
     latestVideoFailed: "Your choice couldn't be saved. Please try again.",
@@ -1346,6 +1356,8 @@ export const en: Catalog = {
     deleteError: "The account couldn't be deleted. Check your connection, then try again.",
     deleteTypeWord: (word: string) => `To confirm, type ${word} below.`,
     deleteWordLabel: (word: string) => `Confirmation word: ${word}`,
+    // "Matching the mockups" batch: the username row, at the top of the "Account" card.
+    usernameLabel: "Username",
   },
   contact: {
     settingsSection: "Help",

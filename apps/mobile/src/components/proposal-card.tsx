@@ -42,12 +42,15 @@ export function ProposalCard({
   placement,
   cheapest = false,
   variant = "grid",
+  column,
 }: {
   piece: Piece;
   onSelect: () => void;
   placement?: ClickPlacement;
   cheapest?: boolean;
   variant?: "grid" | "row";
+  /** Grille de deux colonnes à 8 pt (lot « fidélité aux maquettes ») : la moitié de la largeur, l'écart porté par la carte. Absent : 48 %, comme avant. */
+  column?: "left" | "right";
 }) {
   const price = piece.priceFrom !== null ? formatPrice(piece.priceFrom, piece.currency, getActiveLocale()) : null;
   // Ligne de la liste triée : « Prix à vérifier chez le marchand » s'affiche aussi sans prix, et se lit.
@@ -62,11 +65,11 @@ export function ProposalCard({
             <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} size="card" />
           </View>
           <View style={styles.rowText}>
-            <Text style={styles.cardName} numberOfLines={2}>
+            <Text style={styles.rowName} numberOfLines={2}>
               {piece.name}
             </Text>
             {piece.merchantName ? (
-              <Text style={styles.cardMeta} numberOfLines={1}>
+              <Text style={styles.rowMeta} numberOfLines={1}>
                 {piece.merchantName}
               </Text>
             ) : null}
@@ -89,7 +92,7 @@ export function ProposalCard({
   }
 
   return (
-    <View style={styles.card}>
+    <View style={column === undefined ? styles.card : [styles.cardColumn, column === "left" ? styles.cardLeft : styles.cardRight]}>
       <Pressable onPress={onSelect} accessibilityRole="button" accessibilityLabel={label} accessibilityHint={t.result.showLargeHint}>
         {/* La tuile « Écrin » des grilles (components/piece-tile.tsx) ; le libellé est celui du bouton. */}
         <PieceTile variant="grid" size="card" hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} edgeColor={piece.edgeColor} />
@@ -107,6 +110,11 @@ export function ProposalCard({
       <View style={styles.marks}>
         {/* Boutiques douteuses : « Boutique connue » ou « Prix inhabituellement bas », touchable à part. */}
         <OfferMarkNote piece={piece} />
+        {piece.offerMark && typeof piece.inStock === "boolean" ? (
+          <Text style={styles.markDot} accessible={false}>
+            ·
+          </Text>
+        ) : null}
         {/* Stock affiché : « En stock » ou « Épuisée » d'après Google, touchable à part (components/stock-note.tsx). */}
         <StockNote piece={piece} />
       </View>
@@ -165,8 +173,10 @@ function ShopLink({ piece, placement }: { piece: Piece; placement?: ClickPlaceme
         // Le nom de la pièce : parmi les liens de la page (rotor de VoiceOver), « Voir chez … » seul serait ambigu.
         accessibilityLabel={[label, piece.name, isAffiliate ? t.result.affiliateDisclosure : null].filter(Boolean).join(", ")}
       >
-        <Text style={styles.shopLinkLabel} numberOfLines={2}>
-          {label} ›
+        {/* Le « › » hors du soulignement, collé au libellé par une espace insécable. */}
+        <Text numberOfLines={2}>
+          <Text style={styles.shopLinkLabel}>{label}</Text>
+          <Text style={styles.shopLinkChevron}>{"\u00a0›"}</Text>
         </Text>
       </Pressable>
       <AffiliateMention isAffiliate={isAffiliate} />
@@ -191,12 +201,21 @@ const ROW_IMAGE_WIDTH = 76;
 // tactile minimale (44 points).
 const styles = themedStyles(() => ({
   card: { width: "48%" },
-  marks: { flexDirection: "row", flexWrap: "wrap", columnGap: space.sm },
+  cardColumn: { width: "50%" },
+  cardLeft: { paddingRight: 4 },
+  cardRight: { paddingLeft: 4 },
+  marks: { flexDirection: "row", flexWrap: "wrap", columnGap: space.sm, marginTop: 4, alignItems: "center" },
+  markDot: { fontSize: 12, color: color.acier },
   fill: { width: "100%", height: "100%" },
-  cardName: { fontSize: font.caption, color: color.encre, marginTop: 8, lineHeight: 17 },
-  cardMeta: { fontSize: 12, color: color.acier, marginTop: 2 },
+  // Deux lignes réservées : les rangées restent alignées (minHeight, jamais height).
+  cardName: { fontSize: font.secondary, lineHeight: 20, fontWeight: "500", color: color.encre, marginTop: 8, minHeight: 40 },
+  cardMeta: { fontSize: font.caption, lineHeight: 18, color: color.acier, marginTop: 2 },
+  // Ligne de la liste triée par prix : inchangée (aucune maquette).
+  rowName: { fontSize: font.caption, color: color.encre, marginTop: 8, lineHeight: 17 },
+  rowMeta: { fontSize: 12, color: color.acier, marginTop: 2 },
   shopLink: { minHeight: size.touchTarget, justifyContent: "center" },
-  shopLinkLabel: { ...lienSouligne, fontSize: font.caption, color: color.vert, fontWeight: "600", lineHeight: 17 },
+  shopLinkLabel: { ...lienSouligne, fontSize: font.caption, lineHeight: 17, color: color.vert, fontWeight: "400" },
+  shopLinkChevron: { fontSize: font.caption, lineHeight: 17, color: color.encre },
   blockedLink: { ...lienSouligne, fontSize: font.caption, color: color.vert, fontWeight: "600", marginBottom: space.xs },
   // Ligne de la liste triée par prix : vignette à gauche, texte et prix à droite, le lien sous le texte.
   row: { width: "100%", paddingVertical: space.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.filet },

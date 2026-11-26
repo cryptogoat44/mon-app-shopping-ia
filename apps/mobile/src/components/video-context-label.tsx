@@ -43,7 +43,8 @@ export function VideoContextLabel() {
 }
 
 const styles = themedStyles(() => ({
-  block: { marginBottom: space.md, gap: space.xs },
+  // Sous la photo, avant le champ et le bouton (lot « fidélité aux maquettes ») : sans marge du bas.
+  block: { marginBottom: 0, gap: space.xs },
   note: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
   row: {
     flexDirection: "row",
@@ -55,7 +56,7 @@ const styles = themedStyles(() => ({
     borderRadius: radius.full,
     paddingLeft: space.md,
     paddingRight: space.xs,
-    minHeight: 36,
+    minHeight: 32,
     maxWidth: "100%",
   },
   label: { fontSize: font.caption, color: color.encre, flexShrink: 1 },

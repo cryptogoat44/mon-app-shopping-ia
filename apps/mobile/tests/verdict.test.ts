@@ -193,7 +193,9 @@ describe("l'écran : la phrase en tête, annoncée, touchable, sans rien déplac
     const screen = read("src/app/(app)/spot/result.tsx");
     const line = screen.indexOf("<VerdictLine verdict={result.verdict} />");
     expect(line).toBeGreaterThan(-1);
-    expect(line).toBeLessThan(screen.indexOf("t.result.count(result.pieces.length, result.query)"));
+    // Lot « fidélité aux maquettes » : le décompte est passé dans la barre du haut ; la phrase reste avant le tri et la grande carte.
+    expect(screen).not.toContain("t.result.count(result.pieces.length, result.query)");
+    expect(line).toBeLessThan(screen.indexOf("<ResultSortBar"));
     expect(line).toBeLessThan(screen.indexOf("{showBigCard ? ("));
     const component = read("src/components/verdict-line.tsx");
     expect(component).toContain("if (!verdict || !sentence) return null;");

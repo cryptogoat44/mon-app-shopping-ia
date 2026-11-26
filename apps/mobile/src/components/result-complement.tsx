@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import type { TextSearchStatus } from "@monapp/shared-types";
-import { color, font, radius, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { COMPLEMENT_SHOWN_FIRST, firstShown, type IndexedPiece } from "@/lib/result-sections";
 import type { ClickPlacement } from "@/lib/price-first";
@@ -73,8 +73,8 @@ export function ResultComplement({
       {note ? <Text style={styles.caption}>{note}</Text> : null}
       {visible.length > 0 ? (
         <View style={styles.grid}>
-          {visible.map(({ piece, index }) => (
-            <ProposalCard key={piece.id} piece={piece} onSelect={() => onSelect(index)} placement={placements?.get(index)} cheapest={index === cheapestIndex} />
+          {visible.map(({ piece, index }, i) => (
+            <ProposalCard key={piece.id} piece={piece} onSelect={() => onSelect(index)} placement={placements?.get(index)} cheapest={index === cheapestIndex} column={i % 2 === 0 ? "left" : "right"} />
           ))}
         </View>
       ) : null}
@@ -89,9 +89,11 @@ export function ResultComplement({
 
 // Mêmes mesures que la grille « Autres propositions » de l'écran Résultat.
 const styles = themedStyles(() => ({
-  sectionTitle: { fontSize: font.body, fontWeight: "600", color: color.encre, marginTop: space.xl, marginBottom: space.md },
+  // Titre de section en Bodoni 23/34, comme « Autres propositions » (lot « fidélité aux maquettes »).
+  sectionTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre, marginTop: space.xl, marginBottom: space.md },
   caption: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginTop: -space.sm, marginBottom: space.md },
-  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: space.lg },
+  // Deux colonnes à 8 pt, portés par chaque carte (lot « fidélité aux maquettes »).
+  grid: { flexDirection: "row", flexWrap: "wrap", rowGap: space.lg },
   secondary: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: space.sm },
   secondaryLabel: { color: color.encre, fontSize: font.body, fontWeight: "500" },
   pending: { flexDirection: "row", alignItems: "center", gap: space.sm, marginTop: space.xl, minHeight: 24 },

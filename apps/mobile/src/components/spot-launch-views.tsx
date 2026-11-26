@@ -1,8 +1,8 @@
-import { useState } from "react";
-import { ActivityIndicator, Pressable, Text, TextInput, View, type StyleProp, type TextStyle } from "react-native";
+import { useState, type ReactNode } from "react";
+import { ActivityIndicator, Platform, Pressable, Text, TextInput, View, type StyleProp, type TextStyle } from "react-native";
 import { Image } from "expo-image";
 import { SEARCH_QUERY_MAX_LENGTH } from "@monapp/shared-types";
-import { color, font, radius, serifFont, serifLineHeight, size, space } from "@/theme/tokens";
+import { color, font, getActiveScheme, radius, serifFont, serifLineHeight, size, space } from "@/theme/tokens";
 import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { ErrorMessage } from "@/components/error-message";
@@ -116,6 +116,7 @@ export function QueryInput({
   style,
   placeholder = t.launch.placeholder,
   label = t.launch.title,
+  boxed = false,
 }: {
   value: string;
   onChangeText: (value: string) => void;
@@ -125,11 +126,13 @@ export function QueryInput({
   style?: StyleProp<TextStyle>;
   placeholder?: string;
   label?: string;
+  /** Un bloc plein (photo, maquette « Écrin » 3) au lieu du champ souligné (question des vidéos). */
+  boxed?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
   return (
     <TextInput
-      style={[styles.input, focused ? styles.inputFocused : null, style]}
+      style={boxed ? [styles.inputBoxed, focused ? styles.inputBoxedFocused : null, style] : [styles.input, focused ? styles.inputFocused : null, style]}
       value={value}
       onChangeText={onChangeText}
       placeholder={placeholder}
@@ -176,6 +179,10 @@ export interface AskProps {
   addingVideo: boolean;
   message: string | null;
   privacy: string | null;
+  /** Photo : la pastille de la vidéo associée (et sa phrase), entre « Utiliser toute l'image » et le champ — donc avant le bouton. */
+  context?: ReactNode;
+  /** Photo : hauteurs mesurées de la pastille et de la note des mots (l'écran règle la taille de la photo). */
+  onMeasure?: (part: "context" | "note", height: number) => void;
 }
 
 /** La question (vidéo analysée par l'IA, prête à la saisie dès l'ouverture),
@@ -185,21 +192,21 @@ export function AskView(p: AskProps) {
     <>
       {p.photoWords ? (
         <>
-          <Text style={styles.fieldLabel}>{t.launch.photoLabel}</Text>
+          {/* Lot « fidélité aux maquettes » (maquette « Écrin » 3) : la pastille de la vidéo, un seul champ, puis la note des mots —
+              ce qu'ils deviennent est lu (et entendu avec VoiceOver) avant « Chercher cette pièce ». */}
+          {p.context ? <View onLayout={(event) => p.onMeasure?.("context", event.nativeEvent.layout.height)}>{p.context}</View> : null}
           <QueryInput
             value={p.query}
             onChangeText={p.onQuery}
             onSubmit={() => p.canLaunch && p.onLaunch()}
             testID="spot-photo-words"
-            placeholder={t.launch.photoPlaceholder}
+            placeholder={`${t.launch.photoLabel} · ${t.launch.photoPlaceholder}`}
             label={t.launch.photoLabel}
+            boxed
           />
-          <Text style={styles.note}>{p.linkWords ? t.launch.linkWordsNote : t.launch.photoWordsNote}</Text>
-          {p.frameHint ? (
-            <Text style={styles.body} accessibilityLiveRegion="polite">
-              {t.launch.frameHint}
-            </Text>
-          ) : null}
+          <Text style={styles.photoNote} onLayout={(event) => p.onMeasure?.("note", event.nativeEvent.layout.height)}>
+            {p.linkWords ? t.launch.linkWordsNote : t.launch.photoWordsNote}
+          </Text>
         </>
       ) : p.withQuery ? (
         <>
@@ -218,7 +225,7 @@ export function AskView(p: AskProps) {
       ) : null}
       {p.message ? <ErrorMessage style={styles.message}>{p.message}</ErrorMessage> : null}
       <Pressable
-        style={[styles.primary, p.canLaunch ? null : styles.primaryDisabled]}
+        style={[styles.primary, p.photoWords ? styles.primaryPhoto : null, p.canLaunch ? null : styles.primaryDisabled]}
         onPress={p.onLaunch}
         disabled={!p.canLaunch}
         accessibilityRole="button"
@@ -226,6 +233,12 @@ export function AskView(p: AskProps) {
       >
         <Text style={[styles.primaryLabel, p.canLaunch ? null : styles.primaryLabelDisabled]}>{p.launchLabel}</Text>
       </Pressable>
+      {/* Photo : le conseil de cadrage, sous le bouton (le bouton reste grisé tant que rien n'est entouré). */}
+      {p.photoWords && p.frameHint ? (
+        <Text style={styles.frameHint} accessibilityLiveRegion="polite">
+          {t.launch.frameHint}
+        </Text>
+      ) : null}
       {p.declined ? (
         <>
           <Text style={styles.note}>{t.launch.declinedNote}</Text>
@@ -317,15 +330,35 @@ const styles = themedStyles(() => ({
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: serifLineHeight.title, marginTop: space.lg },
   fieldLabel: { fontSize: font.secondary, color: color.encre, fontWeight: "600", marginTop: space.lg },
   frameTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: serifLineHeight.title },
-  caption: { fontSize: font.caption, color: color.acier, marginTop: 6, lineHeight: 18 },
-  cropArea: { marginTop: space.md },
+  caption: { fontSize: font.caption, color: color.acier, marginTop: 2, lineHeight: 18 },
+  cropArea: { marginTop: 12 },
   // Centré sous l'image, elle-même centrée (le cadre a la forme de l'image).
-  wholeImage: { alignSelf: "center", minHeight: size.touchTarget, justifyContent: "center" },
-  wholeImageLabel: { fontSize: font.secondary, color: color.acier, textDecorationLine: "underline" },
+  wholeImage: { alignSelf: "center", minHeight: size.touchTarget, justifyContent: "center", marginTop: 4 },
+  wholeImageLabel: { ...lienSouligne, fontSize: font.caption, color: color.vert },
   body: { fontSize: font.secondary, color: color.encre, marginTop: space.md, lineHeight: 21 },
   // Contour « plein » de largeur nulle : remplace le cadre du navigateur (« auto », qui ignore la largeur).
   input: { minHeight: 48, marginTop: space.xs, borderBottomWidth: 1, borderBottomColor: color.filet, fontSize: font.body, color: color.encre, outlineStyle: "solid", outlineWidth: 0 },
   inputFocused: { borderBottomWidth: 2, borderBottomColor: color.vert },
+  // Photo : un bloc plein ; 16 sur le site (Safari sur iPhone zoome toute la page sous 16 px) ; filet en thème clair, accent au focus.
+  inputBoxed: {
+    minHeight: 44,
+    borderRadius: radius.md,
+    borderCurve: "continuous",
+    backgroundColor: color.surface,
+    paddingHorizontal: 14,
+    borderBottomWidth: 0,
+    borderWidth: getActiveScheme() === "light" ? 1 : 0,
+    borderColor: color.filet,
+    marginTop: space.sm,
+    fontSize: Platform.OS === "web" ? 16 : font.secondary,
+    color: color.encre,
+    outlineStyle: "solid",
+    outlineWidth: 0,
+  },
+  inputBoxedFocused: { borderWidth: 1, borderColor: color.vert },
+  photoNote: { fontSize: font.caption, lineHeight: 18, color: color.acier, marginTop: space.xs },
+  frameHint: { fontSize: font.caption, lineHeight: 18, color: color.acier, marginTop: 12 },
+  primaryPhoto: { marginTop: 12 },
   notice: { marginTop: space.md },
   link: { minHeight: 44, justifyContent: "center", marginTop: space.sm },
   linkLabel: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },

@@ -5,6 +5,7 @@ import { color, font, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import { ApiError, deleteMyAccount } from "@/lib/api";
 import { ErrorMessage } from "@/components/error-message";
+import { settingsGroupValues } from "@/components/settings-group";
 import { themedStyles } from "@/theme/themed-styles";
 
 /** « Supprimer mon compte » (Réglages) : l'avertissement, puis le mot de
@@ -84,9 +85,10 @@ export function DeleteAccountSection({ onDeleted }: { onDeleted: () => Promise<v
   );
 }
 
+// Réglages, maquette « Écrin » 7 : le surtitre commun des blocs (components/settings-group.tsx) ; le reste inchangé.
 const styles = themedStyles(() => ({
-  section: { borderTopWidth: 1, borderTopColor: color.filet, paddingTop: space.lg },
-  label: { fontSize: font.caption, fontWeight: "600", color: color.acier, marginBottom: space.sm },
+  section: { marginTop: space.lg, paddingHorizontal: 4 },
+  label: { ...settingsGroupValues().label, paddingHorizontal: 0 },
   body: { fontSize: font.secondary, color: color.acier, marginBottom: space.sm, lineHeight: 19 },
   input: {
     minHeight: 44,

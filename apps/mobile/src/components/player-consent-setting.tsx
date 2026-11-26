@@ -5,13 +5,13 @@
 // non plus avec l'écran d'accord d'avant ; avec le bouton Lecture qui vaut
 // accord (retours du build 3), le titre et la règle, sans bouton.
 import { useCallback, useState } from "react";
-import { Pressable, Text } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { color, font, space } from "@/theme/tokens";
-import { lienSouligne } from "@/theme/accent";
+import { color, font } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { isPlayerAvailable, readPlayerConsent, withdrawPlayerConsent } from "@/lib/player-access";
 import { PLAYER_CONSENT_BY_PLAY_BUTTON, PLAYER_CONSENT_GATE } from "@/lib/spot-flags";
+import { settingsGroup, settingsGroupValues } from "@/components/settings-group";
 import { themedStyles } from "@/theme/themed-styles";
 
 export function PlayerConsentSetting() {
@@ -37,6 +37,8 @@ export function PlayerConsentSetting() {
     state === "given" ? t.player.settings.on : state === "none" ? t.player.settings.none : PLAYER_CONSENT_BY_PLAY_BUTTON ? t.player.settings.withdrawnPlay : t.player.settings.withdrawn;
   return (
     <>
+      {/* Lignes posées dans la carte « Vos données » de Réglages (components/settings-group.tsx) : un filet, jamais une carte à elles. */}
+      <View style={settingsGroup.divider} />
       <Text style={styles.title}>{t.player.settings.title}</Text>
       <Text style={styles.body}>{body}</Text>
       {state === "given" ? (
@@ -48,9 +50,13 @@ export function PlayerConsentSetting() {
   );
 }
 
-const styles = themedStyles(() => ({
-  title: { fontSize: font.secondary, color: color.encre, fontWeight: "600", minHeight: 44, textAlignVertical: "center", paddingTop: space.sm },
-  body: { fontSize: font.secondary, color: color.acier, marginBottom: space.sm, lineHeight: 19 },
-  link: { minHeight: 44, justifyContent: "center", marginBottom: space.sm },
-  linkLabel: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
-}));
+const styles = themedStyles(() => {
+  const g = settingsGroupValues();
+  return {
+    // Un titre seul, sans interrupteur : 44 pt par son propre air (le site ignore textAlignVertical).
+    title: { fontSize: font.secondary, lineHeight: 20, color: color.encre, fontWeight: "400", paddingVertical: 12 },
+    body: g.hint,
+    link: g.linkRow,
+    linkLabel: g.link,
+  };
+});

@@ -171,7 +171,8 @@ describe("la grande carte et la liste ne changent pas", () => {
       "onPress={handleKeep} disabled={kept.has(piece.id)}",
       "onPress={openCategory} disabled={bought.has(piece.id)}",
       "onPress={handleShare}",
-      "{piece.real ? <ResultFeedbackButton onPress={openReport} /> : null}",
+      // Lot « fidélité aux maquettes » : la case « Plus » de la rangée soudée.
+      "{piece.real ? <ResultFeedbackButton onPress={openReport} style={actionCell(3)} /> : null}",
     ]) {
       expect(screen).toContain(button);
     }

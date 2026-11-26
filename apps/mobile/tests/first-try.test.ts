@@ -173,5 +173,7 @@ describe("aide du lien : la capture d'écran d'abord", () => {
     expect(steps[3]).toContain(catalog.firstTry.linkHelp.addScreenshot);
     expect(catalog.firstTry.howItWorks.steps(catalog.spotter.addPhoto)).toHaveLength(3);
     expect(catalog.firstTry.howItWorks.steps(catalog.spotter.addPhoto)[1]).toContain(catalog.spotter.addPhoto);
+    // Lot « fidélité aux maquettes » : la tuile s'appelle « Photo » ; l'étape la nomme entre guillemets.
+    expect(catalog.firstTry.howItWorks.steps(catalog.spotter.tilePhoto)[1]).toContain(catalog.spotter.tilePhoto);
   });
 });

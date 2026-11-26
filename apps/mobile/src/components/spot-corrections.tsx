@@ -3,6 +3,7 @@ import { Modal, Pressable, Text, View, type StyleProp, type ViewStyle } from "re
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import type { SpotResult } from "@/api/types";
 import { ActionButtons, type Action } from "@/components/spot-launch-views";
@@ -122,7 +123,7 @@ export function CorrectionsSheet({
 const styles = themedStyles(() => ({
   notice: { marginTop: space.lg },
   link: { minHeight: 44, alignItems: "center", justifyContent: "center", marginTop: space.sm },
-  linkLabel: { fontSize: font.secondary, color: color.acier, textDecorationLine: "underline" },
+  linkLabel: { ...lienSouligne, fontSize: font.caption, color: color.vert, fontWeight: "400" },
   backdrop: { flex: 1, backgroundColor: color.voile },
   sheet: { backgroundColor: color.porcelaine, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, paddingHorizontal: space.lg, paddingTop: 10 },
   grab: { width: 36, height: 5, borderRadius: 3, backgroundColor: color.filet, alignSelf: "center", marginBottom: space.md },

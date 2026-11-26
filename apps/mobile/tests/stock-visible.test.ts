@@ -314,7 +314,9 @@ describe("les textes et l'accessibilité", () => {
 
   it("sur la grande carte, les cartes des sections et la liste triée, juste après la mention de la boutique", () => {
     const card = read("src/components/proposal-card.tsx");
-    expect(card.match(/<OfferMarkNote piece=\{piece\} \/>\n\s*\{\/\*[^\n]*\*\/\}\n\s*<StockNote piece=\{piece\} \/>/g)).toHaveLength(2);
+    // Lot « fidélité aux maquettes » : sur la carte de la grille, un « · » (non lu) sépare les deux mentions quand les deux sont là.
+    const dot = String.raw`(\s*\{piece\.offerMark && typeof piece\.inStock === "boolean" \? \(\n\s*<Text style=\{styles\.markDot\} accessible=\{false\}>\n\s*·\n\s*<\/Text>\n\s*\) : null\}\n)?`;
+    expect(card.match(new RegExp(String.raw`<OfferMarkNote piece=\{piece\} \/>\n` + dot + String.raw`\s*\{\/\*[^\n]*\*\/\}\n\s*<StockNote piece=\{piece\} \/>`, "g"))).toHaveLength(2);
     const screen = read("src/app/(app)/spot/result.tsx");
     expect(screen.indexOf("<StockNote piece={piece} />")).toBeGreaterThan(screen.indexOf("<OfferMarkNote piece={piece} />"));
     expect(screen).toContain("bigCardLabel(selectedIndex, bestIndex, firstAvailableIndex(result), allPieces(result)[selectedIndex])");

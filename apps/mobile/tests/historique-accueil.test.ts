@@ -196,7 +196,9 @@ describe("l'historique en grille de deux colonnes (retours du build 3, point 7)"
     expect(home).not.toContain("<ScrollView");
     expect(home.match(/^\s*<FlatList$/gm)).toHaveLength(1);
     // Le champ de recherche ne colle pas à la première rangée de photos.
-    expect(home).toContain("recentSection: { marginTop: space.xxl - space.xs, marginBottom: space.md, gap: space.sm }");
+    // Lot « fidélité aux maquettes » : 12 pt, la maquette (jamais 0).
+    expect(home).toContain("recentSection: { marginTop: space.lg, marginBottom: 12, gap: space.xs }");
+    expect(home).not.toMatch(/recentSection: \{[^}]*marginBottom: 0/);
   });
 
   it("refusé : la ligne et ses filets ; permis : la tuile de pièce de la grille, en deux temps (vignette puis originale)", () => {
@@ -208,13 +210,17 @@ describe("l'historique en grille de deux colonnes (retours du build 3, point 7)"
     expect(tile).toContain("<ClockIcon size={22} tint={color.acier} />");
   });
 
-  it("deux cases de 50 %, 12 pt entre les colonnes, 16 entre les rangées ; même hauteur : nom sur deux lignes réservées, méta sur une", () => {
+  // Lot « fidélité aux maquettes » : 8 pt entre les colonnes (4 + 4), le nom sur une ligne.
+  it("deux cases de 50 %, 8 pt entre les colonnes, 16 entre les rangées ; même hauteur : nom sur une ligne, méta sur une", () => {
     expect(tiles).toContain('cell: { width: "50%", marginBottom: space.md }');
-    expect(tiles).toContain("cellLeft: { paddingRight: 6 }");
-    expect(tiles).toContain("cellRight: { paddingLeft: 6 }");
+    expect(tiles).toContain("cellLeft: { paddingRight: 4 }");
+    expect(tiles).toContain("cellRight: { paddingLeft: 4 }");
+    expect(tiles).not.toContain("cellLeft: { paddingRight: 6 }");
     expect(tile).toContain('column === "left" ? styles.cellLeft : styles.cellRight');
-    expect(tiles).toMatch(/name: \{[^}]*lineHeight: 20, minHeight: 40/);
-    expect(tile).toMatch(/<Text style=\{styles\.name\} numberOfLines=\{2\}>/);
+    expect(tiles).toMatch(/name: \{[^}]*lineHeight: 20,/);
+    expect(tiles).not.toMatch(/name: \{[^}]*minHeight: 40/);
+    expect(tile).toMatch(/<Text style=\{styles\.name\} numberOfLines=\{1\}>/);
+    expect(tile).not.toMatch(/<Text style=\{styles\.name\} numberOfLines=\{2\}>/);
     expect(tile).toMatch(/<Text style=\{styles\.meta\} numberOfLines=\{1\}>/);
   });
 

@@ -151,22 +151,23 @@ describe("accès selon iOS", () => {
 // de disparaître. Réduire est un affichage, jamais un accord : rien n'est
 // demandé à iOS, la galerie n'est pas lue et le choix « oui / non » ne bouge pas.
 describe("carte repliée : une préférence d'affichage, sur l'appareil, par compte", () => {
-  it("seul « 1 » vaut repliée ; rien, « 0 » ou un autre texte : la carte entière", () => {
+  // Lot « fidélité aux maquettes » (décision 17) : repliée par défaut.
+  it("seul « 0 » vaut dépliée (choisie par le membre) ; rien, « 1 » ou un autre texte : repliée, le défaut", () => {
     expect(parseLatestVideoReduced("1")).toBe(true);
-    expect(parseLatestVideoReduced(null)).toBe(false);
+    expect(parseLatestVideoReduced(null)).toBe(true);
     expect(parseLatestVideoReduced("0")).toBe(false);
-    expect(parseLatestVideoReduced("oui")).toBe(false);
+    expect(parseLatestVideoReduced("oui")).toBe(true);
     expect(latestVideoReducedKey("compte-1")).toBe("spotto.latest-video-reduced.compte-1");
   });
 
-  it("réduire puis relire : repliée ; rouvrir efface la clé ; un autre compte garde la carte entière", async () => {
+  it("déplier puis relire : dépliée (« 0 » retenu) ; réduire : « 1 » ; un autre compte garde le défaut, repliée", async () => {
+    await saveLatestVideoReduced("compte-1", false);
+    expect(store.get("spotto.latest-video-reduced.compte-1")).toBe("0");
+    expect(await loadLatestVideoReduced("compte-1")).toBe(false);
+    expect(await loadLatestVideoReduced("compte-2")).toBe(true);
     await saveLatestVideoReduced("compte-1", true);
     expect(store.get("spotto.latest-video-reduced.compte-1")).toBe("1");
     expect(await loadLatestVideoReduced("compte-1")).toBe(true);
-    expect(await loadLatestVideoReduced("compte-2")).toBe(false);
-    await saveLatestVideoReduced("compte-1", false);
-    expect(store.has("spotto.latest-video-reduced.compte-1")).toBe(false);
-    expect(await loadLatestVideoReduced("compte-1")).toBe(false);
   });
 
   it("refusé : réduire écrit le choix (« no ») ou touche à la galerie ; permis : la proposition reste allumée", async () => {

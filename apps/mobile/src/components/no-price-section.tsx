@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { color, font, radius, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import type { IndexedPiece } from "@/lib/result-sections";
 import { withoutPriceShown, type ClickPlacement } from "@/lib/price-first";
@@ -62,8 +62,8 @@ export function NoPriceSection({
         <>
           {caption ? <Text style={styles.caption}>{t.result.noPriceText}</Text> : null}
           <View style={styles.grid}>
-            {visible.map(({ piece, index }) => (
-              <ProposalCard key={piece.id} piece={piece} onSelect={() => onSelect(index)} placement={placements.get(index)} />
+            {visible.map(({ piece, index }, i) => (
+              <ProposalCard key={piece.id} piece={piece} onSelect={() => onSelect(index)} placement={placements.get(index)} column={i % 2 === 0 ? "left" : "right"} />
             ))}
           </View>
           {hiddenCount > 0 ? (
@@ -80,7 +80,8 @@ export function NoPriceSection({
 // Même titre que les autres sections ; mêmes boutons que « Voir plus » ;
 // même grille que « Autres propositions ».
 const styles = themedStyles(() => ({
-  title: { fontSize: font.body, fontWeight: "600", color: color.encre, marginTop: space.xl, marginBottom: space.md },
+  // Titre de section en Bodoni 23/34, comme « Autres propositions » (lot « fidélité aux maquettes »).
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre, marginTop: space.xl, marginBottom: space.md },
   toggle: {
     borderWidth: 1,
     borderColor: color.filet,
@@ -104,5 +105,6 @@ const styles = themedStyles(() => ({
   },
   toggleLabel: { color: color.encre, fontSize: font.body, fontWeight: "500", textAlign: "center" },
   caption: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginTop: space.md },
-  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: space.lg, marginTop: space.md },
+  // Deux colonnes à 8 pt, portés par chaque carte (lot « fidélité aux maquettes »).
+  grid: { flexDirection: "row", flexWrap: "wrap", rowGap: space.lg, marginTop: space.md },
 }));

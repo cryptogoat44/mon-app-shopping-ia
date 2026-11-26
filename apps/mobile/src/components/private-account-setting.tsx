@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import { Pressable, Switch, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { Switch } from "@/components/switch";
 import { color, font, radius, space } from "@/theme/tokens";
 import { couleursInterrupteur } from "@/theme/accent";
 import { t } from "@/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { updatePrivateAccount } from "@/lib/api";
 import { useToast } from "@/lib/toast-context";
+import { settingsGroup, settingsGroupValues } from "@/components/settings-group";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Réglages, bloc « Confidentialité du compte » (lot « vie sociale »,
@@ -53,45 +55,51 @@ export function PrivateAccountSetting() {
   return (
     <View style={styles.section}>
       <Text style={styles.label}>{t.privateAccount.sectionTitle}</Text>
-      <View style={styles.row}>
-        <Text style={styles.title}>{t.privateAccount.settingTitle}</Text>
-        <Switch
-          accessibilityLabel={t.privateAccount.settingTitle}
-          accessibilityHint={t.privateAccount.settingHelp}
-          value={value}
-          disabled={saving}
-          onValueChange={toggle}
-          {...couleursInterrupteur(value)}
-          testID="interrupteur-compte-prive"
-        />
-      </View>
-      <Text style={styles.hint}>{t.privateAccount.settingHelp}</Text>
-      {confirming ? (
-        <View style={styles.confirm} accessibilityRole="alert">
-          <Text style={styles.confirmText}>{t.privateAccount.goPublicConfirm}</Text>
-          <View style={styles.confirmActions}>
-            <Pressable style={styles.button} onPress={() => setConfirming(false)} accessibilityRole="button">
-              <Text style={styles.buttonLabel}>{t.privateAccount.goPublicNo}</Text>
-            </Pressable>
-            <Pressable style={styles.button} onPress={() => void apply(false)} accessibilityRole="button" testID="confirmer-compte-public">
-              <Text style={styles.buttonLabel}>{t.privateAccount.goPublicYes}</Text>
-            </Pressable>
-          </View>
+      <View style={settingsGroup.card}>
+        <View style={styles.row}>
+          <Text style={styles.title}>{t.privateAccount.settingTitle}</Text>
+          <Switch
+            accessibilityLabel={t.privateAccount.settingTitle}
+            accessibilityHint={t.privateAccount.settingHelp}
+            value={value}
+            disabled={saving}
+            onValueChange={toggle}
+            {...couleursInterrupteur(value)}
+            testID="interrupteur-compte-prive"
+          />
         </View>
-      ) : null}
+        <Text style={styles.hint}>{t.privateAccount.settingHelp}</Text>
+        {confirming ? (
+          <View style={styles.confirm} accessibilityRole="alert">
+            <Text style={styles.confirmText}>{t.privateAccount.goPublicConfirm}</Text>
+            <View style={styles.confirmActions}>
+              <Pressable style={styles.button} onPress={() => setConfirming(false)} accessibilityRole="button">
+                <Text style={styles.buttonLabel}>{t.privateAccount.goPublicNo}</Text>
+              </Pressable>
+              <Pressable style={styles.button} onPress={() => void apply(false)} accessibilityRole="button" testID="confirmer-compte-public">
+                <Text style={styles.buttonLabel}>{t.privateAccount.goPublicYes}</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }
 
-const styles = themedStyles(() => ({
-  section: { marginBottom: space.lg },
-  label: { fontSize: font.caption, fontWeight: "600", color: color.acier, marginBottom: space.sm },
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.md, minHeight: 44 },
-  title: { flex: 1, fontSize: font.secondary, color: color.encre, fontWeight: "600" },
-  hint: { fontSize: font.secondary, color: color.acier, marginTop: space.sm, lineHeight: 19 },
-  confirm: { marginTop: space.md, padding: space.md, borderRadius: radius.md, borderWidth: 1, borderColor: color.filet, gap: space.md },
-  confirmText: { fontSize: font.secondary, color: color.encre, lineHeight: 20 },
-  confirmActions: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
-  button: { minHeight: 44, paddingHorizontal: space.lg, borderRadius: radius.md, borderWidth: 1, borderColor: color.filet, alignItems: "center", justifyContent: "center" },
-  buttonLabel: { fontSize: font.secondary, fontWeight: "600", color: color.vert },
-}));
+// Bloc groupé de Réglages (components/settings-group.tsx) : surtitre, puis une carte.
+const styles = themedStyles(() => {
+  const g = settingsGroupValues();
+  return {
+    section: g.section,
+    label: g.label,
+    row: g.row,
+    title: g.rowTitle,
+    hint: g.hint,
+    confirm: { marginBottom: 12, padding: space.md, borderRadius: radius.md, borderWidth: 1, borderColor: color.filet, gap: space.md },
+    confirmText: { fontSize: font.secondary, color: color.encre, lineHeight: 20 },
+    confirmActions: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
+    button: { minHeight: 44, paddingHorizontal: space.lg, borderRadius: radius.md, borderWidth: 1, borderColor: color.filet, alignItems: "center", justifyContent: "center" },
+    buttonLabel: { fontSize: font.secondary, fontWeight: "600", color: color.vert },
+  };
+});

@@ -132,10 +132,10 @@ function fallbackLead(reason: FallbackReason): string {
 function TopBar({ onBack, onClose }: { onBack: () => void; onClose: () => void }) {
   return (
     <View style={styles.nav}>
-      <Pressable onPress={onBack} hitSlop={12} style={styles.navSide} accessibilityRole="button" accessibilityLabel={t.common.back}>
+      <Pressable onPress={onBack} style={styles.navSide} accessibilityRole="button" accessibilityLabel={t.common.back}>
         <Text style={styles.back}>‹ {t.common.back}</Text>
       </Pressable>
-      <Pressable onPress={onClose} hitSlop={12} style={[styles.navSide, styles.navRight]} accessibilityRole="button">
+      <Pressable onPress={onClose} style={[styles.navSide, styles.navRight]} accessibilityRole="button">
         <Text style={styles.close}>{t.spotter.close}</Text>
       </Pressable>
     </View>
@@ -988,12 +988,12 @@ const styles = themedStyles(() => ({
   playerContent: { alignItems: "center", paddingHorizontal: space.md, gap: space.sm, maxWidth: 480, alignSelf: "center", width: "100%" },
   centered: { flex: 1, justifyContent: "center", paddingHorizontal: space.xl, gap: space.lg },
   center: { textAlign: "center" },
-  nav: { height: 47, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12 },
-  navSide: { minWidth: 44, height: 44, justifyContent: "center" },
+  nav: { height: 44, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 8 },
+  navSide: { minHeight: 44, minWidth: 44, paddingHorizontal: 8, justifyContent: "center" },
   navRight: { alignItems: "flex-end" },
   // « ‹ Retour » écrit en toutes lettres : sur cet écran, le geste « glisser pour revenir » est coupé.
-  back: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
-  close: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
+  back: { fontSize: font.body, fontWeight: "400", color: color.encre },
+  close: { fontSize: font.body, fontWeight: "400", color: color.encre },
   body: { fontSize: font.secondary, color: color.acier, lineHeight: 21 },
   box: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md, gap: space.sm, alignSelf: "stretch", marginTop: space.md },
   boxTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, lineHeight: serifLineHeight.body, color: color.encre },
@@ -1002,7 +1002,7 @@ const styles = themedStyles(() => ({
   captionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.sm, alignSelf: "stretch", minHeight: 44 },
   caption: { fontSize: font.caption, color: color.acier, flexShrink: 1 },
   link: { minHeight: 44, justifyContent: "center" },
-  linkLabel: { ...lienSouligne, fontSize: font.caption, color: color.vert, fontWeight: "600" },
+  linkLabel: { ...lienSouligne, fontSize: font.caption, color: color.vert },
   notice: { fontSize: font.caption, color: color.acier, lineHeight: 18, alignSelf: "stretch", textAlign: "center" },
   primary: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 52, flexDirection: "row", gap: space.sm, alignItems: "center", justifyContent: "center", paddingHorizontal: space.md, alignSelf: "stretch" },
   primaryDisabled: { backgroundColor: color.inactif },
@@ -1015,7 +1015,16 @@ const styles = themedStyles(() => ({
   keptNote: { fontSize: font.caption, color: color.acier, lineHeight: 18, alignSelf: "stretch" },
   // Retours du build 3 : zone d'actions mesurée sous la vidéo, et la toute première fois.
   actions: { alignSelf: "stretch", alignItems: "center", gap: space.sm },
-  poster: { backgroundColor: color.nuit, borderRadius: radius.piece, borderCurve: "continuous", alignItems: "center", justifyContent: "center" },
+  // Première fois, sans aucune image (rien n'est chargé chez TikTok avant le premier appui) : le cadre 9:16 se détache du fond (lot « fidélité aux maquettes »).
+  poster: {
+    backgroundColor: color.nuitCadre,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: color.nuitFilet,
+    borderRadius: radius.piece,
+    borderCurve: "continuous",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   playDisc: {
     width: 76,
     height: 76,

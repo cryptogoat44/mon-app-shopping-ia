@@ -1,5 +1,5 @@
 import { Pressable, Text, TextInput, View } from "react-native";
-import { color, font, radius, size, space } from "@/theme/tokens";
+import { color, font, getActiveScheme, radius, size, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import type { Piece } from "@/api/types";
 import { ClockIcon, SearchIcon } from "@/components/icons";
@@ -17,7 +17,7 @@ export interface RecentSearch {
 /** Une case de « Récemment spottées » (retours du build 3, point 7 : « deux
  * et deux côte à côte qui se suivent en descendant », « les coins arrondis
  * également sur chaque photo ») : la tuile de pièce de la grille (4:5, coins
- * doux), le nom sur deux lignes réservées, le jour et la boutique. Deux cases
+ * doux), le nom sur une ligne, le jour et la boutique. Deux cases
  * par rangée ; toutes de même hauteur (condition de `numColumns`). Une seule
  * étiquette VoiceOver par case : la tuile n'en porte pas. Image en deux temps
  * (la vignette de la recherche, puis l'originale du marchand si elle est plus
@@ -39,7 +39,7 @@ export function RecentSearchTile({ entry, column, onOpen }: { entry: RecentSearc
           <ClockIcon size={22} tint={color.acier} />
         </View>
       )}
-      <Text style={styles.name} numberOfLines={2}>
+      <Text style={styles.name} numberOfLines={1}>
         {piece.name}
       </Text>
       <Text style={styles.meta} numberOfLines={1}>
@@ -81,23 +81,27 @@ export function HistorySearchField({ value, onChangeText, onClear }: { value: st
 }
 
 const styles = themedStyles(() => ({
-  // Grille de deux colonnes : 12 pt entre les colonnes (6 + 6), 16 entre deux rangées.
+  // Grille de deux colonnes : 8 pt entre les colonnes (4 + 4), 16 entre deux rangées (maquette « Écrin »).
   cell: { width: "50%", marginBottom: space.md },
-  cellLeft: { paddingRight: 6 },
-  cellRight: { paddingLeft: 6 },
+  cellLeft: { paddingRight: 4 },
+  cellRight: { paddingLeft: 4 },
   pressed: { opacity: 0.7 },
   tileEmpty: { width: "100%", aspectRatio: 4 / 5, backgroundColor: color.plinthe, borderRadius: radius.pieceGrid, borderCurve: "continuous", alignItems: "center", justifyContent: "center" },
-  // Deux lignes réservées : même hauteur pour toutes les cases.
-  name: { fontSize: font.secondary, color: color.encre, lineHeight: 20, minHeight: 40, marginTop: space.sm },
+  // Une ligne (le nom entier est dans l'étiquette VoiceOver de la case) : même hauteur pour toutes les cases.
+  name: { fontSize: font.secondary, lineHeight: 20, fontWeight: "500", color: color.encre, marginTop: space.sm },
   meta: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginTop: 2 },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    gap: space.sm,
+    gap: 10,
     minHeight: size.touchTarget,
-    backgroundColor: color.plinthe,
-    borderRadius: radius.full,
-    paddingLeft: space.md,
+    // Bloc plein de la maquette « Écrin » (lot « fidélité aux maquettes »), filet en thème clair seulement.
+    borderRadius: radius.md,
+    borderCurve: "continuous",
+    backgroundColor: color.surface,
+    borderWidth: getActiveScheme() === "light" ? 1 : 0,
+    borderColor: color.filet,
+    paddingLeft: 14,
   },
   // Site (react-native-web) à 320 pt : sans `minWidth: 0`, le champ garde sa
   // largeur minimale de navigateur et pousse la croix hors de l'écran ; la

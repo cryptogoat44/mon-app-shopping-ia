@@ -6,6 +6,7 @@ import {
   edgeColorApplies,
   FILL_TOLERANCE,
   fillsTile,
+  GRID_FILL_TOLERANCE,
   HERO_MAX_POINTS_PER_PIXEL,
   honestSize,
   imageAfterErrors,
@@ -246,6 +247,34 @@ describe("tuile de pièce : remplir, taille honnête, couleur des bords", () => 
   it("dimensions inconnues ou nulles : ne remplit pas", () => {
     expect(fillsTile(null, HERO, "hero")).toBe(false);
     expect(fillsTile({ width: 0, height: 0 }, GRID, "grid")).toBe(false);
+    expect(fillsTile(null, GRID, "grid", GRID_FILL_TOLERANCE)).toBe(false);
+  });
+
+  // Lot « fidélité aux maquettes » (décision 9) : en grille, sans couleur de fond connue, une photo carrée remplit la tuile.
+  describe("grilles sans couleur de fond : règle « recadrée » des maquettes (26 %)", () => {
+    const CELL = { width: 175, height: 219 };
+    it("permis : une photo carrée remplit la case (rognée de 10 % au plus de chaque côté)", () => {
+      expect(GRID_FILL_TOLERANCE).toBe(0.26);
+      expect(fillsTile({ width: 1000, height: 1000 }, CELL, "grid", GRID_FILL_TOLERANCE)).toBe(true);
+    });
+    it("refusé : la même photo avec une couleur de fond connue (tolérance de 12 %) se pose entière sur son fond", () => {
+      expect(fillsTile({ width: 1000, height: 1000 }, CELL, "grid", FILL_TOLERANCE)).toBe(false);
+    });
+    it("refusé : une photo 16:9 (au-delà de 26 %) n'est jamais recadrée, même en grille", () => {
+      expect(fillsTile({ width: 1600, height: 900 }, CELL, "grid", GRID_FILL_TOLERANCE)).toBe(false);
+    });
+    it("refusé : une grande image carrée dans une tuile 4:5 (358 × 448) n'est pas recadrée", () => {
+      expect(fillsTile({ width: 1000, height: 1000 }, { width: 358, height: 448 }, "hero")).toBe(false);
+    });
+    it("permis : une grande image carrée dans le cadre carré du Résultat (358 × 358), si la règle du point par pixel le permet", () => {
+      expect(fillsTile({ width: 1000, height: 1000 }, { width: 358, height: 358 }, "hero")).toBe(true);
+      // Une vignette de 260 px ne serait pas étirée sur 358 pt.
+      expect(fillsTile({ width: 260, height: 260 }, { width: 358, height: 358 }, "hero")).toBe(false);
+    });
+    it("l'écart se mesure au cadre réel ; cadre pas encore mesuré : 4:5", () => {
+      expect(fillsTile({ width: 1200, height: 1500 }, { width: 0, height: 0 }, "grid")).toBe(true);
+      expect(fillsTile({ width: 1200, height: 1500 }, { width: 358, height: 358 }, "hero")).toBe(false);
+    });
   });
 
   it("refusé : une vignette de 260 px n'est jamais étirée sur 358 pt dans une grande tuile", () => {

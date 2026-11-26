@@ -1,6 +1,6 @@
 import { formatLongDate, formatPrice } from "@/lib/format";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { AccessibilityInfo, Keyboard, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
+import { AccessibilityInfo, Keyboard, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, useWindowDimensions, View, type LayoutChangeEvent } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
@@ -9,6 +9,7 @@ import * as Haptics from "expo-haptics";
 import type { MatchFeedbackReason, ProductSearch, VaultCategory, VerdictLevel } from "@monapp/shared-types";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { lienSouligne } from "@/theme/accent";
+import { surtitre } from "@/theme/surtitre";
 import { acceptLanguage, getActiveLocale, t } from "@/i18n";
 import { closeSpotter } from "@/lib/spot-navigation";
 import { addToWishlist, loadSpotResult } from "@/api/client";
@@ -38,7 +39,7 @@ import {
   type ClickPlacement,
   type StartOptions,
 } from "@/lib/price-first";
-import { isPriceSort, resultLayout, stockFilterShown, type ResultView } from "@/lib/result-sort";
+import { isPriceSort, resultLayout, shownProposalCount, stockFilterShown, type ResultView } from "@/lib/result-sort";
 import { usePreferences } from "@/lib/preferences-context";
 import { searchCountryFrom } from "@/lib/foreign-shop";
 import { getDraft } from "@/lib/spot-draft";
@@ -55,6 +56,7 @@ import { useWishAlertsStatus } from "@/lib/use-wish-alerts-status";
 import { canReportResult, wishAlertsStatus, type StockReportTarget } from "@/lib/wish-alerts";
 import { Skeleton } from "@/components/skeleton";
 import { PieceTile } from "@/components/piece-tile";
+import { BagCheckIcon, BookmarkIcon, ExternalLinkIcon, ShareIcon } from "@/components/icons";
 import type { ZoomState } from "@/components/image-viewer";
 import { ErrorMessage } from "@/components/error-message";
 import { NoPriceNotice } from "@/components/no-price-notice";
@@ -159,6 +161,9 @@ export default function ResultScreen() {
   // Voie B (lot c) : seconde recherche avec les mots refusée, sans leurs propositions pour l'instant.
   const [textSearchUsed, setTextSearchUsed] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+  // Grand texte : la rangée d'actions passe en deux rangées de deux (lot « fidélité aux maquettes »).
+  const { fontScale } = useWindowDimensions();
+  const wideText = fontScale > 1.3;
   const heroReveal = useHeroReveal(scrollRef);
   // Pour amener l'écran sur une section (relecture E2, ORD-5).
   const noPriceSection = useRef<View>(null);
@@ -705,15 +710,20 @@ export default function ResultScreen() {
 
   // ---- Rendus ----
 
-  const nav = (
+  // Lot « fidélité aux maquettes » (décision 13) : en titre, le nombre de propositions que l'écran peut montrer ;
+  // la requête reste dans le nom lu par VoiceOver. À droite, la case vide de 44 équilibre le titre (décision 12).
+  const renderNav = (title: string, label?: string) => (
     <View style={styles.nav}>
-      <Pressable onPress={() => closeSpotter(router)} hitSlop={12} style={styles.navSide} accessibilityRole="button">
+      <Pressable onPress={() => closeSpotter(router)} style={styles.navSide} accessibilityRole="button">
         <Text style={styles.close}>{t.spotter.close}</Text>
       </Pressable>
-      <Text style={styles.navTitle}>{t.result.title}</Text>
+      <Text style={styles.navTitle} numberOfLines={1} accessibilityRole="header" accessibilityLabel={label}>
+        {title}
+      </Text>
       <View style={styles.navSide} />
     </View>
   );
+  const nav = renderNav(t.result.title);
 
   if (state.kind === "loading") {
     return (
@@ -861,9 +871,22 @@ export default function ResultScreen() {
     setTimeout(runAfterCorrectionsSheet, 80);
   }
 
+  const total = shownProposalCount(layout);
+  // Cases de la rangée d'actions : filet à gauche des cases 2 à 4 ; grand texte, deux rangées de deux
+  // (filet en haut des cases 3 et 4, pas à gauche de la case 3) ; avec trois cases, la troisième prend toute la largeur.
+  const actionCount = piece.real ? 4 : 3;
+  const actionCell = (position: number) =>
+    wideText
+      ? [
+          styles.actionHalf,
+          position % 2 === 1 ? styles.actionDivider : null,
+          position >= 2 ? styles.actionTopDivider : null,
+          actionCount === 3 && position === 2 ? styles.actionFull : null,
+        ]
+      : [styles.action, position > 0 ? styles.actionDivider : null];
   const screen = (
     <SafeAreaView style={styles.screen}>
-      {nav}
+      {total > 0 ? renderNav(t.result.count(total, null), t.result.count(total, result.query)) : nav}
       {/* Voie B : le champ « Que cherchez-vous ? » est en bas de la liste. */}
       <ScrollView
         ref={scrollRef}
@@ -889,12 +912,8 @@ export default function ResultScreen() {
         {/* Voie C : le décompte, le tri et l'absence de prix parlent de la recherche visuelle seule.
             Prix d'abord : « aucun prix » quand la recherche visuelle n'en a aucun et que la grande carte
             d'office n'en a pas non plus (sinon elles sont toutes repliées en bas, avec le même texte). */}
-        {/* Retours du build 3 (« trop d'espace partout ») : le décompte et l'ordre sur une seule ligne grise. */}
-        {result.pieces.length > 0 || wordsLine ? (
-          <Text style={styles.count}>
-            {[result.pieces.length > 0 ? t.result.count(result.pieces.length, result.query) : null, wordsLine].filter(Boolean).join(" · ")}
-          </Text>
-        ) : null}
+        {/* Lot « fidélité aux maquettes » : le décompte est passé dans la barre du haut ; ici, l'ordre seul, quand il s'applique. */}
+        {wordsLine ? <Text style={styles.count}>{wordsLine}</Text> : null}
         {/* Tri des résultats : en haut de la liste, la ligne des prix avec ; « En stock seulement » à côté
             de « Avec prix seulement », quand une offre dit son stock (ou qu'il est déjà choisi). */}
         <ResultSortBar view={view} onChange={changeView} summary={summaryText} stockShown={stockFilterShown(result, view)} />
@@ -911,6 +930,7 @@ export default function ResultScreen() {
             <PieceTile
               variant="hero"
               enlargeable
+              aspectRatio={1}
               hdUri={piece.imageHdUrl}
               fallbackUri={piece.imageUrl}
               edgeColor={piece.edgeColor}
@@ -924,21 +944,28 @@ export default function ResultScreen() {
             <Text style={styles.name} accessibilityRole="header">
               {piece.name}
             </Text>
-            <Text style={styles.meta}>
-              {[piece.merchantName, displayPrice(piece)].filter(Boolean).join(" · ")}
-            </Text>
+            {/* Juste sous la proposition, visible sans défilement (décision du fondateur, lot 4 ter) : sur la ligne du prix (maquette « Écrin » 4). */}
+            <View style={styles.metaRow}>
+              <Text style={styles.meta}>
+                {[piece.merchantName, displayPrice(piece)].filter(Boolean).join(" · ")}
+              </Text>
+              {sheetActions.length > 0 ? <CorrectionsLink style={styles.notRight} onPress={() => setCorrectionsOpen(true)} /> : null}
+            </View>
             {selectedIndex === cheapest ? <CheapestBadge /> : null}
             <ForeignShopNote piece={piece} />
-            {/* Boutiques douteuses : « Boutique connue » ou « Prix inhabituellement bas » (components/offer-mark.tsx). */}
-            <OfferMarkNote piece={piece} />
-            {/* Stock affiché : « En stock » ou « Épuisée » d'après Google, au moment de la recherche (components/stock-note.tsx). */}
-            <StockNote piece={piece} />
-            {/* Juste sous la proposition, visible sans défilement (décision du fondateur, lot 4 ter). */}
-            {sheetActions.length > 0 ? <CorrectionsLink style={styles.notRight} onPress={() => setCorrectionsOpen(true)} /> : null}
+            <View style={styles.marks}>
+              {/* Boutiques douteuses : « Boutique connue » ou « Prix inhabituellement bas » (components/offer-mark.tsx). */}
+              <OfferMarkNote piece={piece} />
+              {/* Stock affiché : « En stock » ou « Épuisée » d'après Google, au moment de la recherche (components/stock-note.tsx). */}
+              <StockNote piece={piece} />
+            </View>
 
             {piece.merchantUrl ? (
               <Pressable style={styles.primary} onPress={handleOpenMerchant} accessibilityRole="link">
                 <Text style={styles.primaryLabel}>{opensOfferPage(piece) ? t.result.viewOffer : t.result.viewAt(piece.merchantName ?? "")}</Text>
+                <View accessible={false}>
+                  <ExternalLinkIcon size={18} tint={color.blanc} />
+                </View>
               </Pressable>
             ) : null}
             {blockedMerchantUrl ? (
@@ -955,17 +982,28 @@ export default function ResultScreen() {
             {/* « Lien affilié » seulement pour un vrai lien affilié (lot garde-fous, lib/affiliate-link.ts). */}
             <AffiliateMention isAffiliate={isAffiliateLink(piece)} explain centered />
 
-            <View style={styles.actions}>
-              <Pressable style={styles.action} onPress={handleKeep} disabled={kept.has(piece.id)} accessibilityRole="button">
+            {/* Rangée d'actions soudée à pictogrammes (maquette « Écrin » 4, décision 15) : « Plus » ne contient que
+                « Signaler un résultat incohérent » ; « Envoyer à un ami » et « Plus disponible ? » restent deux liens dessous. */}
+            <View style={[styles.actions, wideText ? styles.actionsWrap : null]}>
+              <Pressable style={actionCell(0)} onPress={handleKeep} disabled={kept.has(piece.id)} accessibilityRole="button">
+                <View accessible={false}>
+                  <BookmarkIcon size={18} filled={kept.has(piece.id)} />
+                </View>
                 <Text style={styles.actionLabel}>{kept.has(piece.id) ? t.result.kept : t.result.keep}</Text>
               </Pressable>
-              <Pressable style={styles.action} onPress={openCategory} disabled={bought.has(piece.id)} accessibilityRole="button">
+              <Pressable style={actionCell(1)} onPress={openCategory} disabled={bought.has(piece.id)} accessibilityRole="button">
+                <View accessible={false}>
+                  <BagCheckIcon />
+                </View>
                 <Text style={styles.actionLabel}>{bought.has(piece.id) ? t.result.bought : t.result.markAsBought}</Text>
               </Pressable>
-              <Pressable style={styles.action} onPress={handleShare} disabled={lookBusy} accessibilityRole="button" accessibilityState={{ busy: lookBusy }}>
+              <Pressable style={actionCell(2)} onPress={handleShare} disabled={lookBusy} accessibilityRole="button" accessibilityState={{ busy: lookBusy }}>
+                <View accessible={false}>
+                  <ShareIcon size={18} tint={color.encre} strokeWidth={1.6} />
+                </View>
                 <Text style={styles.actionLabel}>{lookBusy ? t.look.creating : lookAllowed ? t.look.share : t.result.share}</Text>
               </Pressable>
-              {piece.real ? <ResultFeedbackButton onPress={openReport} /> : null}
+              {piece.real ? <ResultFeedbackButton onPress={openReport} style={actionCell(3)} /> : null}
             </View>
             {/* Actions propres au site, rien sur iPhone (components/piece-extra-actions). */}
             <PieceExtraActions
@@ -1007,13 +1045,26 @@ export default function ResultScreen() {
           <>
             {others.length > 0 ? (
               <>
-                <Text style={styles.sectionTitle} accessibilityRole="header">
-                  {t.result.otherProposals}
-                </Text>
+                <View style={styles.sectionHead}>
+                  <Text style={styles.sectionTitle} accessibilityRole="header">
+                    {t.result.otherProposals}
+                  </Text>
+                  {/* Tout ce que la section peut montrer, « Voir plus » compris (maquette « Écrin » 5). */}
+                  <Text style={styles.sectionCount} accessibilityLabel={t.result.count(others.length, null)}>
+                    {others.length}
+                  </Text>
+                </View>
                 <View style={styles.grid}>
-                  {/* Cartes (image, nom, boutique, prix, « Voir chez … ») : components/proposal-card.tsx. */}
-                  {visibleOthers.map(({ piece: p, index }) => (
-                    <ProposalCard key={p.id} piece={p} onSelect={() => selectPiece(index)} placement={placements.get(index)} cheapest={index === cheapest} />
+                  {/* Cartes (image, nom, boutique, prix, « Voir chez … ») : components/proposal-card.tsx. Deux colonnes à 8 pt. */}
+                  {visibleOthers.map(({ piece: p, index }, i) => (
+                    <ProposalCard
+                      key={p.id}
+                      piece={p}
+                      onSelect={() => selectPiece(index)}
+                      placement={placements.get(index)}
+                      cheapest={index === cheapest}
+                      column={i % 2 === 0 ? "left" : "right"}
+                    />
                   ))}
                 </View>
                 {hiddenCount > 0 ? (
@@ -1201,36 +1252,49 @@ function FailureView({
 
 const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
-  nav: { height: 47, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12 },
-  navSide: { minWidth: 44, height: 44, justifyContent: "center" },
-  close: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
-  navTitle: { fontSize: font.caption, color: color.acier },
-  content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
-  count: { fontSize: font.caption, color: color.acier, marginBottom: space.xs },
+  nav: { height: 44, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 8 },
+  navSide: { minHeight: 44, minWidth: 44, paddingHorizontal: 8, justifyContent: "center" },
+  close: { fontSize: font.body, fontWeight: "400", color: color.encre },
+  // Centré sur l'écran comme la maquette (« Fermer » est plus large que la case vide de droite) ; jamais sous les deux côtés.
+  navTitle: { position: "absolute", left: 76, right: 76, textAlign: "center", fontSize: font.secondary, fontWeight: "500", color: color.encre },
+  content: { paddingHorizontal: space.md, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
+  count: { fontSize: font.caption, lineHeight: 18, color: color.acier, marginBottom: space.xs },
   verdictPlace: { minHeight: 1 },
-  heroSkeleton: { width: "100%", aspectRatio: 4 / 5, borderRadius: radius.piece, borderCurve: "continuous" },
-  rankLabel: { fontSize: font.caption, color: color.acier, fontWeight: "600", marginTop: 12 },
+  heroSkeleton: { width: "100%", aspectRatio: 1, borderRadius: radius.piece, borderCurve: "continuous" },
+  rankLabel: { ...surtitre, color: color.acier, marginTop: 12 },
   name: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: serifLineHeight.title, marginTop: 4 },
-  meta: { fontSize: font.secondary, color: color.acier, marginTop: 4 },
+  metaRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", columnGap: space.md, marginTop: space.xs },
+  meta: { fontSize: font.caption, lineHeight: 18, color: color.acier },
+  // Sans grande carte, le lien garde sa place (à gauche, en haut de la liste).
   notRight: { alignItems: "flex-start", marginTop: 0 },
-  primary: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: space.sm },
-  primaryLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
+  marks: { flexDirection: "row", flexWrap: "wrap", columnGap: space.sm, alignItems: "center" },
+  primary: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: 12 },
+  primaryLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600", flexShrink: 1 },
   secondary: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: space.sm },
   secondaryLabel: { color: color.encre, fontSize: font.body, fontWeight: "500" },
   textButton: { minHeight: 44, alignItems: "center", justifyContent: "center", marginTop: space.sm },
   textButtonLabel: { fontSize: font.secondary, color: color.acier, fontWeight: "600" },
   blockedLink: { ...lienSouligne, textAlign: "center", fontSize: font.caption, color: color.vert, fontWeight: "600", marginTop: 10 },
-  actions: { flexDirection: "row", gap: space.sm, marginTop: space.sm },
-  action: { flex: 1, minHeight: 44, borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
-  actionLabel: { fontSize: font.caption, color: color.encre, fontWeight: "500", textAlign: "center" },
+  // Rangée soudée : un seul cadre, des filets entre les cases ; minHeight (jamais height) : un libellé long passe à la ligne.
+  actions: { flexDirection: "row", marginTop: space.sm, minHeight: 56, borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, borderCurve: "continuous", overflow: "hidden" },
+  actionsWrap: { flexWrap: "wrap" },
+  action: { flex: 1, minHeight: 56, alignItems: "center", justifyContent: "center", gap: 4, paddingHorizontal: 2, paddingVertical: 6 },
+  actionHalf: { width: "50%", minHeight: 56, alignItems: "center", justifyContent: "center", gap: 4, paddingHorizontal: 2, paddingVertical: 6 },
+  actionFull: { width: "100%" },
+  actionDivider: { borderLeftWidth: 1, borderLeftColor: color.filet },
+  actionTopDivider: { borderTopWidth: 1, borderTopColor: color.filet },
+  actionLabel: { fontSize: 12, lineHeight: 14, fontWeight: "500", color: color.encre, textAlign: "center" },
   actionError: { fontSize: font.caption, marginTop: space.sm },
   extraActions: { marginTop: space.sm },
-  quietLinks: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", columnGap: space.lg },
+  quietLinks: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", columnGap: space.lg, marginTop: 4 },
   sendToFriend: { alignSelf: "center", marginTop: 0 },
   luxuryResaleTop: { alignSelf: "flex-start", marginTop: 0 },
-  sectionTitle: { fontSize: font.body, fontWeight: "600", color: color.encre, marginTop: space.lg, marginBottom: 12 },
-  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: space.md },
-  failContent: { flexGrow: 1, justifyContent: "center", paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
+  sectionHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginTop: space.lg, marginBottom: 12 },
+  sectionTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre, flexShrink: 1 },
+  sectionCount: { fontSize: font.caption, color: color.acier },
+  // Deux colonnes à 8 pt (4 + 4, portés par chaque carte) : une carte seule en fin de rangée garde sa demi-largeur.
+  grid: { flexDirection: "row", flexWrap: "wrap", rowGap: space.md },
+  failContent: { flexGrow: 1, justifyContent: "center", paddingHorizontal: space.md, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   failTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: serifLineHeight.title },
   failTip: { fontSize: font.secondary, color: color.acier, lineHeight: 21, marginTop: space.sm },
   backdrop: { flex: 1, backgroundColor: color.voile },

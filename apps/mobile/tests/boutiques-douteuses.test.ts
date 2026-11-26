@@ -242,8 +242,8 @@ describe("mentions des boutiques : ce que l'app reçoit et affiche", () => {
 
   it("sur chaque carte (grille, liste triée, grande carte) : une zone à part, touchable, avec son libellé et la feuille d'une phrase", () => {
     const card = code("components/proposal-card.tsx");
-    const row = card.slice(card.indexOf('if (variant === "row")'), card.indexOf("return (\n    <View style={styles.card}>"));
-    const grid = card.slice(card.indexOf("return (\n    <View style={styles.card}>"), card.indexOf("export function CheapestBadge"));
+    const row = card.slice(card.indexOf('if (variant === "row")'), card.indexOf("return (\n    <View style={column === undefined ? styles.card"));
+    const grid = card.slice(card.indexOf("return (\n    <View style={column === undefined ? styles.card"), card.indexOf("export function CheapestBadge"));
     for (const variant of [row, grid]) expect(variant.indexOf("<OfferMarkNote piece={piece} />")).toBeGreaterThan(variant.indexOf("</Pressable>"));
     const screen = code("app/(app)/spot/result.tsx");
     expect(screen.indexOf("<OfferMarkNote piece={piece} />")).toBeGreaterThan(screen.indexOf("<ForeignShopNote piece={piece} />"));

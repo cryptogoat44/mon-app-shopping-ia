@@ -3,7 +3,7 @@ import { StyleSheet, View, type ImageStyle, type LayoutChangeEvent, type StylePr
 import { Image } from "expo-image";
 import { SpotImage, type ImageNaturalSize } from "@/components/spot-image";
 import { EnlargeableImage, type ZoomState } from "@/components/image-viewer";
-import { edgeBackground, edgeColorApplies, fillsTile, honestSize, type PieceImageSize, type PieceTileVariant } from "@/lib/piece-image";
+import { edgeBackground, edgeColorApplies, FILL_TOLERANCE, fillsTile, GRID_FILL_TOLERANCE, honestSize, type PieceImageSize, type PieceTileVariant } from "@/lib/piece-image";
 import { color, getActiveScheme, radius } from "@/theme/tokens";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -40,6 +40,7 @@ export function PieceTile({
   edgeColor,
   style,
   onLayout,
+  aspectRatio,
 }: {
   hdUri?: string | null;
   fallbackUri: string;
@@ -63,6 +64,8 @@ export function PieceTile({
   /** Largeur, maxWidth, marges propres à l'écran. */
   style?: StyleProp<ViewStyle>;
   onLayout?: (event: LayoutChangeEvent) => void;
+  /** Absent : 4:5, la forme de toutes les tuiles. Grande image du Résultat : 1 (carrée, maquette « Écrin » 4). */
+  aspectRatio?: number;
 }) {
   const [frame, setFrame] = useState({ width: 0, height: 0 });
   const [natural, setNatural] = useState<{ uri: string; size: ImageNaturalSize } | null>(null);
@@ -91,7 +94,9 @@ export function PieceTile({
   // copie floue (le flou ne reste que dans les bandes autour).
   let foreground: { style: StyleProp<ImageStyle>; fit: "contain" | "cover" } = { style: StyleSheet.absoluteFill, fit: "contain" };
   if (naturalSize && frame.width > 0 && frame.height > 0) {
-    if (fillsTile(naturalSize, frame, variant)) foreground = { style: [StyleSheet.absoluteFill, { backgroundColor: color.plinthe }], fit: "cover" };
+    // Grille sans couleur de fond connue : une photo carrée remplit aussi la tuile (règle « recadrée » des maquettes).
+    const tolerance = variant === "grid" && !background ? GRID_FILL_TOLERANCE : FILL_TOLERANCE;
+    if (fillsTile(naturalSize, frame, variant, tolerance)) foreground = { style: [StyleSheet.absoluteFill, { backgroundColor: color.plinthe }], fit: "cover" };
     else {
       const shown = honestSize(naturalSize, frame, variant);
       foreground = {
@@ -118,7 +123,7 @@ export function PieceTile({
 
   const tileView = (
     <View
-      style={[variant === "hero" ? styles.hero : styles.grid, enlargeable ? null : style]}
+      style={[variant === "hero" ? styles.hero : styles.grid, enlargeable ? null : style, aspectRatio !== undefined ? { aspectRatio } : null]}
       onLayout={enlargeable ? handleTileLayout : handleLayout}
     >
       {background ? (

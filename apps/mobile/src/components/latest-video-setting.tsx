@@ -1,13 +1,14 @@
 import { useCallback, useState } from "react";
-import { Linking, Platform, Pressable, Switch, Text, View } from "react-native";
+import { Linking, Platform, Pressable, Text, View } from "react-native";
+import { Switch } from "@/components/switch";
 import { useFocusEffect } from "expo-router";
-import { color, font, space } from "@/theme/tokens";
-import { couleursInterrupteur, lienSouligne } from "@/theme/accent";
+import { couleursInterrupteur } from "@/theme/accent";
 import { t } from "@/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { latestVideoSettings, loadLatestVideo, saveLatestVideoChoice } from "@/lib/latest-video";
 import type { GalleryAccess, LatestVideoChoice } from "@/lib/latest-video-state";
 import { ErrorMessage } from "@/components/error-message";
+import { settingsGroup, settingsGroupValues } from "@/components/settings-group";
 import { themedStyles } from "@/theme/themed-styles";
 
 type Settings = { choice: LatestVideoChoice | null; access: GalleryAccess };
@@ -63,6 +64,8 @@ export function LatestVideoSetting() {
   const showOpenSettings = settings !== null && (described?.accessLeft || (settings.choice === "yes" && settings.access !== "full"));
   return (
     <>
+      {/* Lignes posées dans la carte « Vos données » de Réglages (components/settings-group.tsx) : un filet, jamais une carte à elles. */}
+      <View style={settingsGroup.divider} />
       <View style={styles.row}>
         <Text style={styles.title}>{t.settings.latestVideoTitle}</Text>
         <Switch
@@ -86,10 +89,13 @@ export function LatestVideoSetting() {
   );
 }
 
-const styles = themedStyles(() => ({
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44, gap: space.sm },
-  title: { flex: 1, fontSize: font.secondary, color: color.encre, fontWeight: "600" },
-  body: { fontSize: font.secondary, color: color.acier, marginBottom: space.sm, lineHeight: 19 },
-  link: { minHeight: 44, justifyContent: "center", marginBottom: space.sm },
-  linkLabel: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
-}));
+const styles = themedStyles(() => {
+  const g = settingsGroupValues();
+  return {
+    row: g.row,
+    title: g.rowTitle,
+    body: g.hint,
+    link: g.linkRow,
+    linkLabel: g.link,
+  };
+});

@@ -138,7 +138,10 @@ describe("la tuile de pièce (components/piece-tile.tsx)", () => {
   });
 
   it("premier plan : remplie quand fillsTile, sinon la taille honnête, centrée", () => {
-    expect(tile).toContain("fillsTile(naturalSize, frame, variant)");
+    // Lot « fidélité aux maquettes » : la tolérance des grilles (26 %) seulement en grille et sans couleur de fond ; jamais en grand.
+    expect(tile).toContain('const tolerance = variant === "grid" && !background ? GRID_FILL_TOLERANCE : FILL_TOLERANCE;');
+    expect(tile).toContain("fillsTile(naturalSize, frame, variant, tolerance)");
+    expect(tile).not.toMatch(/variant === "hero"[^;\n]*GRID_FILL_TOLERANCE/);
     expect(tile).toContain("honestSize(naturalSize, frame, variant)");
     expect(tile).toContain("onImageSize={(measured) => setNatural({ uri: imageKey, size: measured })}");
     // Agrandissable : le libellé est porté une seule fois, par le bouton.
@@ -232,25 +235,30 @@ describe("la grande carte et l'écran des résultats, resserrés", () => {
     expect(read("src/components/stock-report-sheet.tsx")).toContain('testID="plus-disponible"');
   });
 
-  it("le décompte et l'ordre sur une seule ligne grise", () => {
+  // Lot « fidélité aux maquettes » (décision 13) : le décompte passe dans la barre du haut ; la ligne grise ne garde que l'ordre, quand il s'applique.
+  it("l'ordre seul sur une ligne grise, seulement quand il s'applique ; le décompte en titre de la barre", () => {
     expect(screen.match(/style=\{styles\.count\}/g)).toHaveLength(1);
-    expect(screen).toContain('wordsLine].filter(Boolean).join(" · ")');
+    expect(screen).toContain("{wordsLine ? <Text style={styles.count}>{wordsLine}</Text> : null}");
+    expect(screen).not.toContain('wordsLine].filter(Boolean).join(" · ")');
     expect(styleOf(screen, "count")).toContain("marginBottom: space.xs");
+    expect(screen).toContain("renderNav(t.result.count(total, null), t.result.count(total, result.query))");
   });
 
-  it("refusé : la note d'ordre coupée par une limite de lignes (requête longue, petit écran, grand texte)", () => {
+  it("refusé : la note d'ordre coupée par une limite de lignes (petit écran, grand texte)", () => {
     const tag = screen.slice(screen.indexOf("<Text style={styles.count}"), screen.indexOf(">", screen.indexOf("<Text style={styles.count}")) + 1);
     expect(tag).not.toContain("numberOfLines");
-    // Permis : le décompte et la note restent dans le même texte, la note après « · ».
     expect(tag).toBe("<Text style={styles.count}>");
   });
 
   it("rythme de la grande carte et de la grille", () => {
     expect(styleOf(screen, "rankLabel")).toContain("marginTop: 12");
-    expect(styleOf(screen, "primary")).toContain("minHeight: 48");
-    expect(styleOf(screen, "primary")).toContain("marginTop: space.sm");
-    expect(styleOf(screen, "actions")).toContain("gap: space.sm, marginTop: space.sm");
-    expect(styleOf(screen, "sectionTitle")).toContain("marginTop: space.lg, marginBottom: 12");
+    // Lot « fidélité aux maquettes » : « Voir chez … » de 52, la rangée d'actions soudée (sans écart), les marges du titre sur sa ligne.
+    expect(styleOf(screen, "primary")).toContain("minHeight: 52");
+    expect(styleOf(screen, "primary")).toContain("marginTop: 12");
+    expect(styleOf(screen, "actions")).toContain("marginTop: space.sm");
+    expect(styleOf(screen, "actions")).not.toContain("gap:");
+    expect(styleOf(screen, "sectionHead")).toContain("marginTop: space.lg, marginBottom: 12");
+    expect(styleOf(screen, "sectionTitle")).not.toContain("marginTop");
     expect(styleOf(screen, "grid")).toContain("rowGap: space.md");
     expect(styleOf(screen, "sendToFriend")).toContain("marginTop: 0");
   });
@@ -273,8 +281,10 @@ describe("la grande carte et l'écran des résultats, resserrés", () => {
 describe("zones tactiles intactes", () => {
   it("44 points pour les segments, les pastilles, les liens ; aucun hitSlop ajouté", () => {
     const bar = read("src/components/result-sort-bar.tsx");
-    expect(styleOf(bar, "segment")).toContain("minHeight: size.touchTarget");
-    expect(styleOf(bar, "filter")).toContain("minHeight: size.touchTarget");
+    // Lot « fidélité aux maquettes » : la pastille du tri et les filtres, des pastilles de 32 dans une zone de 44.
+    expect(styleOf(bar, "chipZone")).toContain("minHeight: size.touchTarget");
+    expect(bar.match(/style=\{styles\.chipZone\}/g)).toHaveLength(3);
+    expect(styleOf(bar, "chip")).toContain("height: 32");
     expect(read("src/components/proposal-card.tsx")).toMatch(/shopLink: \{ minHeight: size\.touchTarget/);
     for (const path of ["src/components/send-to-friend-link.tsx", "src/components/stock-report-sheet.tsx", "src/components/spot-corrections.tsx"]) {
       expect(read(path), path).toMatch(/minHeight: (44|size\.touchTarget)/);
