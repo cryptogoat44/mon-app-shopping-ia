@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { StyleSheet, View, type ImageStyle, type LayoutChangeEvent, type StyleProp, type ViewStyle } from "react-native";
+import { Platform, StyleSheet, View, type ImageStyle, type LayoutChangeEvent, type StyleProp, type ViewStyle } from "react-native";
 import { Image } from "expo-image";
 import { SpotImage, type ImageNaturalSize } from "@/components/spot-image";
 import { EnlargeableImage, type ZoomState } from "@/components/image-viewer";
@@ -93,7 +93,8 @@ export function PieceTile({
   // Fond uni seulement si la photo touche le cadre sur l'axe que le serveur n'a pas mesuré (lib/piece-image.ts).
   const background = edgeColorApplies(naturalSize, frame, variant) ? edgeBackground(edgeColor) : null;
   // Sans couleur donnée : les bords prolongés, une bande par côté libre (aucune tant que la taille n'est pas connue).
-  const bands = background || !shownUri ? [] : edgeBands(naturalSize, frame, variant);
+  // Site : le flou CSS rend transparents les bords de la copie (bande prise plus loin du bord, copie de dessous aux bouts).
+  const bands = background || !shownUri ? [] : edgeBands(naturalSize, frame, variant, Platform.OS === "web" ? "web" : "native");
   // Taille inconnue : contenue sur toute la tuile ; sinon remplie, ou une
   // boîte centrée à la taille honnête. Taille connue : un fond opaque juste
   // sous la photo, pour qu'un détourage transparent ne laisse pas voir les
@@ -143,6 +144,17 @@ export function PieceTile({
             importantForAccessibility="no-hide-descendants"
             style={[styles.band, band.box]}
           >
+            {band.fill ? (
+              <Image
+                source={{ uri: shownUri! }}
+                contentFit="fill"
+                blurRadius={band.blur}
+                cachePolicy="memory-disk"
+                recyclingKey={recyclingKey}
+                accessible={false}
+                style={[styles.bandCopy, band.fill, { transform: band.transform }]}
+              />
+            ) : null}
             <Image
               source={{ uri: shownUri! }}
               contentFit="fill"

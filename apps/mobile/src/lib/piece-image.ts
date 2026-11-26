@@ -168,8 +168,11 @@ export const EDGE_BLUR_MIN = 2;
 export const EDGE_BLUR_MAX = 10;
 /** Profondeur où la bande de photo est prise, en multiples du flou : sur le
  * site, le flou (filtre CSS) rend transparents les tout premiers points du
- * bord de la copie ; on les saute (3 écarts-types). */
+ * bord de la copie ; on les saute (3 écarts-types). Sur l'iPhone, le flou
+ * d'expo-image prolonge les bords (aucune transparence) : la bande est prise
+ * à EDGE_INSET_NATIVE point du bord, la colonne même du bord. */
 export const EDGE_INSET_PER_BLUR = 3;
+export const EDGE_INSET_NATIVE = 1;
 
 export type EdgeSide = "left" | "right" | "top" | "bottom";
 
@@ -177,8 +180,13 @@ export type EdgeBand = {
   side: EdgeSide;
   /** La vue qui coupe : un point de plus sous la photo (aucun fil de plinthe à la jointure, la photo opaque la recouvre). */
   box: { left: number; top: number; width: number; height: number };
-  /** La copie de la photo, dans la vue, avant l'étirement. */
+  /** La copie de la photo, dans la vue, avant l'étirement : à l'échelle de la photo le long du bord (chaque ligne
+   * de la bande prolonge la même ligne de la photo, rien ne se décale à la jointure). */
   copy: { left: number; top: number; width: number; height: number };
+  /** Site seulement : une seconde copie, dessinée SOUS la première, un peu plus longue que le bord (étirée de
+   * `inset` à chaque bout) : elle remplit les deux bouts de la bande, où le flou CSS rend la première transparente.
+   * Même étirement (transform) que la première. */
+  fill?: { left: number; top: number; width: number; height: number };
   /** blurRadius de la copie. */
   blur: number;
   /** Étirement retourné à partir du bord (transform de React Native : centre de la copie pour origine). */
@@ -190,7 +198,7 @@ export type EdgeBand = {
  * haut et bas ; petite image d'une grande tuile : les quatre). Aucune quand la
  * photo remplit la tuile, ou que sa taille ou le cadre ne sont pas connus (la
  * plinthe reste). */
-export function edgeBands(natural: Dimensions | null, frame: Dimensions, variant: PieceTileVariant): EdgeBand[] {
+export function edgeBands(natural: Dimensions | null, frame: Dimensions, variant: PieceTileVariant, platform: "native" | "web" = "native"): EdgeBand[] {
   if (!known(natural) || !(frame.width > 0) || !(frame.height > 0) || fillsTile(natural, frame, variant)) return [];
   const shown = honestSize(natural, frame, variant);
   const photo = { left: (frame.width - shown.width) / 2, top: (frame.height - shown.height) / 2, width: shown.width, height: shown.height };
@@ -200,36 +208,42 @@ export function edgeBands(natural: Dimensions | null, frame: Dimensions, variant
   // copie : translate(a) puis scale(−s), a = seam + s·sample − c·(1 + s).
   const shift = (seam: number, sample: number, center: number, stretch: number) => seam + stretch * sample - center * (1 + stretch);
   const blur = Math.round(Math.min(EDGE_BLUR_MAX, Math.max(EDGE_BLUR_MIN, Math.min(photo.width, photo.height) * EDGE_BLUR_SHARE)));
-  const inset = blur * EDGE_INSET_PER_BLUR;
+  const web = platform === "web";
+  const inset = web ? blur * EDGE_INSET_PER_BLUR : EDGE_INSET_NATIVE;
   const across = Math.min(inset, photo.width / 4);
   const down = Math.min(inset, photo.height / 4);
   const left = photo.left;
   const right = frame.width - photo.left - photo.width;
-  // La copie dépasse la bande de `inset` le long du bord (étirée d'autant) : le bord transparent du
-  // flou, sur le site, tombe hors de la vue qui coupe (sinon les coins de la bande s'assombrissent).
+  // Site : la copie de dessous dépasse la bande de `inset` le long du bord (étirée d'autant) : le bord
+  // transparent du flou tombe hors de la vue qui coupe (sinon les coins de la bande s'assombrissent).
   const along = inset;
   const top = photo.top;
   const bottom = frame.height - photo.top - photo.height;
   if (left >= 0.5) {
     const stretch = left / EDGE_STRIP;
-    const copy = { left: photo.left, top: -along, width: photo.width, height: photo.height + 2 * along };
-    bands.push({ side: "left", box: { left: 0, top: photo.top, width: left + 1, height: photo.height }, copy, blur, transform: [{ translateX: shift(left, left + across, copy.left + copy.width / 2, stretch) }, { scaleX: -stretch }] });
+    const copy = { left: photo.left, top: 0, width: photo.width, height: photo.height };
+    const fill = web ? { ...copy, top: -along, height: photo.height + 2 * along } : undefined;
+    bands.push({ side: "left", box: { left: 0, top: photo.top, width: left + 1, height: photo.height }, copy, fill, blur, transform: [{ translateX: shift(left, left + across, copy.left + copy.width / 2, stretch) }, { scaleX: -stretch }] });
   }
   if (right >= 0.5) {
     const stretch = right / EDGE_STRIP;
-    const copy = { left: 1 - photo.width, top: -along, width: photo.width, height: photo.height + 2 * along };
-    bands.push({ side: "right", box: { left: photo.left + photo.width - 1, top: photo.top, width: right + 1, height: photo.height }, copy, blur, transform: [{ translateX: shift(1, 1 - across, copy.left + copy.width / 2, stretch) }, { scaleX: -stretch }] });
+    const copy = { left: 1 - photo.width, top: 0, width: photo.width, height: photo.height };
+    const fill = web ? { ...copy, top: -along, height: photo.height + 2 * along } : undefined;
+    bands.push({ side: "right", box: { left: photo.left + photo.width - 1, top: photo.top, width: right + 1, height: photo.height }, copy, fill, blur, transform: [{ translateX: shift(1, 1 - across, copy.left + copy.width / 2, stretch) }, { scaleX: -stretch }] });
   }
-  // Haut et bas : toute la largeur de la tuile (la copie y est aussi étirée en largeur quand la photo ne touche pas les côtés).
+  // Haut et bas : toute la largeur de la tuile (la copie y est aussi étirée en largeur quand la photo ne touche pas les
+  // côtés : petite image d'une grande tuile ; une photo plus large que le cadre le touche, à l'échelle).
   if (top >= 0.5) {
     const stretch = top / EDGE_STRIP;
-    const copy = { left: -along, top: photo.top, width: frame.width + 2 * along, height: photo.height };
-    bands.push({ side: "top", box: { left: 0, top: 0, width: frame.width, height: top + 1 }, copy, blur, transform: [{ translateY: shift(top, top + down, copy.top + copy.height / 2, stretch) }, { scaleY: -stretch }] });
+    const copy = { left: 0, top: photo.top, width: frame.width, height: photo.height };
+    const fill = web ? { ...copy, left: -along, width: frame.width + 2 * along } : undefined;
+    bands.push({ side: "top", box: { left: 0, top: 0, width: frame.width, height: top + 1 }, copy, fill, blur, transform: [{ translateY: shift(top, top + down, copy.top + copy.height / 2, stretch) }, { scaleY: -stretch }] });
   }
   if (bottom >= 0.5) {
     const stretch = bottom / EDGE_STRIP;
-    const copy = { left: -along, top: 1 - photo.height, width: frame.width + 2 * along, height: photo.height };
-    bands.push({ side: "bottom", box: { left: 0, top: photo.top + photo.height - 1, width: frame.width, height: bottom + 1 }, copy, blur, transform: [{ translateY: shift(1, 1 - down, copy.top + copy.height / 2, stretch) }, { scaleY: -stretch }] });
+    const copy = { left: 0, top: 1 - photo.height, width: frame.width, height: photo.height };
+    const fill = web ? { ...copy, left: -along, width: frame.width + 2 * along } : undefined;
+    bands.push({ side: "bottom", box: { left: 0, top: photo.top + photo.height - 1, width: frame.width, height: bottom + 1 }, copy, fill, blur, transform: [{ translateY: shift(1, 1 - down, copy.top + copy.height / 2, stretch) }, { scaleY: -stretch }] });
   }
   return bands;
 }

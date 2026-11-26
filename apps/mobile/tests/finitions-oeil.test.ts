@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { setActiveLocale } from "../src/i18n";
-import { EDGE_INSET_PER_BLUR, EDGE_STRIP, edgeBands, fillsTile } from "../src/lib/piece-image";
+import { EDGE_INSET_NATIVE, EDGE_INSET_PER_BLUR, EDGE_STRIP, edgeBands, fillsTile } from "../src/lib/piece-image";
 import { actionsInTwoRows, estimatedTextWidth, pairStacked, placeholderFor } from "../src/lib/text-fit";
 import { recentDayLabel, recentDayShort } from "../src/lib/recent-searches";
 import { fr } from "../src/i18n/fr";
@@ -62,9 +62,12 @@ describe("1 · les bords prolongés (lib/piece-image.ts, edgeBands)", () => {
     expect(edgeBands({ width: 200, height: 260 }, square, "hero").map((b) => b.side)).toEqual(["left", "right", "top", "bottom"]);
   });
 
-  it("l'étirement part du bord : le point pris dans la photo touche la jointure, EDGE_STRIP points plus loin touchent le bord de la tuile", () => {
-    for (const band of edgeBands({ width: 1000, height: 1500 }, square, "hero").concat(edgeBands({ width: 1600, height: 900 }, square, "hero"))) {
-      const inset = band.blur * EDGE_INSET_PER_BLUR;
+  it("l'étirement part du bord : le point pris dans la photo touche la jointure, EDGE_STRIP points plus loin touchent le bord de la tuile (iPhone et site)", () => {
+    const cases = [
+      ...edgeBands({ width: 1000, height: 1500 }, square, "hero").concat(edgeBands({ width: 1600, height: 900 }, square, "hero")).map((band) => ({ band, inset: EDGE_INSET_NATIVE })),
+      ...edgeBands({ width: 1000, height: 1500 }, square, "hero", "web").concat(edgeBands({ width: 1600, height: 900 }, square, "hero", "web")).map((band) => ({ band, inset: band.blur * EDGE_INSET_PER_BLUR })),
+    ];
+    for (const { band, inset } of cases) {
       if (band.side === "left") {
         const seam = band.box.width - 1;
         expect(mapped(band, seam + inset)).toBeCloseTo(seam, 6);
@@ -80,6 +83,35 @@ describe("1 · les bords prolongés (lib/piece-image.ts, edgeBands)", () => {
         expect(mapped(band, 1 - inset)).toBeCloseTo(1, 6);
         expect(mapped(band, 1 - inset - EDGE_STRIP)).toBeCloseTo(band.box.height, 6);
       }
+    }
+  });
+
+  it("refusé (correctif) : la bande prise 21 points dans la photo et étirée le long du bord ; permis : sur l'iPhone, la colonne du bord, à l'échelle de la photo", () => {
+    const [left, right] = edgeBands({ width: 1000, height: 1500 }, square, "hero");
+    for (const band of [left, right]) {
+      // Chaque ligne de la bande prolonge la même ligne de la photo : la copie a la hauteur de la photo, posée sur elle.
+      expect(band.copy.top).toBe(0);
+      expect(band.copy.height).toBeCloseTo(band.box.height, 6);
+      expect(band.fill).toBeUndefined();
+    }
+    // Le point pris est à 1 point du bord (la colonne même du bord), plus à 3 fois le flou.
+    expect(mapped(left, left.box.width - 1 + 1)).toBeCloseTo(left.box.width - 1, 6);
+    expect(mapped(left, left.box.width - 1 + 21)).not.toBeCloseTo(left.box.width - 1, 0);
+    const [top] = edgeBands({ width: 1600, height: 900 }, square, "hero");
+    expect(top.copy.left).toBe(0);
+    expect(top.copy.width).toBe(358);
+  });
+
+  it("site : la copie visible aussi à l'échelle de la photo ; la copie de dessous, plus longue, remplit seule les bouts que le flou CSS rend transparents", () => {
+    for (const band of edgeBands({ width: 1000, height: 1500 }, square, "hero", "web")) {
+      expect(band.copy.top).toBe(0);
+      expect(band.copy.height).toBeCloseTo(band.box.height, 6);
+      const inset = band.blur * EDGE_INSET_PER_BLUR;
+      expect(band.fill).toEqual({ ...band.copy, top: -inset, height: band.copy.height + 2 * inset });
+    }
+    for (const band of edgeBands({ width: 1600, height: 900 }, square, "hero", "web")) {
+      const inset = band.blur * EDGE_INSET_PER_BLUR;
+      expect(band.fill).toEqual({ ...band.copy, left: -inset, width: band.copy.width + 2 * inset });
     }
   });
 
@@ -110,7 +142,10 @@ describe("1 · la tuile (components/piece-tile.tsx) dessine les bandes", () => {
   });
 
   it("couleur des bords connue : fond uni, aucune bande ; taille inconnue : aucune bande", () => {
-    expect(tile).toContain("const bands = background || !shownUri ? [] : edgeBands(naturalSize, frame, variant);");
+    expect(tile).toContain('const bands = background || !shownUri ? [] : edgeBands(naturalSize, frame, variant, Platform.OS === "web" ? "web" : "native");');
+    // La copie de dessous (site seulement) est dessinée avant, donc sous la copie visible.
+    expect(tile.indexOf("style={[styles.bandCopy, band.fill, { transform: band.transform }]}")).toBeGreaterThan(-1);
+    expect(tile.indexOf("style={[styles.bandCopy, band.fill, { transform: band.transform }]}")).toBeLessThan(tile.indexOf("style={[styles.bandCopy, band.copy, { transform: band.transform }]}"));
     expect(tile).toContain("{ backgroundColor: background }");
   });
 
