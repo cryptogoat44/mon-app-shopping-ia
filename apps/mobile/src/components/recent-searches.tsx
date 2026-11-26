@@ -5,7 +5,7 @@ import { getActiveLocale, t } from "@/i18n";
 import type { Piece } from "@/api/types";
 import { ClockIcon, SearchIcon } from "@/components/icons";
 import { PieceTile } from "@/components/piece-tile";
-import { recentDayLabel } from "@/lib/recent-searches";
+import { recentDayLabel, recentDayShort } from "@/lib/recent-searches";
 import { placeholderFor } from "@/lib/text-fit";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -26,13 +26,15 @@ export interface RecentSearch {
  * nette), comme les grilles des Envies et du Vault. */
 export function RecentSearchTile({ entry, column, onOpen }: { entry: RecentSearch; column: "left" | "right"; onOpen: () => void }) {
   const { piece } = entry;
-  const meta = [recentDayLabel(entry.createdAt, getActiveLocale()), piece.merchantName].filter(Boolean).join(" · ");
+  // Lu par VoiceOver : la date entière ; écrite : la date courte (« Lun. 23 nov. · Le Quai »), lot « finitions de l'œil ».
+  const spoken = [recentDayLabel(entry.createdAt, getActiveLocale()), piece.merchantName].filter(Boolean).join(", ");
+  const day = recentDayShort(entry.createdAt, getActiveLocale());
   return (
     <Pressable
       style={({ pressed }) => [styles.cell, column === "left" ? styles.cellLeft : styles.cellRight, pressed ? styles.pressed : null]}
       onPress={onOpen}
       accessibilityRole="button"
-      accessibilityLabel={`${piece.name}, ${meta}`}
+      accessibilityLabel={`${piece.name}, ${spoken}`}
     >
       {piece.imageUrl ? (
         <PieceTile variant="grid" size="card" hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} edgeColor={piece.edgeColor} recyclingKey={entry.searchId} />
@@ -44,9 +46,17 @@ export function RecentSearchTile({ entry, column, onOpen }: { entry: RecentSearc
       <Text style={styles.name} numberOfLines={1}>
         {piece.name}
       </Text>
-      <Text style={styles.meta} numberOfLines={1}>
-        {meta}
-      </Text>
+      {/* À 320 points, la boutique est raccourcie avant la date, jamais l'inverse. */}
+      <View style={styles.metaRow}>
+        <Text style={[styles.meta, styles.metaDay]} numberOfLines={1}>
+          {piece.merchantName ? `${day} ·\u00a0` : day}
+        </Text>
+        {piece.merchantName ? (
+          <Text style={[styles.meta, styles.metaShop]} numberOfLines={1}>
+            {piece.merchantName}
+          </Text>
+        ) : null}
+      </View>
     </Pressable>
   );
 }
@@ -95,7 +105,10 @@ const styles = themedStyles(() => ({
   tileEmpty: { width: "100%", aspectRatio: 4 / 5, backgroundColor: color.plinthe, borderRadius: radius.pieceGrid, borderCurve: "continuous", alignItems: "center", justifyContent: "center" },
   // Une ligne (le nom entier est dans l'étiquette VoiceOver de la case) : même hauteur pour toutes les cases.
   name: { fontSize: font.secondary, lineHeight: 20, fontWeight: "500", color: color.encre, marginTop: space.sm },
-  meta: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginTop: 2 },
+  metaRow: { flexDirection: "row", marginTop: 2 },
+  meta: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
+  metaDay: { flexShrink: 0 },
+  metaShop: { flexShrink: 1 },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",

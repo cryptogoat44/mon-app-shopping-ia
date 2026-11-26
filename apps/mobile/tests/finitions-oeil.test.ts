@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { setActiveLocale } from "../src/i18n";
 import { EDGE_INSET_PER_BLUR, EDGE_STRIP, edgeBands, fillsTile } from "../src/lib/piece-image";
 import { actionsInTwoRows, estimatedTextWidth, pairStacked, placeholderFor } from "../src/lib/text-fit";
+import { recentDayLabel, recentDayShort } from "../src/lib/recent-searches";
 import { fr } from "../src/i18n/fr";
 import { en } from "../src/i18n/en";
 
@@ -264,5 +266,48 @@ describe("6 · petites largeurs et grand texte (lib/text-fit.ts)", () => {
     expect(screen).toMatch(/\n  navTitle: \{[^}]*fontSize: font\.body/);
     expect(screen).toMatch(/\n  close: \{[^}]*fontSize: font\.body/);
     expect(screen).toContain("{ left: titleInset, right: titleRight }");
+  });
+});
+
+describe("7 · l'accueil : la date courte des cases, le maillon du lien", () => {
+  // Heure locale de l'appareil, comme l'écran (tests/retrouver-pieces.test.ts).
+  const at = (y: number, m: number, d: number, h = 12) => new Date(y, m - 1, d, h).toISOString();
+  const NOW = new Date(2026, 10, 26, 15);
+
+  it("français : « Lun. 23 nov. » ; « Aujourd'hui » et « Hier » gardés ; « 1er » ; l'année d'une autre année", () => {
+    expect(recentDayShort(at(2026, 11, 23), "fr", NOW)).toBe("Lun. 23 nov.");
+    expect(recentDayShort(at(2026, 11, 26, 8), "fr", NOW)).toBe("Aujourd'hui");
+    expect(recentDayShort(at(2026, 11, 25, 23), "fr", NOW)).toBe("Hier");
+    expect(recentDayShort(at(2026, 11, 1), "fr", NOW)).toBe("Dim. 1er nov.");
+    expect(recentDayShort(at(2025, 12, 30), "fr", NOW)).toBe("Mar. 30 déc. 2025");
+  });
+
+  afterEach(() => setActiveLocale("fr"));
+
+  it("anglais : « Mon, Nov 23 » ; « Today » et « Yesterday » gardés", () => {
+    setActiveLocale("en");
+    expect(recentDayShort(at(2026, 11, 23), "en", NOW)).toBe("Mon, Nov 23");
+    expect(recentDayShort(at(2026, 11, 26, 8), "en", NOW)).toBe("Today");
+    expect(recentDayShort(at(2026, 11, 25, 9), "en", NOW)).toBe("Yesterday");
+  });
+
+  it("refusé : la date longue écrite sur la case ; permis : lue par VoiceOver ; la boutique raccourcie avant la date", () => {
+    const tile = read("src/components/recent-searches.tsx");
+    expect(tile).toContain("const day = recentDayShort(entry.createdAt, getActiveLocale());");
+    expect(tile).toContain("const spoken = [recentDayLabel(entry.createdAt, getActiveLocale()), piece.merchantName]");
+    expect(tile).toContain("accessibilityLabel={`${piece.name}, ${spoken}`}");
+    expect(tile).not.toMatch(/<Text style=\{styles\.meta\} numberOfLines=\{1\}>\s*\{meta\}/);
+    expect(tile).toMatch(/\n  metaDay: \{ flexShrink: 0 \}/);
+    expect(tile).toMatch(/\n  metaShop: \{ flexShrink: 1 \}/);
+    // La date longue reste celle d'avant (tests/retrouver-pieces.test.ts).
+    expect(recentDayLabel(at(2026, 11, 23), "fr", NOW)).toBe("lundi 23 novembre");
+  });
+
+  it("l'icône du lien : le maillon de la maquette (refusé : l'ancien tracé en « S »)", () => {
+    const icons = read("src/components/icons.tsx");
+    const link = icons.slice(icons.indexOf("export function LinkIcon("), icons.indexOf("export function CameraIcon("));
+    expect(link).toContain('d="M10 14a4 4 0 0 0 5.7 0l2.8-2.8a4 4 0 0 0-5.7-5.7L11.5 6.8M14 10a4 4 0 0 0-5.7 0l-2.8 2.8a4 4 0 0 0 5.7 5.7l1.3-1.3"');
+    expect(link).toContain('viewBox="0 0 24 24"');
+    expect(icons).not.toContain("M7 11l4-4M6.5 4.5");
   });
 });

@@ -58,14 +58,17 @@ export function VerifiedIcon({ size = 16, tint = color.vert, strokeWidth = 1.4 }
   );
 }
 
+/** Le maillon de chaîne (lot « finitions de l'œil ») : deux anneaux qui se tiennent en diagonale, tracé de la
+ * maquette « Écrin » 1 (l'ancien tracé se lisait comme un « S »). `strokeWidth` reste exprimé pour une boîte de 18. */
 export function LinkIcon({ size = 18, tint = color.blanc, strokeWidth = 1.3 }: IconProps) {
   return (
-    <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
-        d="M7 11l4-4M6.5 4.5l1.6-1.6a2.5 2.5 0 013.5 3.5L10 8M11.5 13.5l-1.6 1.6a2.5 2.5 0 01-3.5-3.5L8 10"
+        d="M10 14a4 4 0 0 0 5.7 0l2.8-2.8a4 4 0 0 0-5.7-5.7L11.5 6.8M14 10a4 4 0 0 0-5.7 0l-2.8 2.8a4 4 0 0 0 5.7 5.7l1.3-1.3"
         stroke={tint}
-        strokeWidth={strokeWidth}
+        strokeWidth={(strokeWidth * 24) / 18}
         strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </Svg>
   );
