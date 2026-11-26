@@ -198,10 +198,13 @@ describe("le lecteur : actions visibles, barre de lecture sous la vidéo", () =>
     expect(spot.indexOf("if (!alive.current || controller.signal.aborted) return;")).toBeLessThan(spot.indexOf('router.push({ pathname: "/spot/lancer"'));
   });
 
-  it("vidéo et fond de la première fois arrondis à 14, courbe continue", () => {
-    expect(code("src/components/embedded-player.tsx")).toContain('frame: { backgroundColor: color.nuit, overflow: "hidden", borderRadius: VIDEO_RADIUS, borderCurve: "continuous" },');
-    expect(read("src/components/embedded-player.tsx")).toContain("const VIDEO_RADIUS = 14;");
-    expect(code(SCREEN)).toContain('poster: { backgroundColor: color.nuit, borderRadius: VIDEO_RADIUS, borderCurve: "continuous"');
+  it("vidéo et fond de la première fois arrondis au jeton radius.piece (14), courbe continue", () => {
+    expect(code("src/components/embedded-player.tsx")).toContain('frame: { backgroundColor: color.nuit, overflow: "hidden", borderRadius: radius.piece, borderCurve: "continuous" },');
+    expect(code(SCREEN)).toContain('poster: { backgroundColor: color.nuit, borderRadius: radius.piece, borderCurve: "continuous"');
+    expect(read("src/theme/tokens.ts")).toMatch(/^\s+piece: 14,/m);
+    // Assemblage : plus de constante locale en double du jeton.
+    expect(read("src/components/embedded-player.tsx")).not.toMatch(/VIDEO_RADIUS|borderRadius: 14\b/);
+    expect(read(SCREEN)).not.toMatch(/VIDEO_RADIUS|borderRadius: 14\b/);
   });
 });
 

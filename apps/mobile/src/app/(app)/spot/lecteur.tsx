@@ -117,8 +117,6 @@ type Stage =
 type Notice = "tap_to_play" | "leave" | "reloaded";
 
 const BASE_URL = playerBaseUrl(PUBLIC_WEB_URL);
-/** Coins de la vidéo et du fond de la première fois : comme embedded-player.tsx. */
-const VIDEO_RADIUS = 14; // = radius.piece du lot « Vitrine » (tokens.ts) : à remplacer par le jeton à l'assemblage
 /** « Spotter ce moment » : après « pause », l'état « en pause » du lecteur, ou ce délai au plus (pour que le temps soit à jour). */
 const PAUSE_WAIT_MS = 400;
 /** Repli : 5 s après la première lecture sans aucun temps avec une durée, les commandes de TikTok reviennent. */
@@ -1015,7 +1013,7 @@ const styles = themedStyles(() => ({
   keptNote: { fontSize: font.caption, color: color.acier, lineHeight: 18, alignSelf: "stretch" },
   // Retours du build 3 : zone d'actions mesurée sous la vidéo, et la toute première fois.
   actions: { alignSelf: "stretch", alignItems: "center", gap: space.sm },
-  poster: { backgroundColor: color.nuit, borderRadius: VIDEO_RADIUS, borderCurve: "continuous", alignItems: "center", justifyContent: "center" },
+  poster: { backgroundColor: color.nuit, borderRadius: radius.piece, borderCurve: "continuous", alignItems: "center", justifyContent: "center" },
   playDisc: {
     width: 76,
     height: 76,

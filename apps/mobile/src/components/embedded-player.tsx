@@ -8,14 +8,13 @@ import type { RefObject } from "react";
 import { View } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import type { ShouldStartLoadRequest } from "react-native-webview/lib/WebViewTypes";
-import { color } from "@/theme/tokens";
+import { color, radius } from "@/theme/tokens";
 import { isAllowedNavigation, sameDocument } from "@/lib/player-link";
 import { parseHostMessage, type HostMessage } from "@/lib/player-state";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Retours du build 3 : coins arrondis de la vidéo (« arrêter les coins carrés »), courbe continue sur iPhone.
 // Le module de l'instantané ne photographie que la vue web : l'arrondi n'y entre pas (voulu).
-const VIDEO_RADIUS = 14; // = radius.piece du lot « Vitrine » (tokens.ts) : à remplacer par le jeton à l'assemblage
 
 export interface EmbeddedPlayerProps {
   /** Page hôte complète (lib/player-host-page.ts). */
@@ -92,6 +91,6 @@ export function EmbeddedPlayer(p: EmbeddedPlayerProps) {
 }
 
 const styles = themedStyles(() => ({
-  frame: { backgroundColor: color.nuit, overflow: "hidden", borderRadius: VIDEO_RADIUS, borderCurve: "continuous" },
+  frame: { backgroundColor: color.nuit, overflow: "hidden", borderRadius: radius.piece, borderCurve: "continuous" },
   web: { flex: 1, backgroundColor: color.nuit },
 }));

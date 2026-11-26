@@ -617,8 +617,10 @@ describe("le dessin du tracé : poudre de lumière, la lumière suit la forme", 
   });
 
   it("le cadre prend la forme de l'image : coins de 14 pt, plus de bandes", () => {
-    expect(code).toContain("const IMAGE_RADIUS = 14;");
-    expect(code).toMatch(/frame: \{ position: "absolute", borderRadius: IMAGE_RADIUS, overflow: "hidden"/);
+    // Assemblage : le jeton radius.piece (14) de theme/tokens.ts, plus de constante locale.
+    expect(code).not.toMatch(/IMAGE_RADIUS|borderRadius: 14\b|rx=\{14\}/);
+    expect(code).toMatch(/frame: \{ position: "absolute", borderRadius: radius\.piece, overflow: "hidden"/);
+    expect(code).toContain("rx={radius.piece}");
     expect(code).toContain("left: imageBox.left, top: imageBox.top, width: imageBox.width, height: imageBox.height");
   });
 

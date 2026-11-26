@@ -15,6 +15,7 @@ import {
   tiktokHostPage,
 } from "../src/lib/player-host-page";
 import { TIKTOK_PLAYER_PARAMS_NATIVE } from "../src/lib/player-link";
+import { radius } from "../src/theme/tokens";
 
 // Mission « liens vidéo » : les pages hôtes sont écrites par l'app, n'affichent
 // rien d'elles-mêmes, ne touchent jamais au lecteur officiel et ne font que
@@ -52,6 +53,10 @@ describe("page hôte TikTok : le lecteur officiel, depuis l'identifiant seul", (
     expect(tiktokPage()).toContain("html,body{margin:0;height:100%;background:#000;overflow:hidden;border-radius:14px}");
     expect(tiktokPage()).toMatch(/#player\{[^}]*border-radius:14px\}/);
     expect(instagramPage()).toContain("html,body{margin:0;background:#fff;border-radius:14px}");
+    // Assemblage : le CSS garde son 14px écrit en clair, mais il doit valoir le jeton radius.piece (tokens.ts).
+    const cssRadii = [...`${tiktokPage()}${instagramPage()}`.matchAll(/border-radius:(\d+)px/g)].map((m) => Number(m[1]));
+    expect(cssRadii.length).toBe(3);
+    for (const px of cssRadii) expect(px).toBe(radius.piece);
     // Instagram : jamais overflow:hidden (un code plus haut que la place doit pouvoir défiler).
     expect(instagramPage()).not.toMatch(/html,body\{[^}]*overflow:hidden/);
     expect(tiktokHostPage(ID, "t", TIKTOK_PLAYER_PARAMS_NATIVE)).toContain(`src="https://www.tiktok.com/player/v1/${ID}?autoplay=1"`);

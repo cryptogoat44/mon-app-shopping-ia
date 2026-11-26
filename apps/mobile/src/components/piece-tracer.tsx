@@ -47,9 +47,6 @@ import { useReduceMotion } from "@/lib/use-reduce-motion";
 import { currentDevice } from "@/components/link-notice";
 import { themedStyles } from "@/theme/themed-styles";
 
-/** Coins du cadre de l'image (fin des bandes : le cadre prend la forme de
- * l'image). */
-const IMAGE_RADIUS = 14; // = radius.piece du lot « Vitrine » : jeton à l'assemblage
 /** Fondu du voile au lâcher, de la lueur, d'un tracé refusé. */
 const FADE_MS = 240;
 /** La pastille est dans le cadre, aussi bas que l'image : avec les grandes
@@ -411,7 +408,7 @@ export function PieceTracer({ uri, zone, onChange, onImageSize, onDragChange, he
             {zone && !zoneTrace && !drawing ? (
               <View pointerEvents="none" style={StyleSheet.absoluteFill}>
                 <Svg width={frame.width} height={frame.height} style={StyleSheet.absoluteFill}>
-                  <Rect {...insideEdge(frame)} rx={IMAGE_RADIUS} fill="none" stroke={FRAME_LINE.color} strokeWidth={FRAME_LINE.wholeWidth} />
+                  <Rect {...insideEdge(frame)} rx={radius.piece} fill="none" stroke={FRAME_LINE.color} strokeWidth={FRAME_LINE.wholeWidth} />
                 </Svg>
               </View>
             ) : null}
@@ -445,10 +442,10 @@ export function PieceTracer({ uri, zone, onChange, onImageSize, onDragChange, he
 const styles = themedStyles(() => ({
   container: { width: "100%" },
   // Avant la mesure de l'image : la place entière, sur la plinthe.
-  waiting: { backgroundColor: color.plinthe, borderRadius: IMAGE_RADIUS, overflow: "hidden" },
+  waiting: { backgroundColor: color.plinthe, borderRadius: radius.piece, overflow: "hidden" },
   // Le cadre à la forme de l'image : plus de bandes autour.
   // Coins « continus » d'iOS (comme les icônes) ; le site ne connaît pas ce style.
-  frame: { position: "absolute", borderRadius: IMAGE_RADIUS, overflow: "hidden", ...(Platform.OS === "ios" ? { borderCurve: "continuous" as const } : null) },
+  frame: { position: "absolute", borderRadius: radius.piece, overflow: "hidden", ...(Platform.OS === "ios" ? { borderCurve: "continuous" as const } : null) },
   surface: { position: "absolute" },
   messageRow: { position: "absolute", left: space.sm, right: space.sm, bottom: space.md, alignItems: "center" },
   // Posée sur la photo : la même dans les deux thèmes, sombre et translucide.
