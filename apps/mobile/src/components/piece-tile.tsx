@@ -155,6 +155,31 @@ export function PieceTile({
                 style={[styles.bandCopy, band.fill, { transform: band.transform }]}
               />
             ) : null}
+            {/* Petite image (quatre bandes) : chaque coin reprend la bande de côté voisine, étirée en plus le long de y. */}
+            {band.corners?.map((corner, index) => (
+              <View key={index} style={[styles.band, corner.box, { transform: band.transform }]}>
+                {corner.side.fill ? (
+                  <Image
+                    source={{ uri: shownUri! }}
+                    contentFit="fill"
+                    blurRadius={band.blur}
+                    cachePolicy="memory-disk"
+                    recyclingKey={recyclingKey}
+                    accessible={false}
+                    style={[styles.bandCopy, corner.side.fill, { transform: corner.side.transform }]}
+                  />
+                ) : null}
+                <Image
+                  source={{ uri: shownUri! }}
+                  contentFit="fill"
+                  blurRadius={band.blur}
+                  cachePolicy="memory-disk"
+                  recyclingKey={recyclingKey}
+                  accessible={false}
+                  style={[styles.bandCopy, corner.side.copy, { transform: corner.side.transform }]}
+                />
+              </View>
+            ))}
             <Image
               source={{ uri: shownUri! }}
               contentFit="fill"

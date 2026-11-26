@@ -115,21 +115,68 @@ describe("1 · les bords prolongés (lib/piece-image.ts, edgeBands)", () => {
         expect(band.copy.left).toBe(photoLeft);
         expect(band.copy.width).toBe(200);
         expect(band.copy.height).toBe(260);
-        // La vue, elle, couvre toute la largeur ; la copie de dessous aussi (les coins), avec le même étirement.
+        // La vue, elle, couvre toute la largeur ; les coins sont remplis par les bandes de côté (test suivant).
         expect(band.box.width).toBe(358);
-        expect(band.fill).toBeDefined();
-        expect(band.fill!.top).toBe(band.copy.top);
-        expect(band.fill!.height).toBe(band.copy.height);
-        expect(band.fill!.left).toBeLessThanOrEqual(0);
-        expect(band.fill!.left + band.fill!.width).toBeGreaterThanOrEqual(358);
+        expect(band.corners).toHaveLength(2);
         // L'étirement part toujours de la jointure.
         const inset = platform === "web" ? band.blur * EDGE_INSET_PER_BLUR : EDGE_INSET_NATIVE;
         if (band.side === "top") expect(mapped(band, band.box.height - 1 + inset)).toBeCloseTo(band.box.height - 1, 6);
         else expect(mapped(band, 1 - inset)).toBeCloseTo(1, 6);
       }
     }
-    // Photo qui touche les côtés (16:9) sur l'iPhone : aucune copie de dessous, rien ne change.
-    for (const band of edgeBands({ width: 1600, height: 900 }, square, "hero")) expect(band.fill).toBeUndefined();
+    // Photo qui touche les côtés (16:9) sur l'iPhone : aucune copie de dessous, aucun coin, rien ne change.
+    for (const band of edgeBands({ width: 1600, height: 900 }, square, "hero")) {
+      expect(band.fill).toBeUndefined();
+      expect(band.corners).toBeUndefined();
+    }
+  });
+
+  it("refusé (correctif) : les coins d'une petite image remplis par une copie étirée sur toute la largeur (couture verticale au droit des côtés de la photo) ; permis : chaque coin reprend la bande de côté voisine, il prolonge le pixel du coin de la photo", () => {
+    // 200 × 260 dans le carré de 358 : photo.left = 79, photo.top = 49.
+    const photo = { left: 79, top: 49, width: 200, height: 260 };
+    /** Le point de la photo (colonne, ligne) montré au point (x, y) de la tuile par le coin `corner` de la bande `band`. */
+    const inverse = (move: number, scale: number, center: number, at: number) => center + (at - center - move) / scale;
+    const shownBy = (band: ReturnType<typeof edgeBands>[number], corner: NonNullable<ReturnType<typeof edgeBands>[number]["corners"]>[number], x: number, y: number) => {
+      const [moveY, scaleY] = band.transform as [{ translateY: number }, { scaleY: number }];
+      const [moveX, scaleX] = corner.side.transform as [{ translateX: number }, { scaleX: number }];
+      const yInBox = y - band.box.top;
+      const yInCorner = inverse(moveY.translateY, scaleY.scaleY, corner.box.top + corner.box.height / 2, yInBox) - corner.box.top;
+      const xInCorner = inverse(moveX.translateX, scaleX.scaleX, corner.side.copy.left + corner.side.copy.width / 2, x - corner.box.left);
+      return { column: xInCorner - corner.side.copy.left, row: yInCorner - corner.side.copy.top };
+    };
+    for (const platform of ["native", "web"] as const) {
+      const bands = edgeBands({ width: 200, height: 260 }, square, "hero", platform);
+      const [left, right, top, bottom] = bands;
+      expect(bands.map((b) => b.side)).toEqual(["left", "right", "top", "bottom"]);
+      const inset = platform === "web" ? top.blur * EDGE_INSET_PER_BLUR : EDGE_INSET_NATIVE;
+      // Refusé : plus aucune copie de dessous étirée sur toute la largeur de la tuile.
+      for (const band of [top, bottom]) {
+        if (platform === "native") expect(band.fill).toBeUndefined();
+        else expect(band.fill).toEqual({ ...band.copy, left: band.copy.left - inset, width: band.copy.width + 2 * inset });
+      }
+      // Permis : le coin du haut à gauche, au droit du côté gauche de la photo (x = photo.left), montre la colonne
+      // du bord de la photo (celle que prend la bande de gauche), plus la colonne 44 d'une copie étirée.
+      const [topLeft, topRight] = top.corners!;
+      const [bottomLeft, bottomRight] = bottom.corners!;
+      expect(topLeft.side).toEqual({ copy: left.copy, fill: left.fill, transform: left.transform });
+      expect(topRight.side).toEqual({ copy: right.copy, fill: right.fill, transform: right.transform });
+      const atLeft = shownBy(top, topLeft, photo.left, 20);
+      expect(atLeft.column).toBeCloseTo(inset, 6);
+      expect(atLeft.column).not.toBeCloseTo((photo.left * photo.width) / 358, 0);
+      // … et au droit du côté droit, la dernière colonne ; la ligne, elle, est celle de la bande du haut ou du bas.
+      expect(shownBy(top, topRight, photo.left + photo.width, 20).column).toBeCloseTo(photo.width - inset, 6);
+      expect(shownBy(top, topLeft, 10, photo.top).row).toBeCloseTo(inset, 6);
+      expect(shownBy(bottom, bottomLeft, photo.left, photo.top + photo.height).row).toBeCloseTo(photo.height - inset, 6);
+      expect(shownBy(bottom, bottomRight, photo.left + photo.width, photo.top + photo.height).column).toBeCloseTo(photo.width - inset, 6);
+      // Plus loin dans le coin : toujours le même pixel du coin (la bande de côté ne dépend pas de y, celle du haut pas de x).
+      expect(shownBy(top, topLeft, 0, 0).column).toBeCloseTo(shownBy(top, topLeft, 0, 40).column, 6);
+    }
+    // La tuile dessine les coins sous la copie de la bande, au-dessus de la copie de dessous.
+    const tile = read("src/components/piece-tile.tsx");
+    const corners = tile.indexOf("band.corners?.map(");
+    expect(corners).toBeGreaterThan(tile.indexOf("style={[styles.bandCopy, band.fill, { transform: band.transform }]}"));
+    expect(corners).toBeLessThan(tile.indexOf("style={[styles.bandCopy, band.copy, { transform: band.transform }]}"));
+    expect(tile).toContain("<View key={index} style={[styles.band, corner.box, { transform: band.transform }]}>");
   });
 
   it("site : la copie visible aussi à l'échelle de la photo ; la copie de dessous, plus longue, remplit seule les bouts que le flou CSS rend transparents", () => {

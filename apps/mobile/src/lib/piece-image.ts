@@ -185,13 +185,24 @@ export type EdgeBand = {
   copy: { left: number; top: number; width: number; height: number };
   /** Une seconde copie, dessinée SOUS la première, avec le même étirement (transform). Site : un peu plus longue
    * que le bord (étirée de `inset` à chaque bout) : elle remplit les deux bouts de la bande, où le flou CSS rend la
-   * première transparente. Haut et bas d'une petite image (quatre bandes, iPhone et site) : étirée sur toute la
-   * largeur de la tuile, elle remplit les coins, de chaque côté de la première (qui reste au-dessus de la photo). */
+   * première transparente (le long du bord : haut et bas à toute largeur, côtés à toute hauteur). iPhone : aucune. */
   fill?: { left: number; top: number; width: number; height: number };
   /** blurRadius de la copie. */
   blur: number;
   /** Étirement retourné à partir du bord (transform de React Native : centre de la copie pour origine). */
   transform: [{ translateX: number }, { scaleX: number }] | [{ translateY: number }, { scaleY: number }];
+  /** Haut et bas d'une petite image (quatre bandes) : les coins, dessinés SOUS la copie. Chaque coin reprend la bande
+   * de côté voisine (sa copie, son étirement le long de x) dans une vue qui porte l'étirement de cette bande-ci le
+   * long de y : le coin prolonge le pixel du coin de la photo, et continue les deux bandes qu'il touche. */
+  corners?: EdgeCorner[];
+};
+
+/** Un coin : `box`, la vue qui porte l'étirement de la bande du haut ou du bas (même centre que sa copie) et coupe ce
+ * qui dépasse, à la place de la bande de côté ; dedans, la copie (et sur le site la copie de dessous) de cette bande
+ * de côté, avec son étirement. */
+export type EdgeCorner = {
+  box: { left: number; top: number; width: number; height: number };
+  side: Pick<EdgeBand, "copy" | "fill" | "transform">;
 };
 
 /** Les bandes à dessiner autour d'une photo qui ne remplit pas sa tuile : une
@@ -233,24 +244,30 @@ export function edgeBands(natural: Dimensions | null, frame: Dimensions, variant
     bands.push({ side: "right", box: { left: photo.left + photo.width - 1, top: photo.top, width: right + 1, height: photo.height }, copy, fill, blur, transform: [{ translateX: shift(1, 1 - across, copy.left + copy.width / 2, stretch) }, { scaleX: -stretch }] });
   }
   // Haut et bas : la vue couvre toute la largeur de la tuile, la copie reste au-dessus de la photo, à son échelle
-  // (chaque colonne de la bande prolonge la même colonne de la photo). Petite image d'une grande tuile (la photo ne
-  // touche pas les côtés) : les coins sont remplis par la copie de dessous, étirée sur toute la largeur.
-  const narrow = left >= 0.5 || right >= 0.5;
-  const acrossFrame = (seam: number, height: number) => {
+  // (chaque colonne de la bande prolonge la même colonne de la photo). Site : la copie de dessous dépasse la copie de
+  // `inset` à chaque bout (même rôle que sur les côtés). Petite image d'une grande tuile (la photo ne touche pas les
+  // côtés) : chaque coin reprend la bande de côté voisine, étirée en plus le long de y (une copie étirée sur toute la
+  // largeur, elle, ne prolongeait pas le pixel du coin : couture verticale au droit des côtés de la photo).
+  const sideBands = bands.slice();
+  const acrossFrame = (seam: number, height: number, boxTop: number) => {
     const copy = { left: photo.left, top: seam, width: photo.width, height };
-    const wide = { ...copy, left: 0, width: frame.width };
-    const fill = web ? { ...wide, left: -along, width: frame.width + 2 * along } : narrow ? wide : undefined;
-    return { copy, fill };
+    const fill = web ? { ...copy, left: copy.left - along, width: copy.width + 2 * along } : undefined;
+    const corners: EdgeCorner[] = sideBands.map((band) => ({
+      box: { ...band.box, top: band.box.top - boxTop },
+      side: { copy: band.copy, fill: band.fill, transform: band.transform },
+    }));
+    return { copy, fill, corners: corners.length > 0 ? corners : undefined };
   };
   if (top >= 0.5) {
     const stretch = top / EDGE_STRIP;
-    const { copy, fill } = acrossFrame(photo.top, photo.height);
-    bands.push({ side: "top", box: { left: 0, top: 0, width: frame.width, height: top + 1 }, copy, fill, blur, transform: [{ translateY: shift(top, top + down, copy.top + copy.height / 2, stretch) }, { scaleY: -stretch }] });
+    const { copy, fill, corners } = acrossFrame(photo.top, photo.height, 0);
+    bands.push({ side: "top", box: { left: 0, top: 0, width: frame.width, height: top + 1 }, copy, fill, blur, transform: [{ translateY: shift(top, top + down, copy.top + copy.height / 2, stretch) }, { scaleY: -stretch }], corners });
   }
   if (bottom >= 0.5) {
     const stretch = bottom / EDGE_STRIP;
-    const { copy, fill } = acrossFrame(1 - photo.height, photo.height);
-    bands.push({ side: "bottom", box: { left: 0, top: photo.top + photo.height - 1, width: frame.width, height: bottom + 1 }, copy, fill, blur, transform: [{ translateY: shift(1, 1 - down, copy.top + copy.height / 2, stretch) }, { scaleY: -stretch }] });
+    const boxTop = photo.top + photo.height - 1;
+    const { copy, fill, corners } = acrossFrame(1 - photo.height, photo.height, boxTop);
+    bands.push({ side: "bottom", box: { left: 0, top: boxTop, width: frame.width, height: bottom + 1 }, copy, fill, blur, transform: [{ translateY: shift(1, 1 - down, copy.top + copy.height / 2, stretch) }, { scaleY: -stretch }], corners });
   }
   return bands;
 }
