@@ -142,12 +142,13 @@ export const fr = {
     prepareError: "La préparation a échoué. Vérifiez votre connexion, puis réessayez.",
     networkError: "Connexion impossible. Vérifiez votre connexion internet, puis réessayez.",
     serverError: `${BRAND} ne répond pas pour le moment. Réessayez dans une minute.`,
-    // Retours du build 2 : la carte « Votre dernière vidéo » repliée sur une ligne, et sa croix
-    // (elle éteint la proposition, exactement comme l'interrupteur de Réglages).
+    // Retours du build 2 : la carte « Votre dernière vidéo » repliée sur une ligne.
     latestVideoExpand: "Rechercher dans cette vidéo",
-    latestVideoDismiss: "Ne plus proposer ma dernière vidéo",
-    latestVideoDismissed: "C'est noté : votre dernière vidéo ne vous sera plus proposée. Vous pouvez réactiver cette proposition dans Réglages.",
-    latestVideoSettingsLink: "Ouvrir Réglages",
+    // Retours du build 3, point 3 : la carte se réduit en une ligne fine au lieu de disparaître
+    // (plus de croix ; seul Réglages éteint la proposition).
+    latestVideoReduce: "Réduire la carte « Votre dernière vidéo »",
+    latestVideoReveal: "Affiche la carte en entier",
+    latestVideoShow: "Rouvrir",
   },
   // Lot 4 : choix d'une image dans une vidéo importée (la vidéo reste sur l'appareil).
   video: {

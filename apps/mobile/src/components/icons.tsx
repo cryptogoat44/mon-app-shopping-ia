@@ -163,6 +163,16 @@ export function MinusIcon({ size = 24, tint = color.encre, strokeWidth = 1.6 }: 
   );
 }
 
+/** Chevron (retours du build 3, point 3) : vers le haut, « réduire » la carte
+ * « Votre dernière vidéo » ; vers le bas, la rouvrir. */
+export function ChevronIcon({ size = 24, tint = color.encre, strokeWidth = 1.6, direction }: IconProps & { direction: "up" | "down" }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d={direction === "up" ? "M6 15l6-6 6 6" : "M6 9l6 6 6-6"} stroke={tint} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
 /** `filled` : cloche pleine (alerte allumée sur une envie, lot alertes prix). */
 export function BellIcon({ size = 24, tint = color.encre, strokeWidth = 1.4, filled = false }: IconProps & { filled?: boolean }) {
   return (

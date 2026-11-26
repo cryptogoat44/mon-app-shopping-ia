@@ -59,6 +59,8 @@ describe("une seule vitrine", () => {
     "components/proposal-card.tsx#rowImage",
     "components/wishlist-panel.tsx#thumb",
     "app/(app)/(tabs)/profile/index.tsx#vaultThumb",
+    // Lot « accueil » : la case de l'historique sans image (l'horloge, aucune photo).
+    "components/recent-searches.tsx#tileEmpty",
   ]);
 
   it("refusé : aucun nouveau cadre 4:5 sur plinthe hors de piece-tile.tsx (les bandes reviendraient)", () => {

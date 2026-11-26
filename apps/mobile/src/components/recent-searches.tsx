@@ -3,7 +3,7 @@ import { color, font, radius, size, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import type { Piece } from "@/api/types";
 import { ClockIcon, SearchIcon } from "@/components/icons";
-import { SpotImage } from "@/components/spot-image";
+import { PieceTile } from "@/components/piece-tile";
 import { recentDayLabel } from "@/lib/recent-searches";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -14,29 +14,37 @@ export interface RecentSearch {
   piece: Piece;
 }
 
-/** Une ligne de « Récemment spottées » (accueil de Spotter) : vignette, nom, jour et boutique. */
-export function RecentSearchRow({ entry, onOpen }: { entry: RecentSearch; onOpen: () => void }) {
+/** Une case de « Récemment spottées » (retours du build 3, point 7 : « deux
+ * et deux côte à côte qui se suivent en descendant », « les coins arrondis
+ * également sur chaque photo ») : la tuile de pièce de la grille (4:5, coins
+ * doux), le nom sur deux lignes réservées, le jour et la boutique. Deux cases
+ * par rangée ; toutes de même hauteur (condition de `numColumns`). Une seule
+ * étiquette VoiceOver par case : la tuile n'en porte pas. Image en deux temps
+ * (la vignette de la recherche, puis l'originale du marchand si elle est plus
+ * nette), comme les grilles des Envies et du Vault. */
+export function RecentSearchTile({ entry, column, onOpen }: { entry: RecentSearch; column: "left" | "right"; onOpen: () => void }) {
   const { piece } = entry;
   const meta = [recentDayLabel(entry.createdAt, getActiveLocale()), piece.merchantName].filter(Boolean).join(" · ");
   return (
-    <Pressable style={styles.row} onPress={onOpen} accessibilityRole="button" accessibilityLabel={`${piece.name}, ${meta}`}>
-      <View style={styles.thumb}>
-        {/* Vignette de 64 points : la petite image de la recherche suffit, sans
-            télécharger 20 grandes images de marchands. */}
-        {piece.imageUrl ? (
-          <SpotImage fallbackUri={piece.imageUrl} style={styles.fill} fit="cover" recyclingKey={entry.searchId} />
-        ) : (
+    <Pressable
+      style={({ pressed }) => [styles.cell, column === "left" ? styles.cellLeft : styles.cellRight, pressed ? styles.pressed : null]}
+      onPress={onOpen}
+      accessibilityRole="button"
+      accessibilityLabel={`${piece.name}, ${meta}`}
+    >
+      {piece.imageUrl ? (
+        <PieceTile variant="grid" size="card" hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} recyclingKey={entry.searchId} />
+      ) : (
+        <View style={styles.tileEmpty}>
           <ClockIcon size={22} tint={color.acier} />
-        )}
-      </View>
-      <View style={styles.text}>
-        <Text style={styles.name} numberOfLines={2}>
-          {piece.name}
-        </Text>
-        <Text style={styles.meta} numberOfLines={1}>
-          {meta}
-        </Text>
-      </View>
+        </View>
+      )}
+      <Text style={styles.name} numberOfLines={2}>
+        {piece.name}
+      </Text>
+      <Text style={styles.meta} numberOfLines={1}>
+        {meta}
+      </Text>
     </Pressable>
   );
 }
@@ -71,12 +79,15 @@ export function HistorySearchField({ value, onChangeText, onClear }: { value: st
 }
 
 const styles = themedStyles(() => ({
-  row: { flexDirection: "row", alignItems: "center", gap: space.md, minHeight: 72, paddingVertical: space.sm, borderBottomWidth: 1, borderBottomColor: color.filet },
-  thumb: { width: 64, height: 64, backgroundColor: color.plinthe, borderRadius: radius.sm, alignItems: "center", justifyContent: "center", overflow: "hidden" },
-  fill: { width: "100%", height: "100%" },
-  text: { flex: 1, gap: 2 },
-  name: { fontSize: font.secondary, color: color.encre, lineHeight: 20 },
-  meta: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
+  // Grille de deux colonnes : 12 pt entre les colonnes (6 + 6), 16 entre deux rangées.
+  cell: { width: "50%", marginBottom: space.md },
+  cellLeft: { paddingRight: 6 },
+  cellRight: { paddingLeft: 6 },
+  pressed: { opacity: 0.7 },
+  tileEmpty: { width: "100%", aspectRatio: 4 / 5, backgroundColor: color.plinthe, borderRadius: radius.pieceGrid, borderCurve: "continuous", alignItems: "center", justifyContent: "center" },
+  // Deux lignes réservées : même hauteur pour toutes les cases.
+  name: { fontSize: font.secondary, color: color.encre, lineHeight: 20, minHeight: 40, marginTop: space.sm },
+  meta: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginTop: 2 },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
