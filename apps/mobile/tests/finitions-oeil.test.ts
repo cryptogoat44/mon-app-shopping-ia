@@ -311,3 +311,48 @@ describe("7 · l'accueil : la date courte des cases, le maillon du lien", () => 
     expect(icons).not.toContain("M7 11l4-4M6.5 4.5");
   });
 });
+
+describe("8 · Réglages : les choix cohérents (maquette 7)", () => {
+  const blocks = ["src/components/messages-from-setting.tsx", "src/components/mentions-from-setting.tsx", "src/components/piece-sends-setting.tsx"];
+  const values = (source: string) => [...source.matchAll(/\{ value: "(everyone|following|nobody)", label: ([^ }]+) \}/g)].map((m) => [m[1], m[2]] as const);
+  const labelOf = (catalog: typeof fr, path: string) => path.split(".").slice(1).reduce((node: any, key) => node[key], catalog) as string;
+
+  it("même ordre dans chaque bloc « Qui peut… » : du plus ouvert au plus fermé (refusé : « Comptes que je suis » en premier)", () => {
+    for (const path of blocks) {
+      expect(values(read(path)).map(([value]) => value), path).toEqual(["everyone", "following", "nobody"]);
+    }
+  });
+
+  it("mêmes mots pour les mêmes choix (« Comptes que je suis »), sans changer le sens : « Mes amis seulement » reste pour « Qui peut m'écrire »", () => {
+    for (const catalog of [fr, en]) {
+      const seen = new Map<string, Set<string>>();
+      for (const path of blocks) {
+        for (const [value, key] of values(read(path))) {
+          const words = labelOf(catalog, key);
+          if (path.includes("messages-from") && value === "nobody") continue;
+          seen.set(value, (seen.get(value) ?? new Set()).add(words));
+        }
+      }
+      for (const [value, words] of seen) expect([...words], `${value}`).toHaveLength(1);
+    }
+    expect(fr.settings.messagesFromNobody).toBe("Mes amis seulement");
+    expect(fr.commentThreads.following).toBe("Comptes que je suis");
+  });
+
+  it("une liste simple à cocher (refusé : les grosses pastilles qui s'empilent) ; groupe radio, 44 points, état coché sur le site", () => {
+    for (const path of blocks) {
+      expect(read(path), path).toContain("<SettingsChoice");
+      expect(read(path), path).not.toContain("<SegmentedChoice");
+    }
+    const settings = read("src/app/(app)/settings.tsx");
+    expect(settings).not.toContain("<SegmentedChoice");
+    expect(settings.match(/<SettingsChoice/g)).toHaveLength(2);
+    const choice = read("src/components/settings-choice.tsx");
+    expect(choice).toContain('accessibilityRole="radiogroup"');
+    expect(choice).toContain('accessibilityRole="radio"');
+    expect(choice).toContain("aria-checked={selected}");
+    expect(choice).toContain("row: g.row");
+    // Les explications restent, en pied de carte.
+    expect(read("src/components/messages-from-setting.tsx")).toContain("<Text style={styles.hint}>{t.settings.messagesFromHint}</Text>");
+  });
+});

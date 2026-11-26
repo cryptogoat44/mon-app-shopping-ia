@@ -7,7 +7,7 @@ import { LEGAL_DOCUMENT_VERSIONS, type ConsentStatus } from "@monapp/shared-type
 import { color, font, serifDisplayLetterSpacing, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { couleursInterrupteur } from "@/theme/accent";
 import { getActiveLocale, t } from "@/i18n";
-import { SegmentedChoice } from "@/components/segmented-choice";
+import { SettingsChoice } from "@/components/settings-choice";
 import { usePreferences } from "@/lib/preferences-context";
 import { LOCALES, THEME_PREFERENCES } from "@/lib/preferences";
 import { useAuth } from "@/lib/auth-context";
@@ -204,29 +204,26 @@ export default function SettingsScreen() {
 
         <View style={group.section}>
           <Text style={group.label}>{t.preferences.language}</Text>
+          {/* Lot « finitions de l'œil » : la même liste à cocher que les autres choix des Réglages. */}
           <View style={group.card}>
-            <View style={group.choice}>
-              <SegmentedChoice
-                label={t.preferences.language}
-                options={LOCALES.map((value) => ({ value, label: t.preferences.languageNames[value] }))}
-                value={locale}
-                onChange={(value) => chooseLocale(value, "settings")}
-              />
-            </View>
+            <SettingsChoice
+              label={t.preferences.language}
+              options={LOCALES.map((value) => ({ value, label: t.preferences.languageNames[value] }))}
+              value={locale}
+              onChange={(value) => chooseLocale(value, "settings")}
+            />
           </View>
         </View>
 
         <View style={group.section}>
           <Text style={group.label}>{t.preferences.appearance}</Text>
           <View style={group.card}>
-            <View style={group.choice}>
-              <SegmentedChoice
-                label={t.preferences.appearance}
-                options={THEME_PREFERENCES.map((value) => ({ value, label: t.preferences.themeNames[value] }))}
-                value={themePreference}
-                onChange={chooseTheme}
-              />
-            </View>
+            <SettingsChoice
+              label={t.preferences.appearance}
+              options={THEME_PREFERENCES.map((value) => ({ value, label: t.preferences.themeNames[value] }))}
+              value={themePreference}
+              onChange={chooseTheme}
+            />
             <Text style={styles.sectionBody}>{t.preferences.appearanceHint}</Text>
           </View>
         </View>

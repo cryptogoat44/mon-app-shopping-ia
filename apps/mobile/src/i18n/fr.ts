@@ -2029,7 +2029,7 @@ export const fr = {
     settingHelp: "Dans un commentaire ou sur une photo.",
     settingError: "Le réglage n'a pas pu être enregistré. Réessayez.",
     everyone: "Tout le monde",
-    following: "Les comptes que je suis",
+    following: "Comptes que je suis",
     nobody: "Personne",
     notifReply: "a répondu à votre commentaire.",
     notifMention: "vous a mentionné(e) dans un commentaire.",
