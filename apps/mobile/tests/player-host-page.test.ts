@@ -14,6 +14,7 @@ import {
   sanitizeInstagramEmbed,
   tiktokHostPage,
 } from "../src/lib/player-host-page";
+import { TIKTOK_PLAYER_PARAMS_NATIVE } from "../src/lib/player-link";
 
 // Mission « liens vidéo » : les pages hôtes sont écrites par l'app, n'affichent
 // rien d'elles-mêmes, ne touchent jamais au lecteur officiel et ne font que
@@ -40,10 +41,22 @@ const directive = (csp: string, name: string) => csp.split("; ").find((d) => d.s
 describe("page hôte TikTok : le lecteur officiel, depuis l'identifiant seul", () => {
   it("cadre https://www.tiktok.com/player/v1/{id}, lecture automatique, aucun texte visible", () => {
     const page = tiktokPage();
-    expect(page).toContain(`<iframe id="player" src="https://www.tiktok.com/player/v1/${ID}?autoplay=1"`);
+    // Retours du build 3 : commandes de TikTok cachées (les « & » échappés dans l'attribut).
+    expect(page).toContain(`<iframe id="player" src="https://www.tiktok.com/player/v1/${ID}?autoplay=1&amp;controls=0&amp;progress_bar=0&amp;rel=0"`);
     expect(page).toContain('title="Vidéo TikTok"');
     expect(page).toContain('allow="autoplay; encrypted-media"');
     expect(visibleText(page)).toBe("");
+  });
+
+  it("retours du build 3 : coins arrondis à 14 px en CSS ; repli sur les commandes de TikTok par le 3e paramètre", () => {
+    expect(tiktokPage()).toContain("html,body{margin:0;height:100%;background:#000;overflow:hidden;border-radius:14px}");
+    expect(tiktokPage()).toMatch(/#player\{[^}]*border-radius:14px\}/);
+    expect(instagramPage()).toContain("html,body{margin:0;background:#fff;border-radius:14px}");
+    // Instagram : jamais overflow:hidden (un code plus haut que la place doit pouvoir défiler).
+    expect(instagramPage()).not.toMatch(/html,body\{[^}]*overflow:hidden/);
+    expect(tiktokHostPage(ID, "t", TIKTOK_PLAYER_PARAMS_NATIVE)).toContain(`src="https://www.tiktok.com/player/v1/${ID}?autoplay=1"`);
+    // Le CSS ne change ni le relais, ni ses empreintes, ni la règle de sécurité.
+    expect(sha256(TIKTOK_RELAY)).toBe(TIKTOK_RELAY_SHA256);
   });
 
   it("identifiant qui n'est pas fait de chiffres : aucune page (écran de secours)", () => {
