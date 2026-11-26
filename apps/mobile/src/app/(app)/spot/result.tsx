@@ -975,9 +975,13 @@ export default function ResultScreen() {
             {/* Au-dessus des mentions (zIndex) : leur zone touchable remonte de 8 points sur cette ligne, le lien y gagne ;
                 box-none : le vide de la ligne laisse passer le toucher vers les mentions (correctif, aucune hauteur de plus). */}
             <View style={styles.metaRow} pointerEvents="box-none">
-              <Text style={styles.meta}>
-                {[piece.merchantName, displayPrice(piece)].filter(Boolean).join(" · ")}
-              </Text>
+              {/* Le texte du prix ne prend aucun toucher (une vue « none » : la propriété est peu fiable sur un Text d'iPhone) :
+                  sous lui aussi, la zone de 44 points des mentions reste entière ; seul le lien gagne le recouvrement. */}
+              <View pointerEvents="none">
+                <Text style={styles.meta}>
+                  {[piece.merchantName, displayPrice(piece)].filter(Boolean).join(" · ")}
+                </Text>
+              </View>
               {/* Correctif du lot « finitions de l'œil » : le lien ne compte que pour la hauteur du texte (18 points) ;
                   sa zone de 44 points déborde vers le haut, sur le nom (components/spot-corrections.tsx). */}
               {sheetActions.length > 0 ? (

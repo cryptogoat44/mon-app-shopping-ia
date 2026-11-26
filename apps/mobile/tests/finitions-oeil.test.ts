@@ -312,6 +312,17 @@ describe("3 · correctif : « Ce n'est pas la bonne pièce ? » ne grandit plus 
     expect(read("src/components/stock-note.tsx")).toContain("hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}");
     expect(read("src/components/offer-mark.tsx")).toContain("hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}");
   });
+
+  it("refusé (correctif) : le texte du prix, posé au-dessus, prend les 14 points du haut de la zone des mentions ; permis : enveloppé d'une vue qui ne prend aucun toucher, seul le lien gagne", () => {
+    const row = screen.slice(screen.indexOf('<View style={styles.metaRow} pointerEvents="box-none">'), screen.indexOf("<ForeignShopNote piece={piece} />"));
+    // Refusé : le Text du prix enfant direct de la ligne (toujours touchable sous box-none, sur l'iPhone et le site).
+    expect(row).not.toMatch(/pointerEvents="box-none">\s*<Text style=\{styles\.meta\}>/);
+    expect(row).not.toContain("<Text style={styles.meta} pointerEvents");
+    // Permis : une vue « none » autour du texte du prix ; le lien, lui, reste touchable dans la ligne.
+    expect(row).toMatch(/<View pointerEvents="none">\s*<Text style=\{styles\.meta\}>/);
+    const wrapperEnd = row.indexOf("</View>", row.indexOf('<View pointerEvents="none">'));
+    expect(row.indexOf("<CorrectionsLink inline ")).toBeGreaterThan(wrapperEnd);
+  });
 });
 
 describe("5 · le prix n'est jamais coupé ; 4 · le rythme d'« Autres propositions »", () => {
