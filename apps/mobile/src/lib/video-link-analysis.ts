@@ -24,6 +24,7 @@ import {
   type VideoLink,
   type VideoLinkAnalysisErrorCode,
   type VideoLinkAnalysisRequest,
+  type VideoLinkAnalysisStatus,
   type VideoLinkFailureCause,
   type VideoPlatform,
 } from "@monapp/shared-types";
@@ -81,7 +82,8 @@ export const LINK_ANALYSIS_OFF: LinkAnalysisStatus = { enabled: false, pieces: f
  * l'analyse (absente, comme sur un serveur sans le lot 1 : faux). */
 export function linkAnalysisStatus(body: unknown): LinkAnalysisStatus {
   const enabled = linkAnalysisEnabled(body);
-  const record = typeof body === "object" && body !== null ? (body as Record<string, unknown>) : null;
+  // Champs du contrat partagé (VideoLinkAnalysisStatus : `pieces?: true`, `frame?: true`), relus sans confiance aveugle.
+  const record = typeof body === "object" && body !== null ? (body as Partial<Record<keyof VideoLinkAnalysisStatus, unknown>>) : null;
   return { enabled, pieces: enabled && record?.pieces === true, frame: record?.frame === true };
 }
 

@@ -86,6 +86,8 @@ import type {
   InstagramEmbedResponse,
   VideoConfirmRequest,
   VideoLinkAnalysisRequest,
+  VideoLinkFrameRequest,
+  VideoLinkFrameResponse,
   VideoLookupResponse,
   VideoSpotRequest,
   FollowResponse,
@@ -1366,26 +1368,12 @@ export async function fetchVideoLinkAnalysisStatus(signal?: AbortSignal): Promis
   return linkAnalysisStatus(await response.json().catch(() => null));
 }
 
-/** Image du moment (lot 1, TikTok) : demande. À remplacer par le type partagé du lot 1 (VideoLinkFrameRequest de @monapp/shared-types) à l'assemblage. */
-export interface VideoLinkFrameRequest {
-  url: string;
-  atSeconds: number;
-}
-
-/** Image du moment (lot 1, TikTok) : réponse. À remplacer par le type partagé du lot 1 (VideoLinkFrameResponse de @monapp/shared-types) à l'assemblage. */
-export interface VideoLinkFrameResponse {
-  image: string;
-  width: number;
-  height: number;
-  timeSeconds: number;
-}
-
 /** Délai de l'app pour l'image du moment : au-delà, l'instantané contrôlé prend le relais. */
 export const VIDEO_LINK_FRAME_TIMEOUT_MS = 30_000;
 
 
 /** Image du moment (lot 1, TikTok) : le lien et le temps du lecteur → une image nette, en « data: ». Réponse vérifiée ici. */
-export async function fetchVideoLinkFrame(request: VideoLinkFrameRequest, signal?: AbortSignal): Promise<{ image: string; width: number; height: number; timeSeconds: number }> {
+export async function fetchVideoLinkFrame(request: VideoLinkFrameRequest, signal?: AbortSignal): Promise<VideoLinkFrameResponse> {
   const controller = new AbortController();
   const timer = setTimeout(() => abortForTimeout(controller), VIDEO_LINK_FRAME_TIMEOUT_MS);
   const stop = () => controller.abort();

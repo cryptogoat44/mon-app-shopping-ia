@@ -8,6 +8,7 @@
 //   contrôle (ni noir, ni blanc, ni flou : player-snapshot.ts) ;
 // - sinon : aucune image, l'écran passe au secours (snapshot_failed ou
 //   snapshot_blurry).
+import type { VideoLinkFrameErrorCode, VideoLinkFrameResponse } from "@monapp/shared-types";
 import type { PlayerPlatform } from "./player-link";
 
 /** L'image du moment rendue par le serveur (api.ts fetchVideoLinkFrame, réponse vérifiée). */
@@ -77,7 +78,22 @@ export const FRAME_FAILURES = [
 ] as const;
 export type FrameFailure = (typeof FRAME_FAILURES)[number];
 
-const SERVICE_CODES: ReadonlySet<string> = new Set(["video_unavailable", "video_private", "video_too_long", "video_busy", "video_timeout", "invalid_link", "invalid_moment"]);
+/** Chaque code d'erreur que le serveur peut répondre (contrat partagé du lot 1,
+ * VideoLinkFrameErrorCode) → raison de la statistique. Un code ajouté au
+ * contrat sans être traité ici ne compile pas. L'app ne montre jamais le
+ * message du serveur : elle retombe sur l'instantané ou le secours. */
+const FRAME_ERROR_REASONS: Readonly<Record<VideoLinkFrameErrorCode, FrameFailure>> = {
+  video_frame_disabled: "disabled",
+  invalid_moment: "invalid_moment",
+  invalid_link: "invalid_link",
+  video_unavailable: "video_unavailable",
+  video_private: "video_private",
+  video_too_long: "video_too_long",
+  video_busy: "video_busy",
+  video_timeout: "video_timeout",
+  rate_limited: "rate_limited",
+  internal_error: "server",
+};
 
 /** Erreur de fetchVideoLinkFrame (ApiError { status, body.error }, « frame_timeout », réseau) → raison. */
 export function frameFailureReason(error: unknown): FrameFailure {
@@ -85,9 +101,8 @@ export function frameFailureReason(error: unknown): FrameFailure {
   const record = typeof error === "object" && error !== null ? (error as { status?: unknown; body?: unknown }) : null;
   if (record && typeof record.status === "number") {
     const code = typeof record.body === "object" && record.body !== null ? (record.body as { error?: unknown }).error : undefined;
-    if (code === "video_frame_disabled") return "disabled";
     if (code === "invalid_frame") return "invalid";
-    if (typeof code === "string" && SERVICE_CODES.has(code)) return code as FrameFailure;
+    if (typeof code === "string" && Object.prototype.hasOwnProperty.call(FRAME_ERROR_REASONS, code)) return FRAME_ERROR_REASONS[code as VideoLinkFrameErrorCode];
     if (record.status === 429) return "rate_limited";
     return "server";
   }
@@ -99,7 +114,7 @@ const isFrameSide = (value: unknown): value is number => typeof value === "numbe
 
 /** Réponse de POST /api/video-links/frame (lot 1), vérifiée (jamais de confiance aveugle dans le réseau) :
  * une image JPEG en « data: », largeur et hauteur entières de 1 à 2 000. null : refusée. */
-export function parseVideoLinkFrame(body: unknown): { image: string; width: number; height: number; timeSeconds: number } | null {
+export function parseVideoLinkFrame(body: unknown): VideoLinkFrameResponse | null {
   if (typeof body !== "object" || body === null) return null;
   const record = body as Record<string, unknown>;
   if (typeof record.image !== "string" || !record.image.startsWith(FRAME_IMAGE_PREFIX) || record.image.length <= FRAME_IMAGE_PREFIX.length) return null;
