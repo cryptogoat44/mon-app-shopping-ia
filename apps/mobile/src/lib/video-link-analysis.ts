@@ -64,20 +64,25 @@ export function linkAnalysisEnabled(body: unknown): boolean {
   return typeof body === "object" && body !== null && "enabled" in body && body.enabled === true;
 }
 
-/** L'analyse d'un lien, et « Voir les propositions de l'IA » (lot « propositions »). */
+/** L'analyse d'un lien, « Voir les propositions de l'IA » (lot « propositions »),
+ * et l'image du moment demandée au serveur (retours du build 3, TikTok). */
 export interface LinkAnalysisStatus {
   enabled: boolean;
   pieces: boolean;
+  /** POST /api/video-links/frame possible (champ du lot 1, indépendant de l'analyse). */
+  frame: boolean;
 }
 
 /** Repli : tout coupé (erreur, serveur plus ancien ou injoignable). */
-export const LINK_ANALYSIS_OFF: LinkAnalysisStatus = { enabled: false, pieces: false };
+export const LINK_ANALYSIS_OFF: LinkAnalysisStatus = { enabled: false, pieces: false, frame: false };
 
 /** Pour chacun, seule la valeur exacte `true` compte ; les propositions ne
- * valent qu'avec l'analyse allumée. */
+ * valent qu'avec l'analyse allumée ; l'image du moment ne dépend pas de
+ * l'analyse (absente, comme sur un serveur sans le lot 1 : faux). */
 export function linkAnalysisStatus(body: unknown): LinkAnalysisStatus {
   const enabled = linkAnalysisEnabled(body);
-  return { enabled, pieces: enabled && (body as Record<string, unknown>).pieces === true };
+  const record = typeof body === "object" && body !== null ? (body as Record<string, unknown>) : null;
+  return { enabled, pieces: enabled && record?.pieces === true, frame: record?.frame === true };
 }
 
 export type QueryProblem = "too_short" | "too_long" | "link";

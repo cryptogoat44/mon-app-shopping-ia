@@ -52,12 +52,12 @@ describe("appels au serveur (contrat partagé)", () => {
   it("état : GET /api/video-links/analyze/status avec la session ; seule la valeur exacte `true` allume", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { enabled: true }));
     // Lot « propositions » : l'état dit aussi `pieces` (coupé ici : le serveur ne l'a pas dit).
-    expect(await fetchVideoLinkAnalysisStatus()).toEqual({ enabled: true, pieces: false });
+    expect(await fetchVideoLinkAnalysisStatus()).toEqual({ enabled: true, pieces: false, frame: false });
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe("https://api.exemple.test/api/video-links/analyze/status");
     expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer jeton-factice");
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { enabled: "yes" }));
-    expect(await fetchVideoLinkAnalysisStatus()).toEqual({ enabled: false, pieces: false });
+    expect(await fetchVideoLinkAnalysisStatus()).toEqual({ enabled: false, pieces: false, frame: false });
     // Serveur plus ancien (route absente) : une erreur, que l'écran traduit par « coupée ».
     fetchMock.mockResolvedValueOnce(jsonResponse(404, { error: "not_found", message: "Not Found" }));
     await expect(fetchVideoLinkAnalysisStatus()).rejects.toBeInstanceOf(ApiError);
@@ -80,9 +80,9 @@ describe("appels au serveur (contrat partagé)", () => {
 
   it("lot « propositions » : `pieces` allumé seulement par la valeur exacte `true` ; la demande sans mots part en { url, mode }, la réponse est relue avec ses noms", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { enabled: true, pieces: true }));
-    expect(await fetchVideoLinkAnalysisStatus()).toEqual({ enabled: true, pieces: true });
+    expect(await fetchVideoLinkAnalysisStatus()).toEqual({ enabled: true, pieces: true, frame: false });
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { enabled: true, pieces: "true" }));
-    expect(await fetchVideoLinkAnalysisStatus()).toEqual({ enabled: true, pieces: false });
+    expect(await fetchVideoLinkAnalysisStatus()).toEqual({ enabled: true, pieces: false, frame: false });
     const video = { platform: "tiktok", videoKey: "7312345678901234567", canonicalUrl: TIKTOK, creatorHandle: "lea.style" };
     const moments = [{ timeSeconds: 3, image: jpegDataUri(720, 1280), box: { x: 0, y: 0, width: 1, height: 1 } }];
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { video, moments, labels: ["Le manteau camel"] }));

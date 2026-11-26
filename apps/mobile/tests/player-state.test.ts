@@ -2,9 +2,16 @@ import { describe, expect, it } from "vitest";
 import { HOST_MESSAGE_SOURCE } from "../src/lib/player-host-page";
 import type { FrameSample } from "../src/lib/frame-sample";
 import {
-  TIKTOK_MIN_SIZE,
+  BLUR_LIMITS,
+  PLAYER_MIN_HEIGHT,
   embedHeight,
+  estimatedActionsHeight,
+  formatPlayerTime,
+  frameSharpness,
   isBlankFrame,
+  isBlurryFrame,
+  progressFraction,
+  seekSeconds,
   isPlaybackSignal,
   isPlayerAnswer,
   momentSeconds,
@@ -101,22 +108,45 @@ describe("accord préalable", () => {
   });
 });
 
-describe("taille du lecteur (9:16, « Spotter ce moment » visible, jamais sous 325 × 578 quand la largeur le permet)", () => {
-  it("iPhone SE (375 × 647) : au moins la taille minimale de TikTok, l'écran défile", () => {
-    const layout = playerLayout(375, 647);
-    expect(layout.height).toBe(TIKTOK_MIN_SIZE.height);
-    expect(layout.width).toBe(Math.floor((578 * 9) / 16));
+describe("taille du lecteur (retours du build 3 : 9:16, la place qui reste après la zone d'actions mesurée, jamais sous 240)", () => {
+  it("iPhone de la capture 04 (420 × 810 utiles), zone de 168 pt : 579 pt de haut, les deux actions visibles", () => {
+    const layout = playerLayout(420, 810, 168);
+    expect(layout.height).toBe(579);
+    expect(layout.width).toBe(Math.floor((579 * 9) / 16));
   });
 
-  it("iPhone 15 Pro Max (430 × 873) : le plus grand possible sous la place des boutons", () => {
-    const layout = playerLayout(430, 873);
-    expect(layout.height).toBe(873 - 183);
-    expect(layout.width / layout.height).toBeCloseTo(9 / 16, 2);
+  it("iPhone SE (375 × 647 utiles), zone de 220 pt : 364 pt", () => {
+    expect(playerLayout(375, 647, 220).height).toBe(364);
+  });
+
+  it("refusé : passer sous le plancher de 240 (zone énorme, grand texte) — l'écran défile alors", () => {
+    expect(PLAYER_MIN_HEIGHT).toBe(240);
+    expect(playerLayout(375, 647, 900).height).toBe(240);
   });
 
   it("écran étroit : la largeur décide", () => {
-    const layout = playerLayout(300, 1000);
+    const layout = playerLayout(300, 1000, 100);
     expect(layout.width).toBeLessThanOrEqual(300 - 32);
+    expect(layout.height).toBe(Math.floor(((300 - 32) * 16) / 9));
+  });
+
+  it("toujours 9:16 (arrondis vers le bas)", () => {
+    for (const [w, h, a] of [
+      [420, 810, 168],
+      [375, 647, 220],
+      [430, 873, 300],
+      [320, 548, 260],
+    ] as const) {
+      const layout = playerLayout(w, h, a);
+      expect(layout.width).toBe(Math.floor((layout.height * 9) / 16));
+    }
+  });
+
+  it("avant la première mesure : une estimation de la zone d'actions", () => {
+    expect(estimatedActionsHeight({ analysis: false, firstPlay: false, controls: false })).toBe(44 + 52 + 16);
+    expect(estimatedActionsHeight({ analysis: false, firstPlay: false, controls: true })).toBe(44 + 44 + 52 + 3 * 8);
+    expect(estimatedActionsHeight({ analysis: true, firstPlay: false, controls: true })).toBe(220);
+    expect(estimatedActionsHeight({ analysis: true, firstPlay: true, controls: true })).toBe(220 + 44 + 8);
   });
 
   it("code d'intégration : sa hauteur, dans la place disponible ; plus haut : défilement", () => {
@@ -169,5 +199,72 @@ describe("image noire ou blanche refusée (retours du build 2, contrôle repris 
     expect(isBlankFrame(frame((x, y) => ((x * 13 + y * 7) % 50) + 10))).toBe(false);
     expect(isBlankFrame(frame(() => 182))).toBe(false);
     expect(isBlankFrame(frame((x, y) => (x > 50 && x < 74 && y > 30 && y < 150 ? 140 : 12)))).toBe(false);
+  });
+});
+
+describe("barre de lecture (retours du build 3)", () => {
+  it("progressFraction : null tant que la durée est inconnue ou nulle ; bornée entre 0 et 1", () => {
+    expect(progressFraction(3, null)).toBeNull();
+    expect(progressFraction(3, 0)).toBeNull();
+    expect(progressFraction(3, -2)).toBeNull();
+    expect(progressFraction(2, 8)).toBe(0.25);
+    expect(progressFraction(12, 8)).toBe(1);
+    expect(progressFraction(-1, 8)).toBe(0);
+    expect(progressFraction(null, 8)).toBe(0);
+  });
+
+  it("seekSeconds : bornée à [0, durée − 0,1]", () => {
+    expect(seekSeconds(0.5, 8)).toBe(4);
+    expect(seekSeconds(-0.3, 8)).toBe(0);
+    expect(seekSeconds(1, 8)).toBeCloseTo(7.9, 5);
+    expect(seekSeconds(2, 8)).toBeCloseTo(7.9, 5);
+    expect(seekSeconds(0.5, 0)).toBe(0);
+  });
+
+  it("formatPlayerTime : « 0:00 », « 0:05 », « 1:02 », jamais négatif", () => {
+    expect(formatPlayerTime(0)).toBe("0:00");
+    expect(formatPlayerTime(5.9)).toBe("0:05");
+    expect(formatPlayerTime(62)).toBe("1:02");
+    expect(formatPlayerTime(-3)).toBe("0:00");
+    expect(formatPlayerTime(Number.NaN)).toBe("0:00");
+  });
+});
+
+describe("image floue (retours du build 3 : contrôle de netteté de l'instantané)", () => {
+  const W = 96;
+  const H = 171;
+  const sample = (pixel: (x: number, y: number) => number): FrameSample => {
+    const gray = new Uint8Array(W * H);
+    for (let y = 0; y < H; y += 1) for (let x = 0; x < W; x += 1) gray[y * W + x] = Math.max(0, Math.min(255, Math.round(pixel(x, y))));
+    return { gray, width: W, height: H, colors: [] };
+  };
+  const checker = (x: number, y: number, low = 40, high = 210) => (((x >> 2) + (y >> 2)) % 2 ? high : low);
+
+  it("refusé : un dégradé lisse (image floue)", () => {
+    const smooth = sample((x, y) => 60 + x + y * 0.5);
+    expect(frameSharpness(smooth)).toBeLessThan(BLUR_LIMITS.minSharpness);
+    expect(isBlurryFrame(smooth)).toBe(true);
+  });
+
+  it("permis : un damier net", () => {
+    expect(isBlurryFrame(sample((x, y) => checker(x, y)))).toBe(false);
+  });
+
+  it("refusé : fond flou et colonne de droite nette (les boutons de TikTok sont hors de la zone examinée)", () => {
+    const frame = sample((x, y) => (x >= W * 0.82 ? checker(x, y) : 100 + y * 0.3));
+    expect(isBlurryFrame(frame)).toBe(true);
+  });
+
+  it("refusé : seul le bouton central est net (il est retiré de la zone)", () => {
+    const frame = sample((x, y) => {
+      const fx = (x + 0.5) / W;
+      const fy = (y + 0.5) / H;
+      return fx >= 0.4 && fx < 0.6 && fy >= 0.42 && fy < 0.58 ? checker(x, y) : 120;
+    });
+    expect(isBlurryFrame(frame)).toBe(true);
+  });
+
+  it("permis : un plan sombre mais net", () => {
+    expect(isBlurryFrame(sample((x, y) => checker(x, y, 8, 70)))).toBe(false);
   });
 });

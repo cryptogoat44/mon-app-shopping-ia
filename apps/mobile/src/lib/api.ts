@@ -124,7 +124,8 @@ import { isDataUri } from "./data-uri";
 import { linkAnalysisStatus, linkModeOf, parseLinkAnalysis, type LinkAnalysis, type LinkAnalysisStatus } from "./video-link-analysis";
 import { waitNow, waitSince } from "./wait-clock";
 import { serverRequestStarted } from "./server-first-response";
-import { wasTimedOut } from "./app-timeout";
+import { abortForTimeout, wasTimedOut } from "./app-timeout";
+import { parseVideoLinkFrame } from "./spot-moment";
 import { recentSearchesPath } from "./recent-searches";
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
@@ -1363,6 +1364,46 @@ export async function findVideoMoments(frameUris: readonly string[], query: stri
 export async function fetchVideoLinkAnalysisStatus(signal?: AbortSignal): Promise<LinkAnalysisStatus> {
   const response = await authorizedFetch("/api/video-links/analyze/status", signal ? { signal } : undefined);
   return linkAnalysisStatus(await response.json().catch(() => null));
+}
+
+/** Image du moment (lot 1, TikTok) : demande. À remplacer par le type partagé du lot 1 (VideoLinkFrameRequest de @monapp/shared-types) à l'assemblage. */
+export interface VideoLinkFrameRequest {
+  url: string;
+  atSeconds: number;
+}
+
+/** Image du moment (lot 1, TikTok) : réponse. À remplacer par le type partagé du lot 1 (VideoLinkFrameResponse de @monapp/shared-types) à l'assemblage. */
+export interface VideoLinkFrameResponse {
+  image: string;
+  width: number;
+  height: number;
+  timeSeconds: number;
+}
+
+/** Délai de l'app pour l'image du moment : au-delà, l'instantané contrôlé prend le relais. */
+export const VIDEO_LINK_FRAME_TIMEOUT_MS = 30_000;
+
+
+/** Image du moment (lot 1, TikTok) : le lien et le temps du lecteur → une image nette, en « data: ». Réponse vérifiée ici. */
+export async function fetchVideoLinkFrame(request: VideoLinkFrameRequest, signal?: AbortSignal): Promise<{ image: string; width: number; height: number; timeSeconds: number }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => abortForTimeout(controller), VIDEO_LINK_FRAME_TIMEOUT_MS);
+  const stop = () => controller.abort();
+  if (signal?.aborted) controller.abort();
+  else signal?.addEventListener("abort", stop);
+  try {
+    const response = await authorizedFetch("/api/video-links/frame", { method: "POST", body: JSON.stringify({ url: request.url, atSeconds: request.atSeconds }), signal: controller.signal });
+    const frame = parseVideoLinkFrame(await response.json().catch(() => null));
+    if (!frame) throw new ApiError(502, { error: "invalid_frame", message: t.common.unknownServerError });
+    return frame;
+  } catch (error) {
+    // Délai de l'app dépassé : une erreur reconnaissable (statistique « timeout »), pas une annulation.
+    if (wasTimedOut(controller.signal)) throw new Error("frame_timeout");
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", stop);
+  }
 }
 
 /** Le lien et les mots de la personne (ou, en mode « pièces », le lien seul)

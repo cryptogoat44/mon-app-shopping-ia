@@ -4,6 +4,7 @@
 import type { FrameSample } from "./frame-sample";
 import { HOST_MESSAGE_SOURCE } from "./player-host-page";
 import { PLAYER_PLATFORM_LIST, type PlayerPlatform } from "./player-link";
+import { sharpness } from "./video-stage1";
 
 export const PLAYER_TIMINGS = {
   /** Sans nouvelles du lecteur : écran de secours. */
@@ -146,6 +147,57 @@ export function isBlankFrame(sample: FrameSample): boolean {
   return percentile(0.99) <= BLANK_LIMITS.blackP99Max || percentile(0.01) >= BLANK_LIMITS.whiteP1Min;
 }
 
+// ---- Image floue (retours du build 3) ----
+// Second CONTRÔLE de l'instantané, sur la même petite copie de 96 px : une
+// image floue (capture 06 du fondateur : la vidéo floue, les pictogrammes de
+// TikTok nets) est refusée au lieu d'être envoyée. Netteté = variance du
+// laplacien (sharpness de video-stage1.ts, inchangée), mesurée dans la zone
+// de isBlankFrame seulement : sans la colonne de boutons de TikTok, l'en-tête
+// et le bas (nets même quand la vidéo est floue), ni le bouton central.
+
+/** Seuil de départ, À CALIBRER sur l'iPhone (journal « [player] netteté » en
+ * développement) ; repères mesurés sur des copies de 96 px : ≈ 36 flou,
+ * ≈ 1 640 net. */
+export const BLUR_LIMITS = { minSharpness: 150 } as const;
+
+/** Netteté de la zone examinée : les pixels du rectangle BLANK_ZONE recopiés
+ * dans un nouvel échantillon, ceux de BLANK_HOLE remplacés par la moyenne de
+ * la zone (pour ne pas créer de bords). Exportée pour le journal de
+ * développement (calibrage). */
+export function frameSharpness(sample: FrameSample): number {
+  if (sample.width < 3 || sample.height < 3) return 0;
+  const left = Math.floor(BLANK_ZONE.left * sample.width);
+  const right = Math.ceil(BLANK_ZONE.right * sample.width);
+  const top = Math.floor(BLANK_ZONE.top * sample.height);
+  const bottom = Math.ceil(BLANK_ZONE.bottom * sample.height);
+  const width = right - left;
+  const height = bottom - top;
+  if (width < 3 || height < 3) return 0;
+  const isHole = (x: number, y: number) => inside((x + 0.5) / sample.width, (y + 0.5) / sample.height, BLANK_HOLE);
+  let sum = 0;
+  let count = 0;
+  for (let y = top; y < bottom; y += 1) {
+    for (let x = left; x < right; x += 1) {
+      if (isHole(x, y)) continue;
+      sum += sample.gray[y * sample.width + x] ?? 0;
+      count += 1;
+    }
+  }
+  const mean = count > 0 ? Math.round(sum / count) : 0;
+  const gray = new Uint8Array(width * height);
+  for (let y = top; y < bottom; y += 1) {
+    for (let x = left; x < right; x += 1) {
+      gray[(y - top) * width + (x - left)] = isHole(x, y) ? mean : (sample.gray[y * sample.width + x] ?? 0);
+    }
+  }
+  return sharpness({ gray, width, height, colors: [] });
+}
+
+/** Image floue : netteté de la zone sous BLUR_LIMITS.minSharpness. */
+export function isBlurryFrame(sample: FrameSample): boolean {
+  return frameSharpness(sample) < BLUR_LIMITS.minSharpness;
+}
+
 // ---- Commandes au lecteur TikTok (relayées par la page hôte) ----
 
 export type PlayerCommand = "play" | "pause" | "mute" | "unMute";
@@ -182,21 +234,60 @@ export function parsePlayerConsent(raw: string | null): PlayerConsent {
   return consent;
 }
 
-// ---- Taille du lecteur ----
+// ---- Taille du lecteur (retours du build 3) ----
+// La vidéo prend la place qui reste après la zone d'actions MESURÉE (barre de
+// lecture, ligne « Vidéo … de @… », « Spotter ce moment », « Trouver la pièce
+// automatiquement ») : les deux actions sont visibles sans défiler, grand
+// texte compris. Les commandes de TikTok étant cachées, son ancien minimum
+// (325 × 578, sans lequel il ne les dessinait pas) n'a plus lieu d'être.
 
-/** En dessous, le lecteur TikTok ne dessine pas ses commandes. */
-export const TIKTOK_MIN_SIZE = { width: 325, height: 578 } as const;
+/** Plancher de lisibilité : en dessous seulement, l'écran défile. */
+export const PLAYER_MIN_HEIGHT = 240;
 const SIDE_GUTTER = 16;
-/** Barre « ‹ / Fermer » (47) + ligne « Vidéo … de @pseudo » (44) + « Spotter ce moment » (52) + 3 espaces de 8 + marge (8). */
-const CHROME = 183;
+/** Barre « ‹ Retour / Fermer ». */
+const NAV_HEIGHT = 47;
+const GAP = 8;
 
-/** Lecteur 9:16 le plus grand possible, « Spotter ce moment » visible sous
- * lui ; jamais sous 325 × 578 quand la largeur le permet (l'écran défile). */
-export function playerLayout(safeWidth: number, safeHeight: number): { width: number; height: number } {
-  const maxByWidth = ((safeWidth - 2 * SIDE_GUTTER) * 16) / 9;
-  const wanted = Math.min(Math.max(0, safeHeight - CHROME), maxByWidth);
-  const height = Math.floor(Math.max(Math.min(TIKTOK_MIN_SIZE.height, maxByWidth), wanted, 0));
+/** Avant la première mesure de la zone d'actions : barre 44 + ligne @pseudo 44 + Spotter 52 + 3 × 8 (+ Trouver 48 + 8 si l'analyse est allumée ; + phrase d'accord 44 + 8 la première fois). */
+export function estimatedActionsHeight(input: { analysis: boolean; firstPlay: boolean; controls: boolean }): number {
+  let height = 44 + 52 + 2 * GAP;
+  if (input.controls) height += 44 + GAP;
+  if (input.analysis) height += 48 + GAP;
+  if (input.firstPlay) height += 44 + GAP;
+  return height;
+}
+
+/** Lecteur 9:16 le plus grand possible au-dessus de la zone d'actions
+ * (`actionsHeight`, mesurée) ; jamais sous 240 de haut quand la largeur le
+ * permet (l'écran défile alors). Arrondis vers le bas. */
+export function playerLayout(safeWidth: number, safeHeight: number, actionsHeight: number): { width: number; height: number } {
+  const maxByWidth = Math.max(0, ((safeWidth - 2 * SIDE_GUTTER) * 16) / 9);
+  const wanted = Math.min(Math.max(0, safeHeight - NAV_HEIGHT - Math.max(0, actionsHeight) - 2 * GAP), maxByWidth);
+  const height = Math.floor(Math.max(Math.min(PLAYER_MIN_HEIGHT, maxByWidth), wanted, 0));
   return { width: Math.floor((height * 9) / 16), height };
+}
+
+// ---- Barre de lecture (retours du build 3, TikTok seulement) ----
+
+/** Part lue, de 0 à 1 ; null tant que la durée est inconnue ou nulle (la barre reste éteinte). */
+export function progressFraction(currentTime: number | null, duration: number | null): number | null {
+  if (duration === null || !Number.isFinite(duration) || duration <= 0) return null;
+  if (currentTime === null || !Number.isFinite(currentTime)) return 0;
+  return Math.min(1, Math.max(0, currentTime / duration));
+}
+
+/** Position demandée (fraction de la barre) → secondes, bornées à [0, durée − 0,1]. */
+export function seekSeconds(fraction: number, duration: number): number {
+  if (!Number.isFinite(duration) || duration <= 0) return 0;
+  const safe = Number.isFinite(fraction) ? Math.min(1, Math.max(0, fraction)) : 0;
+  return Math.min(Math.max(0, duration - 0.1), Math.max(0, safe * duration));
+}
+
+/** « 0:05 », « 1:02 » : minutes et secondes entières, jamais négatif. */
+export function formatPlayerTime(seconds: number): string {
+  const whole = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
+  const minutes = Math.floor(whole / 60);
+  return `${minutes}:${String(whole % 60).padStart(2, "0")}`;
 }
 
 /** Hauteur d'un code d'intégration : celle qu'il annonce, dans la place disponible. */

@@ -26,6 +26,7 @@ import { WISHLIST_SORTS } from "./wishlist-view";
 import { LINK_AI_FAILURES } from "./video-link-failures";
 import { JOURNEY_ENTRIES } from "./journey-entries";
 import { PURCHASE_CONTEXTS } from "./purchase-question";
+import { FRAME_FAILURES } from "./spot-moment";
 
 type Rule = { kind: "enum"; values: readonly string[] } | { kind: "count" } | { kind: "bool" } | { kind: "duration" };
 
@@ -181,7 +182,8 @@ export const ANALYTICS_EVENTS = {
   player_opened: { platform: PLAYER_PLATFORM, source: oneOf(["paste", "share"]), link_platform: PLAYER_PLATFORM },
   player_unavailable: {
     platform: PLAYER_PLATFORM,
-    reason: oneOf(["build_off", "server_off", "server_unknown", "not_ios", "no_snapshot", "consent_refused", "embed_unavailable", "player_error", "no_answer", "webview_error", "snapshot_failed"]),
+    // Retours du build 3 : « snapshot_blurry », l'instantané flou refusé (et pas d'image du serveur).
+    reason: oneOf(["build_off", "server_off", "server_unknown", "not_ios", "no_snapshot", "consent_refused", "embed_unavailable", "player_error", "no_answer", "webview_error", "snapshot_failed", "snapshot_blurry"]),
     link_platform: PLAYER_PLATFORM,
     // Retours du build 2 (« la vidéo d'abord ») : ce qui suit, « ai » (la recherche
     // automatique) ou « screenshot » (l'écran de secours) ; absent : version d'avant.
@@ -189,7 +191,14 @@ export const ANALYTICS_EVENTS = {
   },
   player_fallback: { platform: PLAYER_PLATFORM, choice: oneOf(["screenshot", "open_app"]), link_platform: PLAYER_PLATFORM },
   player_consent: { platform: PLAYER_PLATFORM, choice: oneOf(["play", "refuse"]), link_platform: PLAYER_PLATFORM },
-  player_spot: { platform: PLAYER_PLATFORM, link_platform: PLAYER_PLATFORM },
+  // Retours du build 3 : image_source, « server » (l'image du moment rendue par
+  // notre serveur, TikTok) ou « snapshot » (l'instantané contrôlé de l'écran) ;
+  // absent : version d'avant (toujours l'instantané).
+  player_spot: { platform: PLAYER_PLATFORM, link_platform: PLAYER_PLATFORM, image_source: oneOf(["server", "snapshot"]) },
+  // Retours du build 3 : l'image du moment n'est pas venue du serveur (l'instantané
+  // prend le relais). La raison seulement : jamais l'adresse ni le temps. Pas de
+  // « platform » (règle de l'en-tête) : link_platform seul.
+  player_frame_failed: { reason: oneOf(FRAME_FAILURES), link_platform: PLAYER_PLATFORM },
   // Retours du build 2 : « Trouver la pièce automatiquement », touché sous le lecteur.
   player_to_ai: { platform: PLAYER_PLATFORM, from: oneOf(["player"]), link_platform: PLAYER_PLATFORM },
   // Lot « vidéo auto » : analyse d'une vidéo à partir de son lien — la
