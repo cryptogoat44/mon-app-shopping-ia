@@ -230,7 +230,9 @@ describe("Résultat, la grande carte (maquettes 4-resultat-grande-carte)", () =>
     expect(styleOf(verdict, "box")).not.toContain("borderWidth");
     expect(styleOf(verdict, "sentence")).toContain("fontSize: font.caption");
     expect(verdict).not.toContain("affirmed");
-    expect(verdict).toContain("{sentence} <Text style={styles.more}>ⓘ</Text>");
+    // Lot « finitions de l'œil » : « ⓘ » lié au dernier mot par une espace insécable (jamais seul sur une ligne).
+    expect(verdict).toContain('{sentence}{"\\u00A0"}<Text style={styles.more}>ⓘ</Text>');
+    expect(verdict).not.toContain("{sentence} <Text style={styles.more}>ⓘ</Text>");
     expect(verdict).toContain("<VerdictSheet");
     const list = screen.slice(screen.indexOf("<ScrollView\n        ref={scrollRef}"));
     expect(list.indexOf('testID="verdict-place"')).toBeGreaterThan(-1);

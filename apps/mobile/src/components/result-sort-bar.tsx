@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
 import { color, font, radius, size, space } from "@/theme/tokens";
 import { lienSouligne } from "@/theme/accent";
@@ -19,6 +19,11 @@ import { themedStyles } from "@/theme/themed-styles";
 // feuille avec les trois tris en boutons radio, puis « Avec prix » et
 // « En stock » (libellés visibles courts, contenus dans leur nom lu) ; puis
 // la ligne des prix. Aucun tri ni filtre ne disparaît.
+// Lot « finitions de l'œil » : sous les pastilles, UNE seule ligne
+// d'information (deux lignes au plus) : la phrase du verdict quand elle
+// existe (elle dit déjà le nombre de boutiques et la fourchette de prix),
+// sinon « N offres · à partir de X € ». Avec le verdict, ce résumé n'est plus
+// affiché, mais il reste lu par VoiceOver, dans le nom de la pastille du tri.
 
 function sortOptions(): { value: ResultSort; label: string }[] {
   return [
@@ -33,17 +38,20 @@ export function ResultSortBar({
   onChange,
   summary,
   stockShown = false,
+  verdict = null,
 }: {
   view: ResultView;
   onChange: (view: ResultView) => void;
   summary: string | null;
   /** « En stock seulement » : quand une offre dit son stock, ou qu'il est déjà choisi (lib/result-sort.ts, stockFilterShown). */
   stockShown?: boolean;
+  /** La phrase du verdict (components/verdict-line.tsx), quand elle est montrée : seule ligne d'information. */
+  verdict?: ReactNode;
 }) {
   return (
     <View style={styles.bar} testID="result-sort-bar">
       <View style={styles.filters}>
-        <SortMenuButton view={view} onChange={onChange} />
+        <SortMenuButton view={view} onChange={onChange} hiddenSummary={verdict ? summary : null} />
         <Pressable
           accessibilityRole="switch"
           accessibilityState={{ checked: view.withPriceOnly }}
@@ -63,10 +71,14 @@ export function ResultSortBar({
         </Pressable>
         {stockShown ? <InStockOnlyToggle view={view} onChange={onChange} /> : null}
       </View>
-      {/* Mise à jour à l'arrivée des boutiques : annoncée sans couper (site, Android). */}
-      <Text style={styles.summary} accessibilityLiveRegion="polite" testID="price-summary">
-        {summary ?? ""}
-      </Text>
+      {/* Le verdict seul, ou le résumé des prix (mis à jour à l'arrivée des boutiques : annoncé sans couper, site et Android). */}
+      {verdict ? (
+        verdict
+      ) : (
+        <Text style={styles.summary} accessibilityLiveRegion="polite" testID="price-summary">
+          {summary ?? ""}
+        </Text>
+      )}
     </View>
   );
 }
@@ -77,7 +89,7 @@ export function ResultSortBar({
  * qui vérifie le tri, ou confirme la ligne cochée avec VoiceOver, n'a pas à
  * chercher le fond) ; le tri ne change que si le choix est nouveau. Site :
  * le Modal de react-native-web (Échap ferme) ; jamais la feuille d'actions d'iOS (absente du site). */
-function SortMenuButton({ view, onChange }: { view: ResultView; onChange: (view: ResultView) => void }) {
+function SortMenuButton({ view, onChange, hiddenSummary }: { view: ResultView; onChange: (view: ResultView) => void; hiddenSummary: string | null }) {
   const [open, setOpen] = useState(false);
   const reduceMotion = useReduceMotion();
   const close = () => setOpen(false);
@@ -88,7 +100,7 @@ function SortMenuButton({ view, onChange }: { view: ResultView; onChange: (view:
         style={styles.chipZone}
         onPress={() => setOpen(true)}
         accessibilityRole="button"
-        accessibilityLabel={t.result.sortMenuLabel(current.label)}
+        accessibilityLabel={hiddenSummary ? `${t.result.sortMenuLabel(current.label)}. ${hiddenSummary}` : t.result.sortMenuLabel(current.label)}
         accessibilityState={{ expanded: open }}
         testID="sort-menu"
       >
@@ -197,8 +209,8 @@ export function WithPriceOnlyEmpty({ onShowAll }: { onShowAll: () => void }) {
 }
 
 const styles = themedStyles(() => ({
-  bar: { marginBottom: 12 },
-  filters: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginTop: space.xs },
+  bar: { marginBottom: space.xs },
+  filters: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
   // Zone tactile de 44 points autour d'une pastille de 32 (maquette « Écrin » 4). Grand texte : la pastille
   // grandit (minHeight, jamais height), ne dépasse jamais la ligne et son libellé passe à la ligne (aucun numberOfLines).
   chipZone: { minHeight: size.touchTarget, justifyContent: "center", flexShrink: 1, maxWidth: "100%" },
@@ -216,7 +228,7 @@ const styles = themedStyles(() => ({
   chipActive: { backgroundColor: color.vert, borderColor: color.vert },
   chipLabel: { fontSize: font.caption, fontWeight: "500", color: color.encre, flexShrink: 1 },
   chipLabelActive: { color: color.blanc },
-  summary: { fontSize: font.caption, lineHeight: 18, color: color.acier, fontWeight: "400", marginTop: space.xs },
+  summary: { fontSize: font.caption, lineHeight: 18, color: color.acier, fontWeight: "400" },
   backdrop: { flex: 1, backgroundColor: color.voile },
   sheet: {
     backgroundColor: color.porcelaine,

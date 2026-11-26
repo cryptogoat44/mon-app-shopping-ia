@@ -256,7 +256,8 @@ describe("la grande carte et l'écran des résultats, resserrés", () => {
   });
 
   it("rythme de la grande carte et de la grille", () => {
-    expect(styleOf(screen, "rankLabel")).toContain("marginTop: 12");
+    // Lot « finitions de l'œil » : resserré (8 au lieu de 12) pour que la rangée d'actions tienne sans défiler.
+    expect(styleOf(screen, "rankLabel")).toContain("marginTop: space.sm");
     // Lot « fidélité aux maquettes » : « Voir chez … » de 52, la rangée d'actions soudée (sans écart), les marges du titre sur sa ligne.
     expect(styleOf(screen, "primary")).toContain("minHeight: 52");
     expect(styleOf(screen, "primary")).toContain("marginTop: 12");
@@ -269,7 +270,9 @@ describe("la grande carte et l'écran des résultats, resserrés", () => {
   });
 
   it("barre de tri : résumé seul, puis les deux pastilles sur une ligne ; testID conservés", () => {
-    expect(styleOf(bar, "bar")).toContain("marginBottom: 12");
+    // Lot « finitions de l'œil » : resserrée (4 au lieu de 12), sans marge au-dessus des pastilles.
+    expect(styleOf(bar, "bar")).toContain("marginBottom: space.xs");
+    expect(styleOf(bar, "filters")).not.toContain("marginTop");
     expect(styleOf(bar, "filters")).toContain('flexDirection: "row", flexWrap: "wrap", gap: space.sm');
     expect(bar).not.toContain("stockLine");
     for (const id of ['testID="result-sort-bar"', 'testID="with-price-only"', 'testID="in-stock-only"', 'testID="price-summary"']) expect(bar).toContain(id);

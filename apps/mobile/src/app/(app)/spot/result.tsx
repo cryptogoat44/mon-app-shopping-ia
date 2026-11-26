@@ -75,7 +75,7 @@ import { useHeroReveal } from "@/lib/use-hero-reveal";
 import { ForeignShopNote } from "@/components/foreign-shop-note";
 import { OfferMarkNote } from "@/components/offer-mark";
 import { StockNote } from "@/components/stock-note";
-import { VerdictLine } from "@/components/verdict-line";
+import { VerdictLine, verdictLineShown } from "@/components/verdict-line";
 import { verdictToTrack } from "@/lib/verdict";
 import { LuxuryResaleEntry } from "@/components/luxury-resale";
 import { luxuryResaleToTrack } from "@/lib/luxury-resale";
@@ -911,14 +911,12 @@ export default function ResultScreen() {
         maintainVisibleContentPosition={priceSort && Platform.OS !== "web" ? { minIndexForVisible: 0 } : undefined}
         scrollEnabled={zoomState !== "zooming"}
       >
-        {/* Le verdict : la phrase de tête, d'après les titres des boutiques ; rien quand le serveur ne sait pas (components/verdict-line.tsx).
-            Sa boîte est toujours là, même vide (collapsable={false} : jamais aplatie), en premier : trié par prix sur
-            iPhone, la phrase arrivée avec les boutiques grandit vers le bas, visible, au lieu de passer au-dessus de l'écran.
-            minHeight 1 : vide, une boîte de hauteur 0 en haut de la liste n'est pas « visible » pour iOS ni Android
-            (y + hauteur > défilement), qui prendraient alors la ligne d'après comme repère et cacheraient la phrase. */}
-        <View collapsable={false} testID="verdict-place" style={styles.verdictPlace}>
-          <VerdictLine verdict={result.verdict} />
-        </View>
+        {/* Le repère du haut de la liste : une boîte toujours là, vide (collapsable={false} : jamais aplatie), en premier :
+            trié par prix sur iPhone, la phrase du verdict arrivée avec les boutiques (sous les pastilles, lot « finitions
+            de l'œil ») grandit vers le bas, visible, au lieu de faire passer le haut de la liste au-dessus de l'écran.
+            minHeight 1 : une boîte de hauteur 0 en haut de la liste n'est pas « visible » pour iOS ni Android
+            (y + hauteur > défilement), qui prendraient alors la ligne d'après comme repère. */}
+        <View collapsable={false} testID="verdict-place" style={styles.verdictPlace} />
         {/* Voie C : le décompte, le tri et l'absence de prix parlent de la recherche visuelle seule.
             Prix d'abord : « aucun prix » quand la recherche visuelle n'en a aucun et que la grande carte
             d'office n'en a pas non plus (sinon elles sont toutes repliées en bas, avec le même texte). */}
@@ -926,7 +924,15 @@ export default function ResultScreen() {
         {wordsLine ? <Text style={styles.count}>{wordsLine}</Text> : null}
         {/* Tri des résultats : en haut de la liste, la ligne des prix avec ; « En stock seulement » à côté
             de « Avec prix seulement », quand une offre dit son stock (ou qu'il est déjà choisi). */}
-        <ResultSortBar view={view} onChange={changeView} summary={summaryText} stockShown={stockFilterShown(result, view)} />
+        {/* Lot « finitions de l'œil » : sous les pastilles, une seule ligne grise : le verdict (d'après les titres des boutiques ;
+            rien quand le serveur ne sait pas, components/verdict-line.tsx), sinon le résumé des prix. */}
+        <ResultSortBar
+          view={view}
+          onChange={changeView}
+          summary={summaryText}
+          stockShown={stockFilterShown(result, view)}
+          verdict={verdictLineShown(result.verdict) ? <VerdictLine verdict={result.verdict} /> : null}
+        />
         {layout.emptyWithFilter ? <WithPriceOnlyEmpty onShowAll={() => changeView({ ...view, withPriceOnly: false })} /> : null}
         {/* Stock affiché : « En stock seulement » ne laisse plus rien ; un seul geste retire les deux filtres. */}
         {layout.emptyWithStockFilter ? <FiltersEmpty onShowAll={() => changeView({ ...view, withPriceOnly: false, inStockOnly: false })} /> : null}
@@ -963,12 +969,15 @@ export default function ResultScreen() {
             </View>
             {selectedIndex === cheapest ? <CheapestBadge /> : null}
             <ForeignShopNote piece={piece} />
-            <View style={styles.marks}>
-              {/* Boutiques douteuses : « Boutique connue » ou « Prix inhabituellement bas » (components/offer-mark.tsx). */}
-              <OfferMarkNote piece={piece} />
-              {/* Stock affiché : « En stock » ou « Épuisée » d'après Google, au moment de la recherche (components/stock-note.tsx). */}
-              <StockNote piece={piece} />
-            </View>
+            {/* Rien à dire (ni mention, ni stock) : pas de rangée, sa marge négative ne tire pas le bouton sur le prix. */}
+            {piece.offerMark || typeof piece.inStock === "boolean" ? (
+              <View style={styles.marks}>
+                {/* Boutiques douteuses : « Boutique connue » ou « Prix inhabituellement bas » (components/offer-mark.tsx). */}
+                <OfferMarkNote piece={piece} />
+                {/* Stock affiché : « En stock » ou « Épuisée » d'après Google, au moment de la recherche (components/stock-note.tsx). */}
+                <StockNote piece={piece} />
+              </View>
+            ) : null}
 
             {piece.merchantUrl ? (
               <Pressable style={styles.primary} onPress={handleOpenMerchant} accessibilityRole="link">
@@ -1275,13 +1284,16 @@ const styles = themedStyles(() => ({
   count: { fontSize: font.caption, lineHeight: 18, color: color.acier, marginBottom: space.xs },
   verdictPlace: { minHeight: 1 },
   heroSkeleton: { width: "100%", aspectRatio: 1, borderRadius: radius.piece, borderCurve: "continuous" },
-  rankLabel: { ...surtitre, color: color.acier, marginTop: 12 },
+  // Lot « finitions de l'œil » : marges resserrées pour que la rangée d'actions tienne sans défiler (390 × 844, titre de deux lignes).
+  rankLabel: { ...surtitre, color: color.acier, marginTop: space.sm },
   name: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: serifLineHeight.title, marginTop: 4 },
   metaRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", columnGap: space.md, marginTop: space.xs },
   meta: { fontSize: font.caption, lineHeight: 18, color: color.acier },
   // Sans grande carte, le lien garde sa place (à gauche, en haut de la liste).
   notRight: { alignItems: "flex-start", marginTop: 0 },
-  marks: { flexDirection: "row", flexWrap: "wrap", columnGap: space.sm, alignItems: "center" },
+  // Les mentions (zones touchables de 32 points pour un texte de 16) ne réservent plus leur marge vide à l'œil :
+  // leur zone déborde sur l'espace de la ligne du prix et du bouton, sans les recouvrir.
+  marks: { flexDirection: "row", flexWrap: "wrap", columnGap: space.sm, alignItems: "center", marginVertical: -8 },
   primary: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: 12 },
   primaryLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600", flexShrink: 1 },
   secondary: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: space.sm },

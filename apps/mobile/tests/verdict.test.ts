@@ -189,14 +189,18 @@ describe("statistiques : verdict_shown { level }", () => {
 });
 
 describe("l'écran : la phrase en tête, annoncée, touchable, sans rien déplacer", () => {
-  it("permis : au-dessus du décompte et de la grande carte ; une zone touchable dont le libellé lu est la phrase", () => {
+  it("permis : sous les pastilles, au-dessus de la grande carte ; une zone touchable dont le libellé lu est la phrase", () => {
     const screen = read("src/app/(app)/spot/result.tsx");
     const line = screen.indexOf("<VerdictLine verdict={result.verdict} />");
     expect(line).toBeGreaterThan(-1);
-    // Lot « fidélité aux maquettes » : le décompte est passé dans la barre du haut ; la phrase reste avant le tri et la grande carte.
+    // Lot « fidélité aux maquettes » : le décompte est passé dans la barre du haut.
     expect(screen).not.toContain("t.result.count(result.pieces.length, result.query)");
-    expect(line).toBeLessThan(screen.indexOf("<ResultSortBar"));
+    // Lot « finitions de l'œil » : barre du haut, pastilles, puis la phrase (seule ligne grise, rendue par la barre de tri
+    // sous ses pastilles), puis la grande carte.
+    expect(line).toBeGreaterThan(screen.indexOf("<ResultSortBar"));
     expect(line).toBeLessThan(screen.indexOf("{showBigCard ? ("));
+    const bar = read("src/components/result-sort-bar.tsx");
+    expect(bar.indexOf("{verdict ? (")).toBeGreaterThan(bar.indexOf("<SortMenuButton"));
     const component = read("src/components/verdict-line.tsx");
     expect(component).toContain("if (!verdict || !sentence) return null;");
     expect(component).toContain('accessibilityRole="button"');
@@ -208,14 +212,16 @@ describe("l'écran : la phrase en tête, annoncée, touchable, sans rien déplac
     expect(component).toContain("}, [sentence]);");
   });
 
-  it("permis : trié par prix sur iPhone, la place du verdict est déjà la première, même vide, et jamais aplatie (la phrase grandit vers le bas, visible)", () => {
+  it("permis : trié par prix sur iPhone, le repère du haut de la liste est déjà le premier, même vide, et jamais aplati (la phrase, plus bas, grandit vers le bas, visible)", () => {
     const screen = read("src/app/(app)/spot/result.tsx");
     const scroll = screen.indexOf("maintainVisibleContentPosition={priceSort");
     expect(scroll).toBeGreaterThan(-1);
     const afterScrollOpen = screen.slice(screen.indexOf(">\n", scroll) + 2);
-    // Premier enfant (après le commentaire) : la boîte toujours rendue, qui contient la phrase.
+    // Premier enfant (après le commentaire) : la boîte toujours rendue, vide (lot « finitions de l'œil » : la phrase est
+    // sous les pastilles ; la boîte reste le repère, la phrase arrivée grandit sous lui).
     const firstChild = afterScrollOpen.replace(/^\s*\{\/\*[\s\S]*?\*\/\}\s*/, "");
-    expect(firstChild.startsWith('<View collapsable={false} testID="verdict-place" style={styles.verdictPlace}>\n          <VerdictLine verdict={result.verdict} />\n        </View>')).toBe(true);
+    expect(firstChild.startsWith('<View collapsable={false} testID="verdict-place" style={styles.verdictPlace} />')).toBe(true);
+    expect(firstChild.indexOf("<ResultSortBar")).toBeLessThan(firstChild.indexOf("<VerdictLine verdict={result.verdict} />"));
     // Vide, elle a une hauteur (au moins 1) : iOS et Android la prennent pour repère dès le haut de la liste.
     expect(screen).toMatch(/\n  verdictPlace: \{ minHeight: 1 \},\n/);
   });

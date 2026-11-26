@@ -41,7 +41,8 @@ describe("le contrôle de tri, en haut de la liste", () => {
     expect(sheet).toContain("onRequestClose={close}");
     // La pastille : un bouton qui dit le tri choisi ; refusé : la feuille d'iOS (absente du site), un hitSlop.
     expect(bar).toContain('testID="sort-menu"');
-    expect(bar).toContain("accessibilityLabel={t.result.sortMenuLabel(current.label)}");
+    // Lot « finitions de l'œil » : avec le verdict à l'œil, le résumé des prix est lu dans le nom de la pastille du tri.
+    expect(bar).toContain("accessibilityLabel={hiddenSummary ? `${t.result.sortMenuLabel(current.label)}. ${hiddenSummary}` : t.result.sortMenuLabel(current.label)}");
     expect(bar).not.toContain("ActionSheetIOS");
     expect(bar).not.toContain("hitSlop");
   });
@@ -59,7 +60,7 @@ describe("le contrôle de tri, en haut de la liste", () => {
   });
 
   it("l'écran le place en haut, avant « Votre pièce » et la grande carte ; le choix vient de l'appareil", () => {
-    const sortBar = screen.indexOf("<ResultSortBar view={view} onChange={changeView} summary={summaryText} stockShown={stockFilterShown(result, view)} />");
+    const sortBar = screen.indexOf("<ResultSortBar\n          view={view}\n          onChange={changeView}\n          summary={summaryText}\n          stockShown={stockFilterShown(result, view)}\n          verdict={verdictLineShown(result.verdict) ? <VerdictLine verdict={result.verdict} /> : null}\n        />");
     expect(sortBar).toBeGreaterThan(-1);
     expect(sortBar).toBeLessThan(screen.indexOf("<YourPiece image={yourPiece} />"));
     expect(sortBar).toBeLessThan(screen.indexOf("onLayout={heroReveal.onHeroLayout}"));

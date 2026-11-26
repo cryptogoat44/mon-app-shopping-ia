@@ -115,3 +115,38 @@ describe("1 · la tuile (components/piece-tile.tsx) dessine les bandes", () => {
     expect(tile).toMatch(/key=\{band\.side\}\s+pointerEvents="none"\s+accessible=\{false\}\s+importantForAccessibility="no-hide-descendants"/);
   });
 });
+
+describe("3 · le haut du Résultat : une seule ligne grise sous les pastilles", () => {
+  const bar = read("src/components/result-sort-bar.tsx");
+  const screen = read("src/app/(app)/spot/result.tsx");
+  const verdict = read("src/components/verdict-line.tsx");
+
+  it("verdict présent : lui seul à l'œil, le résumé des prix reste lu par VoiceOver (nom de la pastille du tri)", () => {
+    const info = bar.slice(bar.indexOf("{verdict ? ("), bar.indexOf("</View>\n  );\n}"));
+    expect(info).toMatch(/\{verdict \? \(\s*verdict\s*\) : \(\s*<Text style=\{styles\.summary\}/);
+    expect(bar).toContain("<SortMenuButton view={view} onChange={onChange} hiddenSummary={verdict ? summary : null} />");
+    expect(bar).toContain("accessibilityLabel={hiddenSummary ? `${t.result.sortMenuLabel(current.label)}. ${hiddenSummary}` : t.result.sortMenuLabel(current.label)}");
+  });
+
+  it("refusé : la phrase du verdict ET le résumé rendus ensemble ; une seule phrase du verdict dans l'écran", () => {
+    // Le résumé n'est rendu que dans la branche « pas de verdict ».
+    expect(bar.match(/testID="price-summary"/g)).toHaveLength(1);
+    expect(bar.indexOf('testID="price-summary"')).toBeGreaterThan(bar.indexOf(") : ("));
+    expect(screen.match(/<VerdictLine /g)).toHaveLength(1);
+    expect(screen).toContain("verdict={verdictLineShown(result.verdict) ? <VerdictLine verdict={result.verdict} /> : null}");
+  });
+
+  it("le « ⓘ » est lié au dernier mot par une espace insécable ; les mots du verdict ne changent pas", () => {
+    expect(verdict).toContain('{sentence}{"\\u00A0"}<Text style={styles.more}>ⓘ</Text>');
+    expect(verdict).toContain("accessibilityLabel={sentence}");
+    expect(verdict).toContain("return Boolean(verdict && verdictSentence(verdict, t.result.verdict, getActiveLocale()));");
+  });
+
+  it("deux lignes de 36 points, zone touchable de 44 sur l'iPhone ; les mentions ne réservent plus leur marge vide", () => {
+    expect(verdict).toContain('box: { minHeight: 36, justifyContent: "center" }');
+    expect(verdict).toContain("hitSlop={{ top: 4, bottom: 4 }}");
+    expect(screen).toContain('marks: { flexDirection: "row", flexWrap: "wrap", columnGap: space.sm, alignItems: "center", marginVertical: -8 }');
+    // Refusé : la rangée vide des mentions qui tirerait le bouton sur le prix.
+    expect(screen).toContain('{piece.offerMark || typeof piece.inStock === "boolean" ? (\n              <View style={styles.marks}>');
+  });
+});
