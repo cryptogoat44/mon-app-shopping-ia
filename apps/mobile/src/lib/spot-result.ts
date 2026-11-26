@@ -135,6 +135,52 @@ export function withTextSearch(previous: SpotResult, search: ProductSearch): Spo
   return next;
 }
 
+/** Relecture des résultats (lot « vitrine », retours du build 3) : combien
+ * des premières propositions « shopping » et « words » le serveur peut
+ * doter d'une grande image (lot « grandes images »). */
+export const HD_REREAD_POOL = 8;
+
+/** Relire la recherche pour ses grandes images ? Oui tant qu'au moins une des
+ * HD_REREAD_POOL premières propositions « shopping » ou « words » n'a pas
+ * d'image haute définition. */
+export function hdRereadDue(result: SpotResult | null): boolean {
+  if (!result || result.status !== "success" || !result.searchId || !result.complement) return false;
+  const pool = [...result.complement.shopping, ...result.complement.words].slice(0, HD_REREAD_POOL);
+  return pool.some((piece) => !piece.imageHdUrl);
+}
+
+/** La recherche relue n'apporte QUE les grandes images (imageHdUrl), par
+ * identifiant de proposition : ordre, filtres, sélection et sections ne
+ * bougent pas ; une proposition inconnue est ignorée ; une grande image déjà
+ * là n'est jamais remplacée par du vide. Rien de neuf : le même objet (aucun
+ * rendu inutile). */
+export function withHdImages(previous: SpotResult, search: ProductSearch): SpotResult {
+  if (search.id !== previous.searchId) return previous;
+  const hdById = new Map<string, string>();
+  for (const match of search.matches) {
+    if (typeof match.imageHdUrl === "string" && match.imageHdUrl) hdById.set(match.id, match.imageHdUrl);
+  }
+  if (hdById.size === 0) return previous;
+  let changed = false;
+  const merge = (pieces: Piece[]): Piece[] => {
+    let listChanged = false;
+    const next = pieces.map((piece) => {
+      const hd = hdById.get(piece.id);
+      if (!hd || hd === piece.imageHdUrl) return piece;
+      listChanged = true;
+      return { ...piece, imageHdUrl: hd };
+    });
+    if (!listChanged) return pieces;
+    changed = true;
+    return next;
+  };
+  const pieces = merge(previous.pieces);
+  const similarPieces = merge(previous.similarPieces);
+  const complement = previous.complement ? { ...previous.complement, shopping: merge(previous.complement.shopping), words: merge(previous.complement.words) } : undefined;
+  if (!changed) return previous;
+  return { ...previous, pieces, similarPieces, ...(complement ? { complement } : {}) };
+}
+
 /** L'invitation n'est plus proposée (refus du serveur) : même résultat, sans
  * « Que cherchez-vous ? » — à l'écran comme au retour sur l'écran. */
 export function withoutTextPrompt(result: SpotResult): SpotResult {

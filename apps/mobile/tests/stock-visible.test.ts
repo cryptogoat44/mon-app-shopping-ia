@@ -326,11 +326,16 @@ describe("les textes et l'accessibilité", () => {
     expect(bar).toContain("accessibilityLabel={t.result.inStockOnly}");
     expect(bar).toContain("accessibilityHint={t.result.inStockOnlyHint}");
     expect(bar).toContain("onChange({ ...view, inStockOnly: !checked })");
+    // Lot « vitrine » (retours du build 3) : à côté de « Avec prix seulement », dans la même ligne de pastilles de la barre.
+    const filters = bar.slice(bar.indexOf("<View style={styles.filters}>"), bar.indexOf("export function InStockOnlyToggle"));
+    expect(filters.indexOf('testID="with-price-only"')).toBeGreaterThan(-1);
+    expect(filters.indexOf("{stockShown ? <InStockOnlyToggle view={view} onChange={onChange} /> : null}")).toBeGreaterThan(filters.indexOf('testID="with-price-only"'));
     const screen = read("src/app/(app)/spot/result.tsx");
-    const sortBar = screen.indexOf("<ResultSortBar view={view} onChange={changeView} summary={summaryText} />");
-    const toggle = screen.indexOf("<InStockOnlyToggle view={view} onChange={changeView} />");
-    expect(toggle).toBeGreaterThan(sortBar);
-    expect(toggle).toBeLessThan(screen.indexOf("<YourPiece image={yourPiece} />"));
+    const sortBar = screen.indexOf("<ResultSortBar view={view} onChange={changeView} summary={summaryText} stockShown={stockFilterShown(result, view)} />");
+    expect(sortBar).toBeGreaterThan(-1);
+    expect(sortBar).toBeLessThan(screen.indexOf("<YourPiece image={yourPiece} />"));
+    // Refusé : plus de rendu séparé sous la barre.
+    expect(screen).not.toContain("<InStockOnlyToggle");
     expect(screen).toContain("changeView({ ...view, withPriceOnly: false, inStockOnly: false })");
   });
 });
