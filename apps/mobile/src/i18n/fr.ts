@@ -552,7 +552,7 @@ export const fr = {
   // pièce s'entoure au doigt, ou à la souris sur un ordinateur. Textes à valider.
   targeting: {
     title: "Entourez la pièce",
-    caption: "Seule la zone entourée sera analysée. Pour corriger, entourez à nouveau la pièce.",
+    caption: "La recherche porte sur la zone que vous entourez.",
     // Moment d'une vidéo choisi après l'analyse d'un lien : le cadre de l'IA est déjà tracé.
     aiCaption: "L'IA a entouré la pièce. Lancez la recherche, ou entourez-la vous-même pour corriger.",
     // Consigne avant le premier tracé.

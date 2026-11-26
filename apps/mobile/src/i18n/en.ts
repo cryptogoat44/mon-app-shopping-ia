@@ -516,7 +516,7 @@ export const en: Catalog = {
   },
   targeting: {
     title: "Circle the piece",
-    caption: "Only the circled area will be analyzed. To correct it, circle the piece again.",
+    caption: "The search covers the area you circle.",
     aiCaption: "The AI has circled the piece. Start the search, or circle it yourself to correct it.",
     instruction: {
       finger: "Circle the piece with your finger",
