@@ -148,11 +148,26 @@ describe("le ruban en tranches", () => {
     }
   });
 
-  it("tranches à pas égal d'opacité : d'une tranche à la suivante, jamais un saut de plus de deux pas", () => {
+  it("tranches à pas égal d'opacité : sur un tracé long, d'une tranche à la suivante, jamais un saut de plus de deux pas", () => {
     for (const layer of powderLayers()) {
       const paths = powderBands(trail, layer);
       for (let index = 1; index < paths.length; index += 1) expect(paths[index].opacity - paths[index - 1].opacity).toBeLessThanOrEqual((2 * layer.alpha) / layer.bands + 1e-9);
     }
+  });
+
+  /** Geste très court (9 points) : l'écart peut dépasser deux pas (le commentaire de powderBands le dit), mais les tranches restent rangées de la plus pâle à la plus vive, sans dépasser l'éclat de la tête. */
+  const ordered = (paths: readonly { opacity: number }[], alpha: number) =>
+    paths.every((path, index) => path.opacity > 0 && path.opacity <= alpha + 1e-9 && (index === 0 || path.opacity > paths[index - 1].opacity));
+  const shortTrail = Array.from({ length: 9 }, (_, index) => ({ x: 100 + index * 3, y: 100 }));
+
+  it("permis : sur un geste très court, des tranches rangées de la plus pâle à la plus vive", () => {
+    for (const layer of powderLayers()) expect(ordered(powderBands(shortTrail, layer), layer.alpha)).toBe(true);
+  });
+
+  it("refusé : les mêmes tranches dans le désordre", () => {
+    const paths = powderBands(shortTrail, POWDER.core);
+    expect(paths.length).toBeGreaterThan(1);
+    expect(ordered([...paths].reverse(), POWDER.core.alpha)).toBe(false);
   });
 
   it("rien à dessiner pour un seul point", () => {
@@ -296,9 +311,10 @@ describe("la lumière qui reste après le lâcher", () => {
     expect(maskGray(2)).toBe("#FFFFFF");
   });
 
-  /** Bord sans marche visible : au moins 6 anneaux, du plus large au plus fin, et jamais plus de 12 % de voile d'un anneau à l'autre (ni depuis le voile plein). */
+  /** Bord sans marche visible : au moins 6 anneaux, du plus large au plus fin, et jamais plus de 12 % de voile d'un anneau à l'autre (ni depuis le voile plein, ni du dernier anneau au clair du dedans). */
   const feathered = (rings: readonly { width: number; level: number }[]) =>
     rings.length >= 6 &&
+    rings[rings.length - 1].level <= 0.12 &&
     rings.every((ring, index) => {
       const previous = index === 0 ? { width: Infinity, level: 1 } : rings[index - 1];
       return ring.width < previous.width && ring.level < previous.level && previous.level - ring.level <= 0.12 && ring.level > 0;
@@ -310,6 +326,10 @@ describe("la lumière qui reste après le lâcher", () => {
 
   it("refusé : les deux anneaux d'avant (marches de 30 % de voile)", () => {
     expect(feathered([{ width: 14, level: 0.7 }, { width: 7, level: 0.4 }])).toBe(false);
+  });
+
+  it("refusé : des anneaux à pas fin qui s'arrêtent à 30 % de voile (marche au bord même de la forme)", () => {
+    expect(feathered(MASK.rings.slice(0, -2))).toBe(false);
   });
 
   /** Un bord lumineux doux et fin : des filets du plus large et pâle au plus fin, aucun au-delà de 20 % ni plus large que 16 pt. */
