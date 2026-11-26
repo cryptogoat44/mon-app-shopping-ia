@@ -4,10 +4,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { createAuthorizer, readConfig } from "../src/config.js";
 import { ERROR_CODES, ERROR_STATUS, LIMITS } from "../src/contract.js";
-import { classifyFfmpegError, decodePlan, ffmpegArgs, parseDurationLine, parseShowinfoLine } from "../src/ffmpeg.js";
-import { buildBody } from "../src/job.js";
+import { momentField } from "../src/app.js";
+import { classifyFfmpegError, decodePlan, ffmpegArgs, momentArgs, momentStart, parseDurationLine, parseShowinfoLine } from "../src/ffmpeg.js";
+import { buildBody, momentTime } from "../src/job.js";
 import { splitJpegStream } from "../src/jpeg.js";
-import { MIN_SHARPNESS, scoreFrame, selectFrames } from "../src/selection.js";
+import { MIN_SHARPNESS, pickMoment, scoreFrame, selectFrames } from "../src/selection.js";
 import { acceptedVideoUrl, isAcceptableMediaUrl, isPublicDomainName } from "../src/urls.js";
 import { DOWNLOAD_FALLBACK_FORMATS, chooseFormat, classifyYtDlpError, downloadError, videoInfoFrom, ytDlpArgs, ytDlpDownloadArgs } from "../src/ytdlp.js";
 
@@ -350,6 +351,35 @@ describe("ffmpeg : arguments et lecture de sa sortie d'erreur", () => {
     assert.ok(!ffmpegArgs({ input: { url: "pipe:0", protocolWhitelist: "pipe" }, mode: "full", stepSeconds: 1 }).includes("-rw_timeout"));
   });
 
+  it("image du moment : -ss AVANT -i, 1 s décodée en entier (jamais -skip_frame ni select), 32 images au plus, mêmes protections et sorties", () => {
+    const args = momentArgs({ input, atSeconds: 3.2 });
+    const at = (/** @type {string} */ flag) => args[args.indexOf(flag) + 1];
+    // Permis : recherche placée avant l'entrée (rapide puis exacte), fenêtre d'une seconde.
+    assert.ok(args.indexOf("-ss") >= 0 && args.indexOf("-ss") < args.indexOf("-i"));
+    assert.equal(at("-ss"), "2.7");
+    assert.equal(at("-t"), "1");
+    assert.deepEqual(args.flatMap((arg, index) => (arg === "-frames:v" ? [args[index + 1]] : [])), ["32", "32"]);
+    assert.equal(at("-protocol_whitelist"), "http,tcp");
+    assert.equal(at("-f"), "mp4");
+    assert.equal(at("-i"), input.url);
+    assert.equal(at("-q:v"), "2");
+    assert.equal(at("-threads"), "1");
+    assert.ok(args.includes("-rw_timeout"));
+    assert.ok(at("-filter_complex").startsWith("[0:v:0]showinfo,split=2[big][small]"));
+    assert.ok(at("-filter_complex").includes("min(1280,iw)"));
+    const outputs = args.filter((arg) => /^pipe:|^\/|\.(?:jpe?g|png)$/i.test(arg));
+    assert.deepEqual(outputs, ["pipe:1", "pipe:3"]);
+    // Refusé : ni images clés seules, ni filtre select (toutes les images de la fenêtre).
+    assert.ok(!args.includes("-skip_frame"));
+    assert.ok(!args.some((arg) => arg.includes("select=")));
+    // Départ jamais avant 0.
+    assert.equal(momentStart(0.2), 0);
+    assert.equal(momentStart(90), 89.5);
+    assert.equal(momentArgs({ input, atSeconds: 0 })[momentArgs({ input, atSeconds: 0 }).indexOf("-ss") + 1], "0");
+    // ffmpegArgs inchangé : jamais de -ss.
+    assert.ok(!ffmpegArgs({ input, mode: "full", stepSeconds: 0.5 }).includes("-ss"));
+  });
+
   it("décodage complet pour une vidéo courte, images clés au-delà de ≈ 45 s, durée inconnue : images clés", () => {
     assert.deepEqual(decodePlan(8, 30), { mode: "full", stepSeconds: 0.5 });
     assert.deepEqual(decodePlan(30, 30), { mode: "full", stepSeconds: 0.75 });
@@ -457,5 +487,71 @@ describe("choix des images", () => {
     assert.deepEqual(Object.keys(body.frames[0]).sort(), ["height", "jpegBase64", "timeSeconds", "width"]);
     assert.equal(stats.frames, 16);
     assert.equal(stats.candidates, 40);
+  });
+});
+
+describe("image du moment : champ atSeconds, instant borné, image choisie", () => {
+  it("atSeconds : absent → mode habituel ; nombre de 0 à 90 permis ; texte, négatif, plus de 90, NaN, infini, null refusés", () => {
+    assert.equal(momentField(undefined, 90), undefined);
+    for (const value of [0, 3.2, 89.999, 90]) assert.equal(momentField(value, 90), value);
+    for (const value of [-1, -0.001, 90.001, 91, "3", NaN, Infinity, null, true, [3], { at: 3 }]) {
+      assert.throws(() => momentField(value, 90), (/** @type {any} */ error) => error.code === "bad_request" && error.detail === "at_refused", String(value));
+    }
+  });
+
+  it("instant au-delà de la fin : la dernière image (0,05 s avant la fin) ; durée inconnue : l'instant demandé", () => {
+    assert.equal(momentTime(3.2, 7), 3.2);
+    assert.equal(momentTime(9, 7), 6.95);
+    assert.equal(momentTime(0, 7), 0);
+    assert.equal(momentTime(5, null), 5);
+    assert.equal(momentTime(0.02, 0.03), 0);
+  });
+
+  /** Petite image à damier (nette) ou unie. */
+  function pixels(/** @type {number} */ hue, /** @type {"sharp" | "flat"} */ kind) {
+    const rgb = new Uint8Array(96 * 96 * 3);
+    for (let i = 0; i < 96 * 96; i += 1) {
+      const dark = kind === "sharp" && ((i % 96) + Math.floor(i / 96)) % 2 === 0 ? 0.6 : 1;
+      rgb[i * 3] = Math.round(((hue * 37) % 256) * dark);
+      rgb[i * 3 + 1] = Math.round(((hue * 91 + 60) % 256) * dark);
+      rgb[i * 3 + 2] = Math.round(((hue * 53 + 120) % 256) * dark);
+    }
+    return rgb;
+  }
+  const frame = (/** @type {number} */ timeSeconds, /** @type {"sharp" | "flat"} */ kind = "sharp") => ({ timeSeconds, ...scoreFrame(pixels(5, kind)) });
+  const window = (/** @type {number} */ start, /** @type {(index: number) => "sharp" | "flat"} */ kind) => Array.from({ length: 30 }, (_, index) => frame(Math.round((start + index / 30) * 1000) / 1000, kind(index)));
+
+  it("permis : la plus proche de l'instant", () => {
+    const candidates = window(2.7, () => "sharp");
+    assert.ok(Math.abs(pickMoment(candidates, 3.2).timeSeconds - 3.2) < 1 / 60);
+    assert.equal(pickMoment(candidates, 0).timeSeconds, 2.7);
+  });
+
+  it("la plus proche est floue (sous 40 % de la meilleure) : la plus proche parmi les nettes", () => {
+    // Les images de 3,1 à 3,3 s sont unies (flou de mouvement) : la plus proche nette est 3,333 ou 3,067.
+    const candidates = window(2.7, (index) => (index >= 12 && index <= 18 ? "flat" : "sharp"));
+    const chosen = pickMoment(candidates, 3.2);
+    assert.ok(chosen.sharpness >= MIN_SHARPNESS);
+    assert.ok(Math.abs(chosen.timeSeconds - 3.2) <= 0.14, String(chosen.timeSeconds));
+  });
+
+  it("refusé : seconde toute unie (noir, fondu) → blank_moment ; aucune image → no_frames", () => {
+    assert.throws(() => pickMoment(window(2.7, () => "flat"), 3.2), (/** @type {any} */ error) => error.code === "unsupported" && error.detail === "blank_moment");
+    assert.throws(() => pickMoment([], 3.2), (/** @type {any} */ error) => error.code === "unavailable" && error.detail === "no_frames");
+  });
+
+  it("corps de la réponse en mode « moment » : le même contrat, UNE seule image, mode noté", () => {
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+    const candidates = window(2.7, () => "sharp").map((candidate) => ({ ...candidate, jpeg, width: 720, height: 1280 }));
+    const stats = /** @type {any} */ ({});
+    const body = buildBody(7, { candidates, durationSeconds: 7 }, stats, 3.2);
+    assert.equal(body.durationSeconds, 7);
+    assert.equal(body.frames.length, 1);
+    assert.deepEqual(Object.keys(body.frames[0]).sort(), ["height", "jpegBase64", "timeSeconds", "width"]);
+    assert.ok(Math.abs(body.frames[0].timeSeconds - 3.2) < 1 / 60);
+    assert.equal(stats.frames, 1);
+    assert.equal(stats.candidates, 30);
+    // Sans instant : le choix habituel (plusieurs images).
+    assert.ok(buildBody(7, { candidates, durationSeconds: 7 }, {}).frames.length > 1);
   });
 });

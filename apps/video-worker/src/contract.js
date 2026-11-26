@@ -9,6 +9,14 @@
 // - 200 : {"durationSeconds", "frames": [{"timeSeconds", "width", "height",
 //   "jpegBase64"}]}, de 6 à 16 images distinctes et nettes, dans l'ordre du
 //   temps, 1 280 px au plus sur le grand côté, JPEG peu compressé (-q:v 2) ;
+// - image du moment (retours du build 3) : champ FACULTATIF "atSeconds",
+//   nombre de 0 à 90 (LIMITS.maxVideoSeconds), sinon 400 bad_request (détail
+//   « at_refused ») ; mode « moment » : toutes les images de la seconde
+//   autour de cet instant sont décodées (décodage complet, jamais les seules
+//   images clés), et la réponse garde la même forme avec UNE SEULE image, la
+//   plus proche de l'instant parmi les nettes (un instant au-delà de la fin
+//   prend la dernière image) ; fenêtre unie (noir, fondu) : 422 unsupported
+//   (détail « blank_moment »). Sans "atSeconds", rien ne change ;
 // - erreur : {"error": code}, avec le statut HTTP de ERROR_STATUS ;
 // - GET /health, sans secret : {"status": "ok", "ytDlp", "ffmpeg"}.
 

@@ -89,6 +89,36 @@ describe("délai global", () => {
     }
   });
 
+  it("image du moment : même délai de 25 s (ici 1,5 s), ffmpeg tué, place rendue", async () => {
+    const service = await startWorker({ limits: { requestDeadlineMs: 1_500 } });
+    try {
+      const result = await service.frames({ ...tiktok("ffslow"), atSeconds: 2 });
+      assert.equal(result.status, 504);
+      assert.deepEqual(result.body, { error: "timeout" });
+      await sleep(200);
+      const { pid, args } = service.records("ffmpeg").at(-1);
+      assert.ok(args.includes("-ss"));
+      assert.equal(isAlive(pid), false, "ffmpeg tué");
+      assert.equal(service.worker.limiter.active, 0);
+    } finally {
+      await service.stop();
+    }
+  });
+
+  it("image du moment : même file d'attente (2 à la fois, file pleine → 503 busy)", async () => {
+    const service = await startWorker({ limits: { maxConcurrentJobs: 1, maxQueuedJobs: 0, maxQueueWaitMs: 300 } });
+    try {
+      const results = await Promise.all([service.frames(tiktok("hold")), sleep(50).then(() => service.frames({ ...tiktok("ok8"), atSeconds: 3 }))]);
+      assert.deepEqual(
+        results.map((result) => result.status),
+        [200, 503]
+      );
+      assert.equal((await service.frames({ ...tiktok("ok8"), atSeconds: 3 })).status, 200);
+    } finally {
+      await service.stop();
+    }
+  });
+
   it("la personne en face raccroche : le programme est tué et la place rendue", async () => {
     const service = await startWorker();
     try {

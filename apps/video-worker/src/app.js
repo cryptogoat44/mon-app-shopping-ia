@@ -93,6 +93,8 @@ export function createWorker(options) {
     let releaseImages = null;
     /** @type {string | undefined} */
     let platform;
+    // Présence seulement du champ atSeconds dans le journal, jamais sa valeur.
+    let moment = false;
     let result = "ok";
     let detail = "ok";
     let status = 200;
@@ -103,8 +105,12 @@ export function createWorker(options) {
       const url = isRecord(body) ? acceptedVideoUrl(body.url, body.platform, limits.maxUrlLength) : null;
       if (!url || !isRecord(body)) throw new WorkerError("bad_request", "url_refused");
       platform = String(body.platform);
+      // Image du moment (retours du build 3) : `atSeconds` facultatif ; absent,
+      // rien ne change. Refusé AVANT toute place prise dans le limiteur.
+      const atSeconds = momentField(body.atSeconds, limits.maxVideoSeconds);
+      moment = atSeconds !== undefined;
       releaseSlot = await limiter.acquire(controller.signal);
-      const job = await extractFrames({ url, platform }, { env: childEnv, signal: controller.signal, deadlineAt, tools, stats });
+      const job = await extractFrames({ url, platform, atSeconds }, { env: childEnv, signal: controller.signal, deadlineAt, tools, stats });
       releaseImages = job.release;
       if (controller.signal.aborted) throw new WorkerError("timeout", "deadline");
       send(response, 200, job.body);
@@ -127,6 +133,7 @@ export function createWorker(options) {
         detail,
         status,
         platform,
+        moment,
         ms: Date.now() - startedAt,
         attempts: stats.attempts,
         ytDlpMs: stats.ytDlpMs,
@@ -269,6 +276,19 @@ function send(response, status, body, extra = {}) {
   if (extra.close) headers.connection = "close";
   response.writeHead(status, headers);
   response.end(extra.head ? undefined : json);
+}
+
+/**
+ * Champ facultatif `atSeconds` : absent → undefined ; sinon un nombre fini
+ * de 0 à `maxSeconds` (un texte, NaN ou l'infini sont refusés).
+ * @param {unknown} value
+ * @param {number} maxSeconds
+ * @returns {number | undefined}
+ */
+export function momentField(value, maxSeconds) {
+  if (value === undefined) return undefined;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > maxSeconds) throw new WorkerError("bad_request", "at_refused");
+  return value;
 }
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */

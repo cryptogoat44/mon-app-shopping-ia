@@ -145,6 +145,74 @@ describe("POST /frames : réponse", () => {
   });
 });
 
+describe("POST /frames : image du moment (champ atSeconds)", () => {
+  it("permis : UNE image, la plus proche de l'instant, même contrat ; ffmpeg se place avant l'entrée et décode tout", async () => {
+    const result = await service.frames({ ...tiktok("ok8"), atSeconds: 3.2 });
+    assert.equal(result.status, 200);
+    assert.deepEqual(Object.keys(result.body).sort(), ["durationSeconds", "frames"]);
+    assert.equal(result.body.durationSeconds, 8);
+    assert.equal(result.body.frames.length, 1);
+    const [frame] = result.body.frames;
+    assert.deepEqual(Object.keys(frame).sort(), ["height", "jpegBase64", "timeSeconds", "width"]);
+    // Le point de départ (2,7 s) est ajouté aux instants de showinfo, qui repartent de 0
+    // (sans lui, l'image serait vers 0,5 s). Le faux ffmpeg change de plan toutes les
+    // 3 images, d'inégale netteté : l'image rendue est à quelques images près de 3,2 s.
+    assert.ok(Math.abs(frame.timeSeconds - 3.2) <= 0.1, String(frame.timeSeconds));
+    assert.notEqual(sceneOf(fakeIndexOf(frame.jpegBase64)), null, "ni noire ni floue");
+    const ffmpeg = service.records("ffmpeg").at(-1);
+    assert.ok(ffmpeg.args.indexOf("-ss") < ffmpeg.args.indexOf("-i"));
+    assert.equal(ffmpeg.args[ffmpeg.args.indexOf("-ss") + 1], "2.7");
+    assert.ok(!ffmpeg.args.includes("-skip_frame"));
+  });
+
+  it("longue vidéo (80 s) : décodage complet autour du moment, jamais les seules images clés", async () => {
+    const result = await service.frames({ ...tiktok("long80"), atSeconds: 60 });
+    assert.equal(result.status, 200);
+    assert.equal(result.body.frames.length, 1);
+    assert.ok(Math.abs(result.body.frames[0].timeSeconds - 60) < 0.1);
+    assert.ok(!service.records("ffmpeg").at(-1).args.includes("-skip_frame"));
+  });
+
+  it("instant au-delà de la fin : la dernière image, pas une erreur", async () => {
+    const result = await service.frames({ ...tiktok("ok8"), atSeconds: 9 });
+    assert.equal(result.status, 200);
+    assert.ok(result.body.frames[0].timeSeconds > 7.5 && result.body.frames[0].timeSeconds <= 8, String(result.body.frames[0].timeSeconds));
+  });
+
+  it("refusé : seconde toute noire → 422 unsupported (blank_moment)", async () => {
+    const result = await service.frames({ ...tiktok("black8"), atSeconds: 3 });
+    assert.equal(result.status, 422);
+    assert.deepEqual(result.body, { error: "unsupported" });
+    assert.equal(service.logs.at(-1)?.detail, "blank_moment");
+  });
+
+  it("refusé : atSeconds négatif, plus de 90, texte, NaN (null en JSON) → 400, sans place prise ni programme lancé", async () => {
+    const launched = service.records("yt-dlp").length;
+    for (const atSeconds of [-1, 91, "3", null]) {
+      const result = await service.frames({ ...tiktok("ok8"), atSeconds });
+      assert.equal(result.status, 400, String(atSeconds));
+      assert.deepEqual(result.body, { error: "bad_request" });
+      assert.equal(service.logs.at(-1)?.detail, "at_refused");
+    }
+    // NaN n'existe pas en JSON : écrit à la main, le corps est illisible (400 aussi).
+    assert.equal((await service.frames(`{"url":"${tiktok("ok8").url}","platform":"tiktok","atSeconds":NaN}`)).status, 400);
+    assert.equal(service.records("yt-dlp").length, launched);
+    assert.equal(service.worker.limiter.active, 0);
+  });
+
+  it("journal : la présence du moment seulement (moment: true), jamais l'instant demandé ni l'adresse", async () => {
+    await service.frames({ ...tiktok("ok8"), atSeconds: 3.217 });
+    const entry = service.logs.at(-1);
+    assert.equal(entry?.moment, true);
+    assert.equal(entry?.mode, "moment");
+    assert.equal(entry?.frames, 1);
+    const text = JSON.stringify(service.logs);
+    for (const forbidden of ["3.217", "3.2", "tiktok.com", "7000000000000000001"]) assert.ok(!text.includes(forbidden), forbidden);
+    await service.frames(tiktok("ok8"));
+    assert.equal(service.logs.at(-1)?.moment, false);
+  });
+});
+
 describe("programmes lancés : rien sur le disque, adresse du fichier en https, en-têtes repris", () => {
   it("yt-dlp : -J, sans cache ni fichier partiel, l'adresse canonique après « -- », environnement sans le secret", async () => {
     await service.frames(tiktok("ok8"));
