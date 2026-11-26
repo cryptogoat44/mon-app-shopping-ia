@@ -25,6 +25,7 @@ import { memberListRoute } from "@/lib/member-lists";
 import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
+import { useTabBarSpace } from "@/lib/use-tab-bar-space";
 
 function chunk<T>(items: T[], size: number): T[][] {
   const rows: T[][] = [];
@@ -34,6 +35,10 @@ function chunk<T>(items: T[], size: number): T[][] {
 
 export default function ProfileScreen() {
   const router = useRouter();
+  // Retours du build 3 (point 5) : la barre flotte au-dessus des listes du profil (chargement,
+  // Envies, Vault, Lifestyle) ; leur dernière rangée remonte au-dessus d'elle.
+  const tabBarSpace = useTabBarSpace();
+  const bottomSpace = { paddingBottom: tabBarSpace };
   const navigation = useNavigation();
   const { profile, refreshProfile } = useAuth();
   const [items, setItems] = useState<VaultItem[]>([]);
@@ -237,7 +242,7 @@ export default function ProfileScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
       <View style={styles.nav}>
         <Text style={styles.navHandle}>@{profile?.username}</Text>
         <Pressable onPress={() => router.push("/settings")} hitSlop={12} style={styles.navButton} accessibilityRole="button" accessibilityLabel={t.settings.title}>
@@ -246,7 +251,7 @@ export default function ProfileScreen() {
       </View>
 
       {loading ? (
-        <ScrollView>
+        <ScrollView contentContainerStyle={bottomSpace} scrollIndicatorInsets={{ bottom: tabBarSpace }}>
           {profileHeader(false)}
           <View style={styles.grid}>
             {[0, 1, 2].map((i) => (
@@ -258,12 +263,13 @@ export default function ProfileScreen() {
           </View>
         </ScrollView>
       ) : segment === "wishlist" ? (
-        <WishlistPanel news={news} header={profileHeader(false)} />
+        <WishlistPanel news={news} header={profileHeader(false)} bottomSpace={tabBarSpace} />
       ) : segment === "vault" ? (
         <FlatList
           data={chunk(items, 3)}
           keyExtractor={(row) => row.map((item) => item.id).join("-")}
-          contentContainerStyle={vaultError || isEmptyVault ? styles.emptyContent : styles.gridContent}
+          contentContainerStyle={[vaultError || isEmptyVault ? styles.emptyContent : styles.gridContent, bottomSpace]}
+          scrollIndicatorInsets={{ bottom: tabBarSpace }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
           renderItem={({ item: row }) => (
             <View style={styles.gridRow}>
@@ -330,7 +336,8 @@ export default function ProfileScreen() {
         />
       ) : (
         <ScrollView
-          contentContainerStyle={isEmptyLifestyle || lifestyleError ? styles.emptyContent : null}
+          contentContainerStyle={[isEmptyLifestyle || lifestyleError ? styles.emptyContent : null, bottomSpace]}
+          scrollIndicatorInsets={{ bottom: tabBarSpace }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
         >
           {profileHeader(false)}
@@ -448,7 +455,6 @@ const styles = themedStyles(() => ({
   grid: {
     paddingHorizontal: space.lg,
     paddingTop: space.md,
-    paddingBottom: space.xxl,
     flexDirection: "row",
     flexWrap: "wrap",
     // 3 colonnes de 31 % : un écart horizontal de 16 points faisait passer
@@ -462,7 +468,6 @@ const styles = themedStyles(() => ({
   gridContent: {
     paddingHorizontal: space.lg,
     paddingTop: space.md,
-    paddingBottom: space.xxl,
     maxWidth: 640,
     alignSelf: "center",
     width: "100%",

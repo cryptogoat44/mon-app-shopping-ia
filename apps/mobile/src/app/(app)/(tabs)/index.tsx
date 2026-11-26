@@ -34,6 +34,7 @@ import { moveIntoCaptureCache } from "@/lib/visual-search-intake";
 import { useSearchLimits } from "@/lib/use-search-limits";
 import { useFirstRunGuide } from "@/lib/use-first-run-guide";
 import { themedStyles } from "@/theme/themed-styles";
+import { useTabBarSpace } from "@/lib/use-tab-bar-space";
 
 /** Dernière vidéo de la galerie (app iPhone, en option), relue à chaque retour
  * sur Spotter. L'accès aux photos n'est demandé à iOS qu'après un « oui ». */
@@ -313,6 +314,8 @@ export default function SpotterScreen() {
   useSharedItemOpener(entries.openShared, entries.busy === null);
   // Lot « recherche confiance » : le guide de la première recherche, une seule fois par appareil, pour un historique vide.
   const guide = useFirstRunGuide(recentLoaded ? history.empty : null);
+  // Retours du build 3 (point 5) : la barre flotte au-dessus de la liste ; la dernière rangée remonte au-dessus d'elle.
+  const tabBarSpace = useTabBarSpace();
 
   const reloadHistory = history.reload;
   useFocusEffect(
@@ -395,7 +398,7 @@ export default function SpotterScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
       <FlatList
         ref={list}
         data={history.entries}
@@ -406,7 +409,8 @@ export default function SpotterScreen() {
         ListFooterComponent={<HistoryFooter history={history} />}
         onEndReached={history.loadMore}
         onEndReachedThreshold={0.5}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace }]}
+        scrollIndicatorInsets={{ bottom: tabBarSpace }}
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
@@ -417,7 +421,7 @@ export default function SpotterScreen() {
 
 const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
-  content: { paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
+  content: { paddingHorizontal: space.lg, paddingTop: space.md, maxWidth: 480, alignSelf: "center", width: "100%" },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, lineHeight: serifLineHeight.display, letterSpacing: serifDisplayLetterSpacing, color: color.encre },
   lead: { fontSize: font.secondary, color: color.acier, marginTop: space.xs, lineHeight: 21 },
   feedback: { fontSize: font.caption, marginTop: space.sm, lineHeight: 18 },

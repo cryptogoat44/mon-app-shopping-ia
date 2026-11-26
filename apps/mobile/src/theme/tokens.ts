@@ -38,6 +38,7 @@ export interface Palette {
   surInactif: string; // texte d'un bouton désactivé (AA sur inactif)
   vertAnglais: string; // marque : disque du « + » de la barre du bas (vert british racing du logo), identique dans les deux thèmes
   dorure: string; // marque : cercle fin et signe du « + » de la barre du bas (or du logo), identique dans les deux thèmes
+  barre: string; // fond de la barre du bas flottante : la surface à 94 %, très très légèrement translucide (retours du build 3, point 5 ; réglable entre 0,90 et 0,96)
 }
 
 export const lightPalette: Palette = {
@@ -65,6 +66,7 @@ export const lightPalette: Palette = {
   surInactif: "#57575C", // 5,5:1 sur inactif
   vertAnglais: "#004225", // 11,2:1 sur porcelaine
   dorure: "#D4AF37", // 5,5:1 sur vertAnglais
+  barre: "rgba(255, 255, 255, 0.94)", // la surface #FFFFFF à 94 %
 };
 
 export const darkPalette: Palette = {
@@ -92,6 +94,7 @@ export const darkPalette: Palette = {
   surInactif: "#B3AFA8", // 5,9:1 sur inactif
   vertAnglais: "#004225", // le cercle doré le détache du fond (8,8:1 sur porcelaine)
   dorure: "#D4AF37", // 5,5:1 sur vertAnglais
+  barre: "rgba(30, 28, 26, 0.94)", // la surface #1E1C1A à 94 %
 };
 
 export type ColorScheme = "light" | "dark";

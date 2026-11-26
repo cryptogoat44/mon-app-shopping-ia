@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { Animated, PanResponder, Platform, Pressable, StyleSheet, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from "react-native";
+import { Animated, PanResponder, Platform, Pressable, StyleSheet, View, useWindowDimensions, type LayoutChangeEvent, type StyleProp, type ViewStyle } from "react-native";
 import * as Haptics from "expo-haptics";
 import type { BottomTabBarProps } from "expo-router/tabs";
-import { color, radius } from "@/theme/tokens";
+import { color, getActiveScheme, radius } from "@/theme/tokens";
 import { themedStyles } from "@/theme/themed-styles";
 import { isSlide, liftedAbove, slideTarget, tabIndexAt } from "@/lib/tab-bar-gesture";
+import { FLOATING_BAR, barBottom, barFrame } from "@/lib/tab-bar-metrics";
 import { useReduceMotion } from "@/lib/use-reduce-motion";
+import { useReduceTransparency } from "@/lib/use-reduce-transparency";
 
 // Barre d'onglets maison (retours du build 2, point 8 : « comme sur
 // Instagram… on peut laisser son doigt et ça glisse d'un onglet à un
@@ -13,9 +15,9 @@ import { useReduceMotion } from "@/lib/use-reduce-motion";
 // d'expo-router, lus dans les options des écrans ((tabs)/_layout.tsx).
 // - Toucher un onglet : comme avant (l'événement tabPress part, le « + »
 //   l'intercepte et ouvre la publication).
-// - Poser le doigt et glisser de côté (TAP_SLOP points ou plus) : une
-//   pastille douce suit le doigt, une légère vibration à chaque nouvel
-//   onglet (iPhone seulement) ; lever le doigt ouvre l'onglet dessous.
+// - Poser le doigt et glisser de côté (TAP_SLOP points ou plus) : la
+//   pastille suit le doigt, une légère vibration à chaque nouvel onglet
+//   (iPhone seulement) ; lever le doigt ouvre l'onglet dessous.
 //   Le glissé saute le « + » : il ne s'ouvre qu'au toucher.
 // Seulement PanResponder et Animated de React Native (ni gesture-handler,
 // ni reanimated, ni pager : aucun n'est initialisé dans l'app). Avec
@@ -23,10 +25,18 @@ import { useReduceMotion } from "@/lib/use-reduce-motion";
 // glisser. VoiceOver : chaque bouton garde le rôle d'avant (« bouton » sur
 // iPhone, comme la barre d'expo-router, « onglet » ailleurs), son état et
 // son libellé ; le double-toucher l'ouvre, le glissé n'est qu'un plus.
+//
+// Retours du build 3, point 5 (« quelque chose comme Instagram… légèrement
+// transparent mais très très légèrement et pas collé aux bords de
+// l'iPhone ») : une pilule qui flotte au-dessus du contenu, détachée des
+// bords (mesures dans lib/tab-bar-metrics.ts), fond à 94 % (plein avec
+// « Réduire la transparence »), icônes seules (le nom de l'onglet reste pour
+// VoiceOver et pour la loupe d'iOS du grand texte), et une pastille
+// discrète, toujours là, derrière l'onglet ouvert. Aucune vue pleine
+// largeur : à côté de la pilule, c'est le contenu qui reçoit le toucher.
+// Les listes des onglets gardent la place qu'il faut en bas (lib/use-tab-bar-space.ts).
 
-// Sur le téléphone, mêmes mesures que la barre d'expo-router (49 points de
-// haut plus la zone du bas, icône 25 dans un cadre de 31 × 28).
-const BAR_HEIGHT = 49;
+// Icône 25 dans un cadre de 31 × 28 (mêmes mesures que la barre d'expo-router).
 const ICON_SIZE = 25;
 const useNativeDriver = Platform.OS !== "web";
 
@@ -34,6 +44,8 @@ type Measure = { x: number; y: number; width: number };
 
 export function TabBar({ state, descriptors, navigation, insets, tapOnlyRoutes }: BottomTabBarProps & { tapOnlyRoutes: readonly string[] }) {
   const reduceMotion = useReduceMotion();
+  const reduceTransparency = useReduceTransparency();
+  const window = useWindowDimensions();
   const routes = state.routes;
   const count = routes.length;
   // Les places qui ne s'ouvrent qu'au toucher, jamais au glissé (le « + » de la publication).
@@ -44,6 +56,8 @@ export function TabBar({ state, descriptors, navigation, insets, tapOnlyRoutes }
   const [rowWidth, setRowWidth] = useState(0);
   const pillX = useRef(new Animated.Value(0)).current;
   const pillOpacity = useRef(new Animated.Value(0)).current;
+  // La pastille a-t-elle déjà été posée une première fois (sans glisser depuis le bord) ?
+  const pillPlaced = useRef(false);
   // Onglet sous le doigt pendant un glissé (null : pas de glissé en cours).
   const hovered = useRef<number | null>(null);
   // Site : le clic du navigateur arrive aussi après un glissé à la souris ;
@@ -109,8 +123,9 @@ export function TabBar({ state, descriptors, navigation, insets, tapOnlyRoutes }
     const index = hovered.current;
     hovered.current = null;
     slidUntil.current = Date.now() + 300;
-    if (latest.current.reduceMotion) pillOpacity.setValue(0);
-    else Animated.timing(pillOpacity, { toValue: 0, duration: 160, useNativeDriver }).start();
+    // Retours du build 3 : la pastille ne s'efface plus, elle revient derrière l'onglet ouvert
+    // (puis suit le nouvel onglet s'il s'ouvre, voir plus bas).
+    showPill(latest.current.state.index);
     if (!open || index === null) return;
     // Doigt levé bien au-dessus de la barre, dans le contenu : rien ne s'ouvre.
     if (releaseY !== undefined && liftedAbove(releaseY, measure.current.y)) return;
@@ -136,22 +151,36 @@ export function TabBar({ state, descriptors, navigation, insets, tapOnlyRoutes }
     })
   ).current;
 
-  // Changement d'écran par ailleurs (lien, notification) pendant un glissé : rien ne reste affiché.
+  // La pastille permanente : derrière l'onglet ouvert, hors glissé. Posée d'un coup la
+  // première fois (et quand la pilule change de largeur), puis elle suit l'onglet ouvert
+  // (ressort, ou saut avec « Réduire les animations ») ; jamais sur le « + ».
   useEffect(() => {
-    if (hovered.current === null) pillOpacity.setValue(0);
-  }, [state.index, pillOpacity]);
+    if (rowWidth <= 0 || hovered.current !== null) return;
+    if (!pillPlaced.current) {
+      pillPlaced.current = true;
+      pillX.setValue(state.index * (rowWidth / Math.max(1, count)));
+      pillOpacity.setValue(tapOnly.has(state.index) ? 0 : 1);
+      return;
+    }
+    showPill(state.index);
+    // showPill et tapOnly sont relus à chaque rendu (latest) ; seuls l'onglet ouvert et la largeur comptent ici.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.index, rowWidth, count, pillX, pillOpacity]);
 
-  const focusedOptions = descriptors[routes[state.index]?.key ?? ""]?.options ?? {};
   const pillWidth = rowWidth / Math.max(1, count);
+  const frame = barFrame(window.width, Math.max(insets.left, insets.right));
 
   return (
-    // Animated.View : tabBarStyle peut porter des valeurs animées.
-    <Animated.View
+    <View
       style={[
         styles.bar,
-        { height: BAR_HEIGHT + insets.bottom, paddingBottom: insets.bottom, paddingHorizontal: Math.max(insets.left, insets.right) },
-        // Les réglages de (tabs)/_layout.tsx : couleurs, et sur le site 62 de haut et 8 en bas.
-        focusedOptions.tabBarStyle,
+        reduceTransparency ? styles.barSolid : null,
+        {
+          bottom: barBottom(insets.bottom),
+          height: Platform.OS === "web" ? FLOATING_BAR.webHeight : FLOATING_BAR.height,
+          left: frame.left,
+          width: frame.width,
+        },
       ]}
     >
       <View ref={rowRef} style={styles.row} onLayout={onRowLayout} accessibilityRole="tablist" {...responder.panHandlers}>
@@ -167,17 +196,9 @@ export function TabBar({ state, descriptors, navigation, insets, tapOnlyRoutes }
           const options = descriptors[route.key]?.options ?? {};
           const focused = index === state.index;
           const tint = String(focused ? (options.tabBarActiveTintColor ?? color.encre) : (options.tabBarInactiveTintColor ?? color.acier));
+          // Plus de libellé affiché (icônes seules) : le nom de l'onglet sert à VoiceOver
+          // (tabBarAccessibilityLabel) et à la loupe d'iOS du grand texte (appui long).
           const title = typeof options.tabBarLabel === "string" ? options.tabBarLabel : (options.title ?? route.name);
-          const label =
-            typeof options.tabBarLabel === "function" ? (
-              options.tabBarLabel({ focused, color: tint, position: "below-icon", children: title })
-            ) : (
-              // iPhone : comme la barre d'origine, le libellé ne grossit pas ; un appui
-              // long avec le grand texte montre la loupe d'iOS (large content viewer).
-              <Text style={[styles.label, { color: tint }, options.tabBarLabelStyle]} numberOfLines={1} selectable={false} allowFontScaling={Platform.OS === "ios" ? false : undefined}>
-                {title}
-              </Text>
-            );
           return (
             <Pressable
               key={route.key}
@@ -200,24 +221,41 @@ export function TabBar({ state, descriptors, navigation, insets, tapOnlyRoutes }
                 {/* Pastille ronde, sans chiffre (Spotter qui attend un partage, Activité). */}
                 {options.tabBarBadge !== undefined ? <View style={[styles.badge, options.tabBarBadgeStyle as StyleProp<ViewStyle>]} /> : null}
               </View>
-              {label}
             </Pressable>
           );
         })}
       </View>
-    </Animated.View>
+    </View>
   );
 }
 
 const styles = themedStyles(() => ({
-  bar: { backgroundColor: color.porcelaine, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.filet },
+  // La pilule : position absolue (left, width, bottom et hauteur calculés au rendu), bouts
+  // entièrement arrondis, filet fin tout autour, fond très légèrement translucide (jeton `barre`).
+  // Ombre douce en clair seulement (en sombre elle ne se verrait pas : le filet suffit). Rien
+  // n'est coupé au bord (iOS couperait aussi l'ombre) : la pastille reste à l'intérieur.
+  bar: {
+    position: "absolute",
+    flexDirection: "row",
+    paddingHorizontal: 6,
+    borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: color.filet,
+    backgroundColor: color.barre,
+    ...(getActiveScheme() === "light"
+      ? { shadowColor: color.encre, shadowOpacity: 0.1, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 6 }
+      : null),
+  },
+  // « Réduire la transparence » (iPhone) : la pilule devient pleine.
+  barSolid: { backgroundColor: color.surface },
   row: { flex: 1, flexDirection: "row" },
-  item: { flex: 1, alignItems: "center", justifyContent: "flex-start", padding: 5 },
-  icon: { width: 31, height: 28, alignItems: "center", justifyContent: "center" },
-  label: { fontSize: 10, textAlign: "center" },
+  // Toute la hauteur de la pilule (60) et au moins 57 de large : bien plus que 44 × 44.
+  item: { flex: 1, alignItems: "center", justifyContent: "center" },
+  // Au moins 31 × 28 ; le disque du « + » (46) y tient sans être coupé.
+  icon: { minWidth: 31, minHeight: 28, alignItems: "center", justifyContent: "center" },
   badge: { position: "absolute", end: -3, top: -3, width: 9, height: 9, borderRadius: radius.full },
-  // La pastille qui suit le doigt : l'accent à 18 % derrière l'icône et le libellé
-  // (gris doux : 1,45:1 sur le fond clair, 1,66:1 sur le fond sombre, plus visible que l'ancien vert).
-  pillTrack: { position: "absolute", top: 2, bottom: 2, left: 0, paddingHorizontal: 6 },
-  pill: { flex: 1, borderRadius: radius.lg, backgroundColor: color.vert, opacity: 0.18 },
+  // La pastille de l'onglet ouvert (56 × 44, maquettes « Écrin ») : toujours là hors glissé,
+  // elle suit le doigt pendant le glissé. Couleur du filet : discrète dans les deux thèmes.
+  pillTrack: { position: "absolute", top: 0, bottom: 0, left: 0, alignItems: "center", justifyContent: "center" },
+  pill: { width: 56, maxWidth: "100%", height: 44, borderRadius: radius.full, backgroundColor: color.filet },
 }));
