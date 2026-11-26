@@ -145,6 +145,17 @@ describe("l'accueil de Spotter : une liste, l'historique en descendant", () => {
     expect(field).toContain("minWidth: size.touchTarget, minHeight: size.touchTarget");
   });
 
+  it("le champ à 320 pt sur le site : refusé, un champ qui ne peut pas rétrécir (croix poussée hors de l'écran) ; permis, minWidth 0 et loupe et croix fixes", () => {
+    const field = code("components/recent-searches.tsx");
+    const styleOf = (name: string) => field.match(new RegExp(`\\n  ${name}: \\{([^}]*)\\}`))?.[1] ?? "";
+    expect(styleOf("searchInput")).toContain("flex: 1");
+    expect(styleOf("searchInput")).toContain("minWidth: 0");
+    expect(styleOf("searchInput")).not.toMatch(/minWidth: [1-9]/);
+    expect(styleOf("searchIcon")).toContain("flexShrink: 0");
+    expect(styleOf("clearButton")).toContain("flexShrink: 0");
+    expect(field).toMatch(/<View style=\{styles\.searchIcon\}>\s*<SearchIcon /);
+  });
+
   it("chaque état sous la liste : chargement (dit à VoiceOver), aucune correspondance, échec avec « Réessayer », fin de l'historique, recherche indisponible", () => {
     const footer = home.slice(home.indexOf("function HistoryFooter("), home.indexOf("export default function SpotterScreen"));
     expect(footer).toContain("accessibilityLabel={t.retrouverPieces.historyLoading}");

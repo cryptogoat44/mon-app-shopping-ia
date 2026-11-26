@@ -55,7 +55,9 @@ export function RecentSearchTile({ entry, column, onOpen }: { entry: RecentSearc
 export function HistorySearchField({ value, onChangeText, onClear }: { value: string; onChangeText: (value: string) => void; onClear: () => void }) {
   return (
     <View style={styles.searchBar}>
-      <SearchIcon size={18} tint={color.acier} strokeWidth={1.6} />
+      <View style={styles.searchIcon}>
+        <SearchIcon size={18} tint={color.acier} strokeWidth={1.6} />
+      </View>
       <TextInput
         style={styles.searchInput}
         value={value}
@@ -97,7 +99,11 @@ const styles = themedStyles(() => ({
     borderRadius: radius.full,
     paddingLeft: space.md,
   },
-  searchInput: { flex: 1, fontSize: font.secondary, color: color.encre, paddingVertical: 10 },
-  clearButton: { minWidth: size.touchTarget, minHeight: size.touchTarget, alignItems: "center", justifyContent: "center" },
+  // Site (react-native-web) à 320 pt : sans `minWidth: 0`, le champ garde sa
+  // largeur minimale de navigateur et pousse la croix hors de l'écran ; la
+  // loupe et la croix ne rétrécissent jamais.
+  searchIcon: { flexShrink: 0 },
+  searchInput: { flex: 1, minWidth: 0, fontSize: font.secondary, color: color.encre, paddingVertical: 10 },
+  clearButton: { flexShrink: 0, minWidth: size.touchTarget, minHeight: size.touchTarget, alignItems: "center", justifyContent: "center" },
   clearLabel: { fontSize: 22, color: color.acier, lineHeight: 24 },
 }));
