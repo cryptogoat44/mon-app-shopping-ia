@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
 import { fetchHdImageUrls } from "../lib/pieceImages.js";
-import { upgradeMerchantImageLater } from "../lib/merchantImage.js";
+import { queueMerchantImages, upgradeMerchantImageLater } from "../lib/merchantImage.js";
 import { z } from "zod";
 import { WISHLIST_ITEMS_MAX, type WishlistItem, type WishlistItemDetail } from "@monapp/shared-types";
 import { findOwnMatch } from "../lib/ownMatches.js";
@@ -143,7 +143,12 @@ export default async function wishlistRoutes(fastify: FastifyInstance) {
       pageRows.map((row) => row.product_match_id).filter((id): id is string => id !== null)
     );
     const hdUrls = await fetchHdImageUrls(fastify, pageRows);
-    return reply.send({ items: pageRows.map((row, index) => toWishlistItem(row, affiliateUrls, hdUrls[index])), nextCursor });
+    const items = pageRows.map((row, index) => toWishlistItem(row, affiliateUrls, hdUrls[index]));
+    // Grandes images des pièces de la page qui n'en ont pas, mises en file
+    // après la réponse (lib/merchantImage.ts, éteint par défaut ; jamais
+    // d'attente ni d'échec de la liste).
+    queueMerchantImages(fastify, request.log, pageRows, hdUrls);
+    return reply.send({ items, nextCursor });
   });
 
   fastify.post("/api/wishlist", { preHandler: fastify.requireAuth }, async (request, reply) => {

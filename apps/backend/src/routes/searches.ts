@@ -51,6 +51,7 @@ import { purgeExpiredSearches } from "../lib/searchRetention.js";
 import { launchDating } from "../lib/launchDating.js";
 import { ANALYSIS_BUCKET, analysisImagePath, legacyAnalysisImagePath, purgeStaleAnalysisImages } from "../lib/storage.js";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
+import { queueResultMerchantImages } from "../lib/merchantImage.js";
 import { searchLocaleFor } from "../lib/locale.js";
 import { DatabaseReadError, INVALID_ID, idParamsSchema, parseInput } from "../lib/validation.js";
 import { IncompleteReadError } from "../lib/pagedReads.js";
@@ -329,6 +330,9 @@ async function saveComplementRows(
     fastify.log.error({ origin, code: error?.code ?? null }, "Échec d'enregistrement des propositions du complément");
     return null;
   }
+  // Grandes images des 8 premières, après la réponse (lib/merchantImage.ts,
+  // MERCHANT_IMAGE_RESULTS_ENABLED, éteint par défaut).
+  queueResultMerchantImages(fastify, fastify.log, inserted.data);
   // Liens « direct », comme pour Lens (voir saveMatches).
   const { error: linksError } = await fastify.supabaseAdmin.from("affiliate_links").insert(
     inserted.data.map((m) => ({
