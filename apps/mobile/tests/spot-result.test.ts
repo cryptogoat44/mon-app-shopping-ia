@@ -248,3 +248,39 @@ describe("relecture des grandes images (withHdImages, hdRereadDue)", () => {
     expect(hdRereadDue(null)).toBe(false);
   });
 });
+
+// Lot « couleur des bords » (retours du build 3) : la couleur unie des bords
+// de la vignette, mesurée par le serveur, arrive dans un champ facultatif et
+// sert de fond à la tuile ; la relecture du lot « vitrine » l'apporte aussi.
+describe("couleur des bords (edgeColor)", () => {
+  function colored(id: string, origin: MatchOrigin, edgeColor?: string, imageHdUrl: string | null = null): ProductMatch {
+    return { ...search().matches[0]!, id, origin, imageHdUrl, ...(edgeColor ? { edgeColor } : {}) };
+  }
+
+  it("permis : matchToPiece recopie la couleur ; absente (serveur plus ancien ou coupé) : null", () => {
+    const result = toSpotResult(search({ matches: [colored("a", "lens", "#f2f1ee"), colored("b", "lens")] }));
+    expect(result.pieces.map((piece) => piece.edgeColor)).toEqual(["#f2f1ee", null]);
+  });
+
+  it("permis : la relecture apporte une couleur mesurée après la première réponse, sans rien changer d'autre", () => {
+    const before = toSpotResult(search({ matches: [colored("l", "lens"), colored("s", "shopping")] }));
+    const next = withHdImages(before, search({ matches: [colored("s", "shopping", "#e8e8e8"), colored("l", "lens", "#ffffff")] }));
+    expect(next.pieces[0]!.edgeColor).toBe("#ffffff");
+    expect(next.complement?.shopping[0]!.edgeColor).toBe("#e8e8e8");
+    expect({ ...next.pieces[0], edgeColor: null }).toEqual(before.pieces[0]);
+    expect(next.complement?.shopping[0]!.imageHdUrl).toBeNull();
+  });
+
+  it("refusé : une couleur déjà là n'est jamais remplacée par du vide ; rien de neuf : le même objet", () => {
+    const before = toSpotResult(search({ matches: [colored("l", "lens", "#ffffff")] }));
+    expect(withHdImages(before, search({ matches: [colored("l", "lens")] }))).toBe(before);
+    expect(withHdImages(before, search({ matches: [colored("l", "lens", "#ffffff")] }))).toBe(before);
+    expect(withHdImages(before, search({ id: "autre", matches: [colored("l", "lens", "#000000")] }))).toBe(before);
+  });
+
+  it("grande image et couleur arrivent ensemble ; chacune garde sa règle", () => {
+    const before = toSpotResult(search({ matches: [colored("s", "shopping", "#ffffff")] }));
+    const next = withHdImages(before, search({ matches: [colored("s", "shopping", undefined, "https://shop.test/s.jpg")] }));
+    expect(next.complement?.shopping[0]).toMatchObject({ imageHdUrl: "https://shop.test/s.jpg", edgeColor: "#ffffff" });
+  });
+});

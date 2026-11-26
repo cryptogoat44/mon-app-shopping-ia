@@ -233,7 +233,7 @@ export default function VaultItemDetailScreen() {
         {error ? <ErrorMessage style={styles.banner}>{error}</ErrorMessage> : null}
 
         {/* Image entière, en haute définition quand elle existe, dans la grande tuile « Écrin » (components/piece-tile.tsx). */}
-        <PieceTile variant="hero" enlargeable hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} accessibilityLabel={item.title} />
+        <PieceTile variant="hero" enlargeable hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} edgeColor={item.edgeColor} accessibilityLabel={item.title} />
         <Pressable
           onPress={handleChangePhoto}
           disabled={changingPhoto || busy}

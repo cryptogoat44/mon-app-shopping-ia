@@ -92,7 +92,7 @@ export function ProposalCard({
     <View style={styles.card}>
       <Pressable onPress={onSelect} accessibilityRole="button" accessibilityLabel={label} accessibilityHint={t.result.showLargeHint}>
         {/* La tuile « Écrin » des grilles (components/piece-tile.tsx) ; le libellé est celui du bouton. */}
-        <PieceTile variant="grid" size="card" hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} />
+        <PieceTile variant="grid" size="card" hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} edgeColor={piece.edgeColor} />
         <Text style={styles.cardName} numberOfLines={2}>
           {piece.name}
         </Text>

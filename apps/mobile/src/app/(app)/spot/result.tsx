@@ -904,7 +904,7 @@ export default function ResultScreen() {
         {showBigCard ? (
           <>
             {/* La grande tuile « Écrin » (components/piece-tile.tsx) : coins doux, la photo entière sur une copie floue d'elle-même. */}
-            <PieceTile variant="hero" enlargeable hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} accessibilityLabel={piece.name} onLayout={heroReveal.onHeroLayout} />
+            <PieceTile variant="hero" enlargeable hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} edgeColor={piece.edgeColor} accessibilityLabel={piece.name} onLayout={heroReveal.onHeroLayout} />
 
             <Text style={styles.rankLabel}>{bigCardLabelText(bigCardLabel(selectedIndex, bestIndex, firstAvailableIndex(result), allPieces(result)[selectedIndex]))}</Text>
             <Text style={styles.name} accessibilityRole="header">

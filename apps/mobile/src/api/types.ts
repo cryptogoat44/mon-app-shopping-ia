@@ -10,6 +10,11 @@ export interface Piece {
   /** Image originale du marchand (haute définition) quand elle existe ;
    * à afficher en priorité, avec repli sur `imageUrl`. */
   imageHdUrl?: string | null;
+  /** Couleur unie des bords de la vignette (« #rrggbb »), mesurée par le
+   * serveur (lot « couleur des bords ») : fond de la tuile derrière une photo
+   * qui ne la remplit pas (components/piece-tile.tsx). Absente ou null :
+   * la copie floue. */
+  edgeColor?: string | null;
   priceFrom: number | null;
   currency: string | null;
   merchantName: string | null;

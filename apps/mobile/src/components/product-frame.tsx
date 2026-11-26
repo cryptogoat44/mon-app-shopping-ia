@@ -18,6 +18,7 @@ export function ProductFrame({
   accessibilityLabel,
   recyclingKey,
   enlargeable = false,
+  edgeColor,
 }: {
   hdUri?: string | null;
   fallbackUri: string;
@@ -25,6 +26,8 @@ export function ProductFrame({
   /** Dans une liste (fil) : voir SpotImage. */
   recyclingKey?: string;
   enlargeable?: boolean;
+  /** Couleur des bords mesurée par le serveur (lot « couleur des bords ») : voir PieceTile. */
+  edgeColor?: string | null;
 }) {
   return (
     <PieceTile
@@ -34,6 +37,7 @@ export function ProductFrame({
       accessibilityLabel={accessibilityLabel}
       recyclingKey={recyclingKey}
       enlargeable={enlargeable}
+      edgeColor={edgeColor}
       style={styles.frame}
     />
   );

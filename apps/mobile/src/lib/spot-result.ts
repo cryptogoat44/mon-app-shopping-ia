@@ -13,6 +13,8 @@ export function matchToPiece(match: ProductMatch): Piece {
     material: null,
     imageUrl: match.imageUrl,
     imageHdUrl: match.imageHdUrl ?? null,
+    // Couleur des bords mesurée par le serveur (lot « couleur des bords ») ; un serveur plus ancien ne l'envoie jamais.
+    edgeColor: match.edgeColor ?? null,
     priceFrom: match.priceMin,
     currency: match.currency,
     merchantName: match.merchantName,
@@ -149,26 +151,32 @@ export function hdRereadDue(result: SpotResult | null): boolean {
   return pool.some((piece) => !piece.imageHdUrl);
 }
 
-/** La recherche relue n'apporte QUE les grandes images (imageHdUrl), par
- * identifiant de proposition : ordre, filtres, sélection et sections ne
- * bougent pas ; une proposition inconnue est ignorée ; une grande image déjà
- * là n'est jamais remplacée par du vide. Rien de neuf : le même objet (aucun
+/** La recherche relue n'apporte QUE les grandes images (imageHdUrl) et la
+ * couleur des bords (edgeColor, lot « couleur des bords »), par identifiant
+ * de proposition : ordre, filtres, sélection et sections ne bougent pas ; une
+ * proposition inconnue est ignorée ; une grande image ou une couleur déjà là
+ * n'est jamais remplacée par du vide. Rien de neuf : le même objet (aucun
  * rendu inutile). */
 export function withHdImages(previous: SpotResult, search: ProductSearch): SpotResult {
   if (search.id !== previous.searchId) return previous;
   const hdById = new Map<string, string>();
+  const edgeById = new Map<string, string>();
   for (const match of search.matches) {
     if (typeof match.imageHdUrl === "string" && match.imageHdUrl) hdById.set(match.id, match.imageHdUrl);
+    if (typeof match.edgeColor === "string" && match.edgeColor) edgeById.set(match.id, match.edgeColor);
   }
-  if (hdById.size === 0) return previous;
+  if (hdById.size === 0 && edgeById.size === 0) return previous;
   let changed = false;
   const merge = (pieces: Piece[]): Piece[] => {
     let listChanged = false;
     const next = pieces.map((piece) => {
       const hd = hdById.get(piece.id);
-      if (!hd || hd === piece.imageHdUrl) return piece;
+      const edge = edgeById.get(piece.id);
+      const newHd = hd && hd !== piece.imageHdUrl;
+      const newEdge = edge && edge !== piece.edgeColor;
+      if (!newHd && !newEdge) return piece;
       listChanged = true;
-      return { ...piece, imageHdUrl: hd };
+      return { ...piece, ...(newHd ? { imageHdUrl: hd } : {}), ...(newEdge ? { edgeColor: edge } : {}) };
     });
     if (!listChanged) return pieces;
     changed = true;

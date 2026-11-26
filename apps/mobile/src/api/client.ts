@@ -26,6 +26,7 @@ function wishlistRowToItem(row: RemoteWishlistItem): WishlistItem {
     material: null,
     imageUrl: row.imageUrl,
     imageHdUrl: row.imageHdUrl,
+    edgeColor: row.edgeColor ?? null,
     priceFrom: row.priceMin,
     currency: row.currency,
     merchantName: row.merchantName,
