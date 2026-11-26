@@ -103,6 +103,35 @@ describe("1 · les bords prolongés (lib/piece-image.ts, edgeBands)", () => {
     expect(top.copy.width).toBe(358);
   });
 
+  it("refusé (correctif) : petite image (quatre bandes), le haut et le bas copiés sur toute la largeur de la tuile (colonnes décalées et resserrées à la jointure) ; permis : à l'échelle de la photo, au-dessus d'elle, coins remplis par la copie de dessous", () => {
+    // 200 × 260 pixels, 1 point par pixel au plus : une boîte de 200 × 260 centrée dans le carré de 358, photo.left = 79.
+    const photoLeft = (358 - 200) / 2;
+    for (const platform of ["native", "web"] as const) {
+      const bands = edgeBands({ width: 200, height: 260 }, square, "hero", platform);
+      for (const band of bands.filter((b) => b.side === "top" || b.side === "bottom")) {
+        // Refusé : la copie étalée sur les 358 points de la tuile.
+        expect(band.copy.width).not.toBe(358);
+        // Permis : la colonne x de la bande est la colonne x de la photo.
+        expect(band.copy.left).toBe(photoLeft);
+        expect(band.copy.width).toBe(200);
+        expect(band.copy.height).toBe(260);
+        // La vue, elle, couvre toute la largeur ; la copie de dessous aussi (les coins), avec le même étirement.
+        expect(band.box.width).toBe(358);
+        expect(band.fill).toBeDefined();
+        expect(band.fill!.top).toBe(band.copy.top);
+        expect(band.fill!.height).toBe(band.copy.height);
+        expect(band.fill!.left).toBeLessThanOrEqual(0);
+        expect(band.fill!.left + band.fill!.width).toBeGreaterThanOrEqual(358);
+        // L'étirement part toujours de la jointure.
+        const inset = platform === "web" ? band.blur * EDGE_INSET_PER_BLUR : EDGE_INSET_NATIVE;
+        if (band.side === "top") expect(mapped(band, band.box.height - 1 + inset)).toBeCloseTo(band.box.height - 1, 6);
+        else expect(mapped(band, 1 - inset)).toBeCloseTo(1, 6);
+      }
+    }
+    // Photo qui touche les côtés (16:9) sur l'iPhone : aucune copie de dessous, rien ne change.
+    for (const band of edgeBands({ width: 1600, height: 900 }, square, "hero")) expect(band.fill).toBeUndefined();
+  });
+
   it("site : la copie visible aussi à l'échelle de la photo ; la copie de dessous, plus longue, remplit seule les bouts que le flou CSS rend transparents", () => {
     for (const band of edgeBands({ width: 1000, height: 1500 }, square, "hero", "web")) {
       expect(band.copy.top).toBe(0);

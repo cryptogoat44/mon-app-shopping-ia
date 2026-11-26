@@ -183,9 +183,10 @@ export type EdgeBand = {
   /** La copie de la photo, dans la vue, avant l'étirement : à l'échelle de la photo le long du bord (chaque ligne
    * de la bande prolonge la même ligne de la photo, rien ne se décale à la jointure). */
   copy: { left: number; top: number; width: number; height: number };
-  /** Site seulement : une seconde copie, dessinée SOUS la première, un peu plus longue que le bord (étirée de
-   * `inset` à chaque bout) : elle remplit les deux bouts de la bande, où le flou CSS rend la première transparente.
-   * Même étirement (transform) que la première. */
+  /** Une seconde copie, dessinée SOUS la première, avec le même étirement (transform). Site : un peu plus longue
+   * que le bord (étirée de `inset` à chaque bout) : elle remplit les deux bouts de la bande, où le flou CSS rend la
+   * première transparente. Haut et bas d'une petite image (quatre bandes, iPhone et site) : étirée sur toute la
+   * largeur de la tuile, elle remplit les coins, de chaque côté de la première (qui reste au-dessus de la photo). */
   fill?: { left: number; top: number; width: number; height: number };
   /** blurRadius de la copie. */
   blur: number;
@@ -231,18 +232,24 @@ export function edgeBands(natural: Dimensions | null, frame: Dimensions, variant
     const fill = web ? { ...copy, top: -along, height: photo.height + 2 * along } : undefined;
     bands.push({ side: "right", box: { left: photo.left + photo.width - 1, top: photo.top, width: right + 1, height: photo.height }, copy, fill, blur, transform: [{ translateX: shift(1, 1 - across, copy.left + copy.width / 2, stretch) }, { scaleX: -stretch }] });
   }
-  // Haut et bas : toute la largeur de la tuile (la copie y est aussi étirée en largeur quand la photo ne touche pas les
-  // côtés : petite image d'une grande tuile ; une photo plus large que le cadre le touche, à l'échelle).
+  // Haut et bas : la vue couvre toute la largeur de la tuile, la copie reste au-dessus de la photo, à son échelle
+  // (chaque colonne de la bande prolonge la même colonne de la photo). Petite image d'une grande tuile (la photo ne
+  // touche pas les côtés) : les coins sont remplis par la copie de dessous, étirée sur toute la largeur.
+  const narrow = left >= 0.5 || right >= 0.5;
+  const acrossFrame = (seam: number, height: number) => {
+    const copy = { left: photo.left, top: seam, width: photo.width, height };
+    const wide = { ...copy, left: 0, width: frame.width };
+    const fill = web ? { ...wide, left: -along, width: frame.width + 2 * along } : narrow ? wide : undefined;
+    return { copy, fill };
+  };
   if (top >= 0.5) {
     const stretch = top / EDGE_STRIP;
-    const copy = { left: 0, top: photo.top, width: frame.width, height: photo.height };
-    const fill = web ? { ...copy, left: -along, width: frame.width + 2 * along } : undefined;
+    const { copy, fill } = acrossFrame(photo.top, photo.height);
     bands.push({ side: "top", box: { left: 0, top: 0, width: frame.width, height: top + 1 }, copy, fill, blur, transform: [{ translateY: shift(top, top + down, copy.top + copy.height / 2, stretch) }, { scaleY: -stretch }] });
   }
   if (bottom >= 0.5) {
     const stretch = bottom / EDGE_STRIP;
-    const copy = { left: 0, top: 1 - photo.height, width: frame.width, height: photo.height };
-    const fill = web ? { ...copy, left: -along, width: frame.width + 2 * along } : undefined;
+    const { copy, fill } = acrossFrame(1 - photo.height, photo.height);
     bands.push({ side: "bottom", box: { left: 0, top: photo.top + photo.height - 1, width: frame.width, height: bottom + 1 }, copy, fill, blur, transform: [{ translateY: shift(1, 1 - down, copy.top + copy.height / 2, stretch) }, { scaleY: -stretch }] });
   }
   return bands;
