@@ -33,7 +33,7 @@ export function RecentSearchTile({ entry, column, onOpen }: { entry: RecentSearc
       accessibilityLabel={`${piece.name}, ${meta}`}
     >
       {piece.imageUrl ? (
-        <PieceTile variant="grid" size="card" hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} recyclingKey={entry.searchId} />
+        <PieceTile variant="grid" size="card" hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} edgeColor={piece.edgeColor} recyclingKey={entry.searchId} />
       ) : (
         <View style={styles.tileEmpty}>
           <ClockIcon size={22} tint={color.acier} />

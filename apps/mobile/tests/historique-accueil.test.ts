@@ -191,7 +191,7 @@ describe("l'historique en grille de deux colonnes (retours du build 3, point 7)"
   it("refusé : la ligne et ses filets ; permis : la tuile de pièce de la grille, en deux temps (vignette puis originale)", () => {
     expect(tiles).not.toContain("RecentSearchRow");
     expect(tiles).not.toContain("borderBottomColor");
-    expect(tile).toContain('<PieceTile variant="grid" size="card" hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} recyclingKey={entry.searchId} />');
+    expect(tile).toContain('<PieceTile variant="grid" size="card" hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} edgeColor={piece.edgeColor} recyclingKey={entry.searchId} />');
     // Sans image : une case 4:5 aux mêmes coins, avec l'horloge.
     expect(tiles).toContain("tileEmpty: { width: \"100%\", aspectRatio: 4 / 5, backgroundColor: color.plinthe, borderRadius: radius.pieceGrid, borderCurve: \"continuous\",");
     expect(tile).toContain("<ClockIcon size={22} tint={color.acier} />");

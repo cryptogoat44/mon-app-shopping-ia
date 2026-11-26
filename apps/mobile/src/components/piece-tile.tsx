@@ -20,8 +20,10 @@ export type { PieceTileVariant } from "@/lib/piece-image";
 // étirée au-delà d'un point par pixel ; grille (« grid ») : la pièce remplit
 // toujours sa tuile. Thème clair seulement : un filet très fin, pour qu'une
 // photo sur fond blanc ne se fonde pas dans la page. `edgeColor` (lot
-// « couleur des bords », plus tard ; rien ne le fournit encore) : une
-// couleur unie « #RRGGBB » à la place de la copie floue.
+// « couleur des bords ») : la couleur unie « #RRGGBB » des bords de la
+// photo, mesurée par le serveur (interrupteur EDGE_COLOR_ENABLED) et reçue
+// avec la pièce, à la place de la copie floue quand la photo touche le
+// cadre (lib/piece-image.ts, edgeColorApplies).
 //
 // Plan B si le flou est trop lent dans une longue grille (essai sur
 // l'iPhone) : remplacer le fond flou par un fond uni — une ligne.
@@ -56,7 +58,7 @@ export function PieceTile({
   /** L'unique grande image zoomable de l'écran seulement (envie, Vault, grande carte) : décodée en entier, nette au zoom.
    * Jamais dans les grilles (mémoire). */
   fullResolution?: boolean;
-  /** Couleur des bords mesurée par le serveur, « #RRGGBB » ; rien ne la fournit encore. */
+  /** Couleur des bords mesurée par le serveur, « #RRGGBB » ; absente tant qu'elle n'est pas mesurée (ou interrupteur éteint). */
   edgeColor?: string | null;
   /** Largeur, maxWidth, marges propres à l'écran. */
   style?: StyleProp<ViewStyle>;

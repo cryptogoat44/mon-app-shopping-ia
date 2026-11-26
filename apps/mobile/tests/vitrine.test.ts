@@ -363,6 +363,8 @@ describe("couleur des bords transmise à chaque tuile", () => {
     ["src/app/(app)/vault-item/[id].tsx", "edgeColor={item.edgeColor}"],
     ["src/components/wishlist-panel.tsx", "edgeColor={item.edgeColor}"],
     ["src/app/(app)/(tabs)/profile/index.tsx", "edgeColor={item.edgeColor}"],
+    // Assemblage : la tuile de l'historique de l'accueil (lot « accueil »).
+    ["src/components/recent-searches.tsx", "edgeColor={piece.edgeColor}"],
   ];
 
   it.each(cases)("%s : chaque PieceTile ou ProductFrame reçoit %s", (path, prop) => {
