@@ -206,7 +206,9 @@ describe("l'écran : la phrase en tête, annoncée, touchable, sans rien déplac
     expect(component).toContain('accessibilityRole="button"');
     expect(component).toContain("accessibilityLabel={sentence}");
     expect(component).toContain("accessibilityHint={t.result.verdict.hint}");
-    expect(component).toContain('accessibilityLiveRegion="polite"');
+    // La zone annoncée (site, Android) est celle, toujours là, de la ligne d'information (components/result-sort-bar.tsx).
+    expect(bar).toContain('<View accessibilityLiveRegion="polite" testID="info-line">');
+    expect(component).not.toContain("accessibilityLiveRegion");
     expect(component).toContain("AccessibilityInfo.announceForAccessibilityWithOptions(sentence, { queue: true });");
     // Annoncée quand elle apparaît ou change.
     expect(component).toContain("}, [sentence]);");

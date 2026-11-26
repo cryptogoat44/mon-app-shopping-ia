@@ -73,14 +73,18 @@ export function ResultSortBar({
         </Pressable>
         {stockShown ? <InStockOnlyToggle view={view} onChange={onChange} /> : null}
       </ScrollView>
-      {/* Le verdict seul, ou le résumé des prix (mis à jour à l'arrivée des boutiques : annoncé sans couper, site et Android). */}
-      {verdict ? (
-        verdict
-      ) : (
-        <Text style={styles.summary} accessibilityLiveRegion="polite" testID="price-summary">
-          {summary ?? ""}
-        </Text>
-      )}
+      {/* Le verdict seul, ou le résumé des prix. La zone annoncée (site et Android, sans couper) est TOUJOURS là, autour
+          des deux : quand les boutiques arrivent avec un verdict, son changement est annoncé (une zone ajoutée déjà
+          remplie ne l'est pas). Correctif du lot « finitions de l'œil ». */}
+      <View accessibilityLiveRegion="polite" testID="info-line">
+        {verdict ? (
+          verdict
+        ) : (
+          <Text style={styles.summary} testID="price-summary">
+            {summary ?? ""}
+          </Text>
+        )}
+      </View>
     </View>
   );
 }

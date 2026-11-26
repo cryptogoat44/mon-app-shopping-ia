@@ -32,8 +32,9 @@ export function VerdictLine({ verdict }: { verdict: SearchVerdict | undefined })
     if (sentence && Platform.OS === "ios") AccessibilityInfo.announceForAccessibilityWithOptions(sentence, { queue: true });
   }, [sentence]);
   if (!verdict || !sentence) return null;
+  // La zone annoncée (site et Android) est celle, toujours là, de la ligne d'information (components/result-sort-bar.tsx).
   return (
-    <View accessibilityLiveRegion="polite">
+    <View>
       <Pressable
         onPress={() => setOpen(true)}
         style={styles.box}
