@@ -1255,7 +1255,8 @@ const styles = themedStyles(() => ({
   nav: { height: 44, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 8 },
   navSide: { minHeight: 44, minWidth: 44, paddingHorizontal: 8, justifyContent: "center" },
   close: { fontSize: font.body, fontWeight: "400", color: color.encre },
-  navTitle: { flexShrink: 1, fontSize: font.secondary, fontWeight: "500", color: color.encre },
+  // Centré sur l'écran comme la maquette (« Fermer » est plus large que la case vide de droite) ; jamais sous les deux côtés.
+  navTitle: { position: "absolute", left: 76, right: 76, textAlign: "center", fontSize: font.secondary, fontWeight: "500", color: color.encre },
   content: { paddingHorizontal: space.md, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   count: { fontSize: font.caption, lineHeight: 18, color: color.acier, marginBottom: space.xs },
   verdictPlace: { minHeight: 1 },
