@@ -145,6 +145,23 @@ describe("la tuile de pièce (components/piece-tile.tsx)", () => {
     expect(tile).toContain("accessibilityLabel={enlargeable ? undefined : accessibilityLabel}");
   });
 
+  it("refusé : la taille mesurée oubliée quand la grande image arrive ; permis : une autre vignette repart de zéro", () => {
+    const key = tile.match(/const imageKey = ([^;]+);/)![1];
+    expect(key).not.toContain("hdUri");
+    expect(key).toBe("fallbackUri");
+    expect(tile).toContain("const naturalSize = natural?.uri === imageKey ? natural.size : null;");
+  });
+
+  it("refusé : le flou visible à travers un détourage transparent ; permis : le flou dans les bandes", () => {
+    // Taille connue : les deux boîtes du premier plan sont opaques.
+    expect(tile).toContain('foreground = { style: [StyleSheet.absoluteFill, { backgroundColor: color.plinthe }], fit: "cover" };');
+    expect(tile).toMatch(/top: \(frame\.height - shown\.height\) \/ 2, backgroundColor: color\.plinthe \}/);
+    // Taille inconnue : pas de fond, pour ne pas cacher le flou pendant le chargement.
+    expect(tile).toContain('let foreground: { style: StyleProp<ImageStyle>; fit: "contain" | "cover" } = { style: StyleSheet.absoluteFill, fit: "contain" };');
+    // Le flou reste sous toute la tuile.
+    expect(tile).toContain("style={styles.blur}");
+  });
+
   it("aucune couleur en dur, aucune dépendance nouvelle", () => {
     expect(tile).not.toMatch(/#[0-9A-Fa-f]{3,8}\b/);
     const imports = [...tile.matchAll(/from "([^"]+)"/g)].map((m) => m[1]);
@@ -208,8 +225,14 @@ describe("la grande carte et l'écran des résultats, resserrés", () => {
   it("le décompte et l'ordre sur une seule ligne grise", () => {
     expect(screen.match(/style=\{styles\.count\}/g)).toHaveLength(1);
     expect(screen).toContain('wordsLine].filter(Boolean).join(" · ")');
-    expect(screen).toContain("<Text style={styles.count} numberOfLines={2}>");
     expect(styleOf(screen, "count")).toContain("marginBottom: space.xs");
+  });
+
+  it("refusé : la note d'ordre coupée par une limite de lignes (requête longue, petit écran, grand texte)", () => {
+    const tag = screen.slice(screen.indexOf("<Text style={styles.count}"), screen.indexOf(">", screen.indexOf("<Text style={styles.count}")) + 1);
+    expect(tag).not.toContain("numberOfLines");
+    // Permis : le décompte et la note restent dans le même texte, la note après « · ».
+    expect(tag).toBe("<Text style={styles.count}>");
   });
 
   it("rythme de la grande carte et de la grille", () => {

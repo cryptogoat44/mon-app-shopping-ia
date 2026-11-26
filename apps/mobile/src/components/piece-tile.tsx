@@ -56,8 +56,10 @@ export function PieceTile({
 }) {
   const [frame, setFrame] = useState({ width: 0, height: 0 });
   const [natural, setNatural] = useState<{ uri: string; size: ImageNaturalSize } | null>(null);
-  const imageKey = `${fallbackUri}\n${hdUri ?? ""}`;
-  // Une autre pièce (liste qui réutilise ses éléments) repart de zéro.
+  // Une autre pièce (liste qui réutilise ses éléments) repart de zéro. Clé
+  // sur la vignette seule : quand la grande image arrive (relecture), la
+  // taille mesurée reste jusqu'à ce que l'original soit vraiment chargé.
+  const imageKey = fallbackUri;
   const naturalSize = natural?.uri === imageKey ? natural.size : null;
 
   const handleLayout = (event: LayoutChangeEvent) => {
@@ -68,14 +70,16 @@ export function PieceTile({
 
   const background = edgeBackground(edgeColor);
   // Taille inconnue : contenue sur toute la tuile ; sinon remplie, ou une
-  // boîte centrée à la taille honnête.
+  // boîte centrée à la taille honnête. Taille connue : un fond opaque juste
+  // sous la photo, pour qu'un détourage transparent ne laisse pas voir la
+  // copie floue (le flou ne reste que dans les bandes autour).
   let foreground: { style: StyleProp<ImageStyle>; fit: "contain" | "cover" } = { style: StyleSheet.absoluteFill, fit: "contain" };
   if (naturalSize && frame.width > 0 && frame.height > 0) {
-    if (fillsTile(naturalSize, frame, variant)) foreground = { style: StyleSheet.absoluteFill, fit: "cover" };
+    if (fillsTile(naturalSize, frame, variant)) foreground = { style: [StyleSheet.absoluteFill, { backgroundColor: color.plinthe }], fit: "cover" };
     else {
       const shown = honestSize(naturalSize, frame, variant);
       foreground = {
-        style: { position: "absolute", width: shown.width, height: shown.height, left: (frame.width - shown.width) / 2, top: (frame.height - shown.height) / 2 },
+        style: { position: "absolute", width: shown.width, height: shown.height, left: (frame.width - shown.width) / 2, top: (frame.height - shown.height) / 2, backgroundColor: color.plinthe },
         fit: "contain",
       };
     }
