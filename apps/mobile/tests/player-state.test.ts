@@ -492,7 +492,7 @@ describe("image floue (retours du build 3 : contrôle de netteté de l'instantan
   // comme flou ; le refus pour flou ne vaut donc que pour TikTok.
   const satin = (amplitude: number) => sample((x, y) => 110 + amplitude * Math.sin((2 * Math.PI * (x + 0.4 * y)) / 22));
 
-  it("limite connue : un satin net à plis doux est jugé flou par la mesure (amplitude 15 à 30)", () => {
+  it("limite connue : un satin net à plis doux est jugé flou par la mesure (amplitude 15 à 30) ; ce refus ne retire pas le lecteur (playerStaysOffered)", () => {
     for (const amplitude of [15, 30]) {
       expect(isBlankFrame(satin(amplitude))).toBe(false);
       expect(isBlurryFrame(satin(amplitude))).toBe(true);

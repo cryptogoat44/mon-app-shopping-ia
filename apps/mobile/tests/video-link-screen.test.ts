@@ -152,7 +152,7 @@ describe("écran « vidéo partagée » : l'analyse d'abord, quand le serveur l'
     expect(screen).toContain("const withPlayer = platform !== null && link !== null && playerOffered({ platform, os: Platform.OS, build: features, server: lookup?.players ?? null, snapshotReady: snapshotAvailable });");
     expect(screen).toContain("{t.videoLinkAuto.player(name)}");
     // Jamais un lecteur qui vient d'échouer, reproposé sur l'écran de l'analyse.
-    expect(screen).toContain("const playerButton = withPlayer && playerBroken === null ? (");
+    expect(screen).toContain("const playerButton = withPlayer && playerStaysOffered(playerBroken) ? (");
     expect(screen).toContain("<EmbeddedPlayer");
     expect(screen).toContain("onPress={() => void spotMoment()}");
     expect(screen).toContain("{t.videoLink.webInstruction}");

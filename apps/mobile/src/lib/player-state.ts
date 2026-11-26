@@ -176,13 +176,16 @@ export function isBlankFrame(sample: FrameSample): boolean {
 // appliqué qu'à l'instantané de TikTok, où le fond flou (06) a été vu
 // (player-snapshot.ts, blurCheckApplies) ; pour Instagram, seul le contrôle
 // noir ou blanc. Sur TikTok, quand l'image du serveur manque, un tel gros
-// plan sans aucun bord peut encore être refusé (décision du fondateur).
+// plan sans aucun bord peut encore être refusé à tort (limite de la mesure,
+// pas une décision du fondateur) : ce refus ne retire donc jamais le lecteur
+// (player-decision.ts, playerStaysOffered), la personne peut revenir à la
+// vidéo et spotter un autre moment.
 
 /** Seuil de départ, À CALIBRER sur l'iPhone (journal « [player] netteté » en
  * développement) ; repères mesurés sur des copies de 96 px : capture 06 floue
  * ≈ 0,37 ; 05 nette ≈ 3,2, et autant assombrie ; sujets nets (manteau
  * uni, silhouette étroite sur fond flou, logo) ≥ 2 ; les mêmes floutés ≤ 0,3
- * (un léger flou d'un pixel ≈ 0,7, encore utilisable). */
+ * (un flou gaussien d'un pixel ≈ 0,25 : refusé ; 05 floutée σ 0,8 ≈ 0,4). */
 export const BLUR_LIMITS = { minSharpness: 0.5 } as const;
 
 /** Part des pixels au plus fort gradient sur laquelle on juge les bords. */

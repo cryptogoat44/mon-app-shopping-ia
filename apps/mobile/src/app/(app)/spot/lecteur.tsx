@@ -68,7 +68,7 @@ import { useImageDrop } from "@/lib/image-drop";
 import { photoPickerEntry, type PhotoJourneyEntry } from "@/lib/journey-entries";
 import { detectLink } from "@/lib/link-detection";
 import { grantPlayerConsent, readPlayerConsent } from "@/lib/player-access";
-import { afterPlayerFailure, decidePlayer, openingPath, playerOffered, type FallbackReason } from "@/lib/player-decision";
+import { afterPlayerFailure, decidePlayer, openingPath, playerOffered, playerStaysOffered, type FallbackReason } from "@/lib/player-decision";
 import { instagramHostPage, tiktokHostPage } from "@/lib/player-host-page";
 import { TIKTOK_PLAYER_PARAMS_NATIVE, isPlayerPlatform, playerBaseUrl, videoOpenUrl, type PlayerPlatform } from "@/lib/player-link";
 import { snapshotAvailable, snapshotPlayer, type PlayerSnapshot } from "@/lib/player-snapshot";
@@ -661,8 +661,9 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
       <Text style={styles.discreetLabel}>{t.videoLinkAuto.backToAuto}</Text>
     </Pressable>
   ) : null;
-  // App iPhone : le lecteur officiel reste proposé à côté de l'analyse, sauf s'il vient d'échouer.
-  const playerButton = withPlayer && playerBroken === null ? (
+  // App iPhone : le lecteur officiel reste proposé à côté de l'analyse, sauf s'il vient d'échouer
+  // (un instantané refusé pour flou ne compte pas : la mesure peut se tromper, un autre moment peut être spotté).
+  const playerButton = withPlayer && playerStaysOffered(playerBroken) ? (
     <Pressable style={styles.secondary} onPress={openPlayerPath} accessibilityRole="button">
       <Text style={styles.secondaryLabel}>{t.videoLinkAuto.player(name)}</Text>
     </Pressable>
@@ -826,6 +827,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
     body = (
       <View style={styles.content}>
         <VideoFallback lead={fallbackLead(stage.reason)} onOpenVideo={openUrl ? openVideo : null} onAddScreenshot={() => void addScreenshot()} busy={busy !== null} />
+        {stage.reason === "snapshot_blurry" ? playerButton : null}
         {autoLink}
         {errorLine}
         {memory}

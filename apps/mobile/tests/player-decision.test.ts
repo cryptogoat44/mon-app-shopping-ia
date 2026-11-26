@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { afterPlayerFailure, decidePlayer, openingPath, playerOffered, playerPossible, type PlayerDecisionInput } from "../src/lib/player-decision";
+import { afterPlayerFailure, decidePlayer, openingPath, playerOffered, playerPossible, playerStaysOffered, type PlayerDecisionInput } from "../src/lib/player-decision";
 
 // Mission « liens vidéo » : lecteur officiel ou écran de secours ? Option du
 // build × interrupteur du serveur × module de l'instantané × accord ×
@@ -144,5 +144,18 @@ describe("après un lecteur en échec ou refusé (retours du build 2)", () => {
   it("permis : analyse pas encore en échec (ou version sans ce champ) → la recherche automatique", () => {
     expect(afterPlayerFailure({ os: "ios", analysis: true, aiFailed: false })).toBe("ai");
     expect(afterPlayerFailure({ os: "ios", analysis: true })).toBe("ai");
+  });
+});
+
+describe("lecteur reproposé après un échec (retours du build 3, netteté)", () => {
+  it("refusé : un lecteur en échec (instantané impossible, erreur, muet…) n'est pas reproposé", () => {
+    for (const reason of ["snapshot_failed", "player_error", "no_answer", "webview_error", "embed_unavailable", "consent_refused"] as const) {
+      expect(playerStaysOffered(reason)).toBe(false);
+    }
+  });
+
+  it("permis : aucun échec, ou un instantané refusé pour flou (la mesure peut se tromper) → le lecteur reste proposé", () => {
+    expect(playerStaysOffered(null)).toBe(true);
+    expect(playerStaysOffered("snapshot_blurry")).toBe(true);
   });
 });

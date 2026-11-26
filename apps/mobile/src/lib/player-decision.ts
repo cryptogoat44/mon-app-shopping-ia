@@ -100,6 +100,15 @@ export function afterPlayerFailure(input: { os: string; analysis: boolean; aiFai
   return input.os !== "web" && input.analysis && !input.aiFailed ? "ai" : "screenshot";
 }
 
+/** Après un échec du lecteur (`broken`, null : aucun) : le bouton du lecteur
+ * reste-t-il proposé ? Un lecteur en échec n'est pas reproposé, SAUF un
+ * instantané refusé pour flou (snapshot_blurry) : la mesure de netteté peut
+ * refuser à tort une image nette (tissu uni à plis doux, player-state.ts) ; la
+ * personne peut alors revenir au lecteur et spotter un autre moment. */
+export function playerStaysOffered(broken: FallbackReason | null): boolean {
+  return broken === null || broken === "snapshot_blurry";
+}
+
 /** Le lecteur de cette plateforme peut-il exister dans ce build, sur cet appareil (sans le serveur ni l'accord) ? */
 export function playerPossible(os: string, build: BuildFeatures, platform?: PlayerPlatform): boolean {
   if (os !== "ios") return false;
