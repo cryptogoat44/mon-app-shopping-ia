@@ -96,6 +96,10 @@ export function twoStepLayers(state: TwoStepState): { showThumb: boolean; showHd
 export const TILE_RATIO = 4 / 5;
 /** Écart de ratio en dessous duquel la photo remplit la tuile (12 %). */
 export const FILL_TOLERANCE = 0.12;
+/** Grilles sans couleur de fond connue : une photo carrée (écart 25 %) remplit
+ * la tuile, rognée de 10 % au plus de chaque côté — règle « recadrée » des
+ * maquettes Écrin (lot « fidélité aux maquettes ») ; jamais pour une grande image. */
+export const GRID_FILL_TOLERANCE = 0.26;
 /** Grandes images seulement : au plus ce nombre de points d'écran par pixel de l'image (1 = une vignette de 260 px ne dépasse pas 260 pt). */
 export const HERO_MAX_POINTS_PER_PIXEL = 1;
 
@@ -107,11 +111,16 @@ function known(natural: Dimensions | null | undefined): natural is Dimensions {
   return Boolean(natural) && Number.isFinite(natural!.width) && Number.isFinite(natural!.height) && natural!.width > 0 && natural!.height > 0;
 }
 
-/** La photo remplit-elle la tuile ? Grille : dès que le ratio est à 12 % près. Grande image : en plus, seulement si remplir ne dépasse pas HERO_MAX_POINTS_PER_PIXEL. */
-export function fillsTile(natural: Dimensions | null, frame: Dimensions, variant: PieceTileVariant): boolean {
+/** La photo remplit-elle la tuile ? L'écart se mesure au ratio du cadre réel
+ * (4:5 tant que le cadre n'est pas mesuré ; carré pour la grande image du
+ * Résultat). Grille : dès que l'écart est sous `tolerance` (12 % ; 26 % pour
+ * une grille sans couleur de fond, GRID_FILL_TOLERANCE). Grande image : en
+ * plus, seulement si remplir ne dépasse pas HERO_MAX_POINTS_PER_PIXEL. */
+export function fillsTile(natural: Dimensions | null, frame: Dimensions, variant: PieceTileVariant, tolerance: number = FILL_TOLERANCE): boolean {
   if (!known(natural)) return false;
-  const gap = Math.abs(natural.width / natural.height / TILE_RATIO - 1);
-  if (gap > FILL_TOLERANCE) return false;
+  const frameRatio = frame.width > 0 && frame.height > 0 ? frame.width / frame.height : TILE_RATIO;
+  const gap = Math.abs(natural.width / natural.height / frameRatio - 1);
+  if (gap > tolerance) return false;
   if (variant === "grid") return true;
   // Remplir (comme cover) agrandit l'image du plus grand des deux rapports.
   const scale = Math.max(frame.width / natural.width, frame.height / natural.height);
