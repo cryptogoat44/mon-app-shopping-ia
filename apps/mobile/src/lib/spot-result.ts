@@ -136,6 +136,9 @@ export function withTextSearch(previous: SpotResult, search: ProductSearch): Spo
     next.complement = { ...next.complement, query: previous.complement?.query ?? null, ...(previous.complement?.late ? { late: true } : {}) };
   }
   if (previous.owned) next.owned = previous.owned;
+  // Couleurs des bords encore en mesure : la réponse des mots ne l'annonce que
+  // si elle a elle-même mis une vignette en file ; garder l'annonce déjà reçue.
+  if (previous.edgeColorsPending === true) next.edgeColorsPending = true;
   return next;
 }
 

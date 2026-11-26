@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { MatchOrigin, ProductMatch, ProductSearch } from "@monapp/shared-types";
 import type { SpotResult } from "../src/api/types";
-import { chooseInitialResult, hdRereadDue, noPriceShown, pieceTitle, toSpotResult, withHdImages } from "../src/lib/spot-result";
+import { chooseInitialResult, hdRereadDue, noPriceShown, pieceTitle, toSpotResult, withHdImages, withTextSearch } from "../src/lib/spot-result";
 
 function search(overrides: Partial<ProductSearch> = {}): ProductSearch {
   return {
@@ -299,5 +299,20 @@ describe("couleur des bords (edgeColor)", () => {
     const odd = toSpotResult(search({ edgeColorsPending: "oui" as unknown as boolean, matches: [colored("l", "lens")] }));
     expect(hdRereadDue(odd)).toBe(false);
     expect(hdRereadDue(toSpotResult(search({ edgeColorsPending: true, matches: [] })))).toBe(false);
+  });
+
+  it("refusé : la réponse des mots sans le champ n'efface pas des couleurs encore en mesure (relecture gardée, grandes images toutes là)", () => {
+    const allHd = [colored("s", "shopping", undefined, "https://shop.test/s.jpg")];
+    const before = toSpotResult(search({ edgeColorsPending: true, matches: allHd }));
+    const next = withTextSearch(before, search({ matches: allHd }));
+    expect(next.edgeColorsPending).toBe(true);
+    expect(hdRereadDue(next)).toBe(true);
+  });
+
+  it("permis : sans le champ ni avant ni après, grandes images toutes là → aucune relecture de plus", () => {
+    const allHd = [colored("s", "shopping", undefined, "https://shop.test/s.jpg")];
+    const next = withTextSearch(toSpotResult(search({ matches: allHd })), search({ matches: allHd }));
+    expect("edgeColorsPending" in next).toBe(false);
+    expect(hdRereadDue(next)).toBe(false);
   });
 });
