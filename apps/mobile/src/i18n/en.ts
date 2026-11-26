@@ -139,12 +139,13 @@ export const en: Catalog = {
     prepareError: "Preparation didn't go through. Check your connection, then try again.",
     networkError: "Unable to connect. Check your internet connection, then try again.",
     serverError: `${BRAND} isn't responding right now. Please try again in a minute.`,
-    // Build 2 feedback: the "Your latest video" card folded to one row, and its cross
-    // (it turns the suggestion off, exactly like the switch in Settings).
+    // Build 2 feedback: the "Your latest video" card folded to one row.
     latestVideoExpand: "Search this video",
-    latestVideoDismiss: "Stop suggesting my latest video",
-    latestVideoDismissed: "Got it: your latest video won't be suggested anymore. You can turn this suggestion back on in Settings.",
-    latestVideoSettingsLink: "Open Settings",
+    // Build 3 feedback, point 3: the card collapses to a thin row instead of disappearing
+    // (no more cross; only Settings turns the suggestion off).
+    latestVideoReduce: "Collapse the “Your latest video” card",
+    latestVideoReveal: "Shows the full card",
+    latestVideoShow: "Show",
   },
   video: {
     title: "Choose the frame",

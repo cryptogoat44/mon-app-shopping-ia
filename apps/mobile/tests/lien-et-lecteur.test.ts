@@ -13,7 +13,9 @@ import { fr } from "../src/i18n/fr";
 //   échoue ou est refusé ; un lecteur qui attend un toucher n'est plus
 //   remplacé au bout de 12 s ;
 // - point 6 : le champ du lien toujours visible, « Coller » ouvre la vidéo ;
-// - point 11 : la carte « Votre dernière vidéo » repliée, avec une croix.
+// - point 11 : la carte « Votre dernière vidéo » repliée (retours du build 3,
+//   point 3 : la croix est remplacée par « réduire », la carte se replie en une
+//   ligne fine au lieu de disparaître).
 const source = (path: string) => readFileSync(join(__dirname, "../src", path), "utf8");
 /** Code sans ses commentaires de ligne. */
 const code = (path: string) => source(path).replace(/^\s*\/\/.*$/gm, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
@@ -148,39 +150,89 @@ describe("textes vrais que le lecteur s'ouvre, que l'IA prenne le relais ou que 
     expect(fr.videoLinkAuto.playerLead.notHere).toBe("La vidéo n'a pas pu être lue ici : l'IA peut chercher la pièce pour vous.");
     expect(fr.videoLinkAuto.playerLead.snapshot).toContain("n'a pas pu prendre l'image de ce moment");
     expect(en.videoLinkAuto.playerLead.snapshot).toContain("couldn't take the frame of this moment");
-    expect(fr.spotter.latestVideoDismissed).toContain("Vous pouvez réactiver");
-    expect(fr.spotter.latestVideoDismissed).toContain("Réglages");
-    expect(en.spotter.latestVideoDismissed).toContain("Settings");
-    expect(fr.spotter.latestVideoDismiss).toBe("Ne plus proposer ma dernière vidéo");
     expect(en.spotter.latestVideoExpand).toBe("Search this video");
   });
 });
 
-describe("carte « Votre dernière vidéo » : repliée, et une croix pour en sortir (point 11)", () => {
+describe("carte « Votre dernière vidéo » : réduire au lieu de supprimer (retours du build 3, point 3)", () => {
   const card = code("components/spot-entry.tsx");
   const home = code("app/(app)/(tabs)/index.tsx");
+  const cardFn = card.slice(card.indexOf("export function LatestVideoCard("), card.indexOf("export function LatestVideoQuestion("));
+  const hook = home.slice(home.indexOf("function useLatestVideo()"), home.indexOf("function useSpotterEntries("));
 
-  it("une ligne : vignette, « Votre dernière vidéo · 0:27 », croix de 44 pt nommée pour VoiceOver ; toucher la ligne déplie les mots et « Rechercher »", () => {
+  it("la carte entière : vignette, « Votre dernière vidéo · 0:27 », toucher la ligne déplie les mots et « Rechercher »", () => {
     expect(card).toContain("const title = duration ? `${t.spotter.latestVideo} · ${duration}` : t.spotter.latestVideo;");
-    expect(card).toContain("accessibilityLabel={t.spotter.latestVideoDismiss}");
-    expect(card).toContain('dismiss: { width: 44, height: 44, alignItems: "center", justifyContent: "center" }');
     expect(card).toContain("accessibilityState={{ expanded: open, disabled: !canExpand }}");
     expect(card).toMatch(/\{open \? \(\s*<>\s*<QueryInput/);
   });
 
-  it("la croix éteint la proposition exactement comme Réglages (« no »), puis une note pour cette visite avec un lien vers Réglages", () => {
-    expect(home).toContain('await saveLatestVideoChoice(userId, "no");');
-    expect(home).toContain('<LatestVideoDismissedNote onSettings={() => router.push("/settings")} />');
-    expect(card).toContain("AccessibilityInfo.announceForAccessibility(t.spotter.latestVideoDismissed);");
-    // Visite suivante : la note disparaît, la carte (si elle revient par Réglages) est repliée.
-    const refresh = home.slice(home.indexOf("const refresh = useCallback"), home.indexOf("return load();", home.indexOf("const refresh = useCallback")));
-    expect(refresh).toContain('setDismissal((current) => (current === "saving" ? current : "idle"));');
-    expect(refresh).toContain("setExpanded(false);");
+  it("refusé : la croix, sa note et son lien vers Réglages ; permis : un bouton « réduire » de 44 pt, nommé pour VoiceOver, à la même place", () => {
+    for (const gone of ["latestVideoDismiss", "LatestVideoDismissedNote", "×", "onDismiss", "dismissFailed", "latestVideoSettingsLink"]) {
+      expect(card, gone).not.toContain(gone);
+      expect(home, gone).not.toContain(gone);
+    }
+    expect(card).toContain('reduce: { width: 44, height: 44, alignItems: "center", justifyContent: "center" }');
+    expect(cardFn).toContain('<Pressable onPress={onReduce} style={styles.reduce} accessibilityRole="button" accessibilityLabel={t.spotter.latestVideoReduce}>');
+    expect(cardFn).toContain('<ChevronIcon direction="up" size={18} tint={color.acier} />');
   });
 
-  it("refusé : un échec de l'enregistrement ne fait pas disparaître la carte ; il est dit", () => {
-    expect(home).toMatch(/catch \{\s*return setDismissal\("failed"\);\s*\}/);
-    expect(card).toContain("{dismissFailed ? <ErrorMessage style={styles.notice}>{t.spotter.latestVideoChoiceFailed}</ErrorMessage> : null}");
+  it("repliée : une ligne fine de 44 pt, toute touchable, qui rouvre la carte ; petite vignette, titre sur une ligne, « Rouvrir » souligné", () => {
+    const slim = cardFn.slice(cardFn.indexOf("if (reduced) {"), cardFn.indexOf("return (\n    <View style={styles.card}>"));
+    expect(slim).toContain("onPress={onReveal}");
+    expect(slim).toContain('accessibilityRole="button"');
+    expect(slim).toContain("accessibilityLabel={title}");
+    expect(slim).toContain("accessibilityHint={t.spotter.latestVideoReveal}");
+    expect(slim).toContain("accessibilityState={{ expanded: false }}");
+    expect(slim).toContain("numberOfLines={1}");
+    expect(slim).toContain("{t.spotter.latestVideoShow}");
+    // Un seul geste dans la ligne : « Rouvrir » n'est pas un second bouton.
+    expect(slim.match(/<Pressable/g)).toHaveLength(1);
+    expect(card).toMatch(/slim: \{[^}]*minHeight: 44,/);
+    expect(card).toMatch(/slim: \{[^}]*borderColor: color\.filet,/);
+    expect(card).toContain("slimThumb: { width: 32, height: 32, borderRadius: radius.pieceThumb,");
+    expect(card).toContain('slimLabel: { flex: 1, fontSize: font.secondary, color: color.encre, fontVariant: ["tabular-nums"] }');
+    expect(card).toContain("slimLink: { ...lienSouligne,");
+  });
+
+  it("refusé : réduire éteint la proposition (« no ») ; permis : la seule écriture de « no » est la réponse à la question, et Réglages", () => {
+    expect(home).not.toContain('saveLatestVideoChoice(userId, "no")');
+    expect(home.match(/saveLatestVideoChoice\(/g)).toHaveLength(1);
+    expect(hook).toContain("await saveLatestVideoChoice(userId, choice);");
+    const setter = hook.slice(hook.indexOf("function setCardReduced("), hook.indexOf("const note ="));
+    expect(setter).toContain("void saveLatestVideoReduced(userId, next).catch(() => {});");
+    expect(setter).not.toContain("saveLatestVideoChoice");
+    expect(setter).toContain("setExpanded(false);");
+    expect(hook).toContain("reduce: () => setCardReduced(true),");
+    expect(hook).toContain("reveal: () => setCardReduced(false),");
+  });
+
+  it("la forme retenue est lue AVEC l'état, avant d'afficher (jamais grande puis petite) ; un geste pendant la relecture l'emporte", () => {
+    const load = hook.slice(hook.indexOf("const load = useCallback("), hook.indexOf("const refresh = useCallback("));
+    expect(load).toContain("await Promise.all([loadLatestVideo(userId), userId ? loadLatestVideoReduced(userId).catch(() => false) : Promise.resolve(false)])");
+    expect(load.indexOf("setReduced(isReduced)")).toBeLessThan(load.indexOf("setState(next)"));
+    expect(load).toContain("if (touches === reducedTouches.current) setReduced(isReduced);");
+    // Retour sur Spotter : la carte repliée (champ des mots fermé), sa forme gardée.
+    const refresh = hook.slice(hook.indexOf("const refresh = useCallback"), hook.indexOf("async function choose("));
+    expect(refresh).toContain("setExpanded(false);");
+    expect(refresh).not.toContain("setReduced");
+    expect(home).toContain("reduced={latestVideo.reduced}");
+    expect(home).toContain("onReduce={latestVideo.reduce}");
+    expect(home).toContain("onReveal={latestVideo.reveal}");
+  });
+
+  it("textes : les trois nouveaux en français et en anglais ; les textes de la croix retirés ; mêmes clés dans les deux langues", () => {
+    for (const lang of [fr, en]) {
+      for (const gone of ["latestVideoDismiss", "latestVideoDismissed", "latestVideoSettingsLink"]) expect(lang.spotter).not.toHaveProperty(gone);
+    }
+    expect(fr.spotter.latestVideoReduce).toBe("Réduire la carte « Votre dernière vidéo »");
+    expect(en.spotter.latestVideoReduce).toBe("Collapse the “Your latest video” card");
+    expect(fr.spotter.latestVideoReveal).toBe("Affiche la carte en entier");
+    expect(en.spotter.latestVideoReveal).toBe("Shows the full card");
+    expect(fr.spotter.latestVideoShow).toBe("Rouvrir");
+    expect(en.spotter.latestVideoShow).toBe("Show");
+    expect(Object.keys(fr.spotter).sort()).toEqual(Object.keys(en.spotter).sort());
+    // Inchangé : la question dit toujours où changer d'avis.
+    expect(fr.spotter.latestVideoAskNote).toContain("Modifiable à tout moment dans Réglages");
   });
 });
 
