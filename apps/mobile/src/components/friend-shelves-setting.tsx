@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { Switch, Text, View } from "react-native";
-import { color, font, space } from "@/theme/tokens";
+import { Text, View } from "react-native";
+import { Switch } from "@/components/switch";
+import { space } from "@/theme/tokens";
+import { couleursInterrupteur } from "@/theme/accent";
 import { t } from "@/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { updateFriendShelves } from "@/lib/api";
@@ -9,6 +11,7 @@ import { useCollectionsStatus } from "@/lib/use-collections-status";
 import { useToast } from "@/lib/toast-context";
 import { ErrorMessage } from "@/components/error-message";
 import { FriendShelvesNotice } from "@/components/friend-shelves-notice";
+import { settingsGroupValues } from "@/components/settings-group";
 import { themedStyles } from "@/theme/themed-styles";
 
 type Shelf = "wishes" | "vault";
@@ -22,6 +25,10 @@ type Shelf = "wishes" | "vault";
 // interrupteurs (rien n'est montré aux amis avant sa réponse). Caché tant
 // que le serveur n'a pas les réglages (le profil n'en dit alors rien). Si
 // l'enregistrement échoue, l'interrupteur revient et un message le dit.
+// Raccord avec la nouvelle interface (lot « fidélité aux maquettes », maquette
+// « Écrin » 7) : une carte par réglage, comme « Proposer mon compte aux autres
+// membres » juste au-dessus (components/settings-group.tsx), le message
+// d'échec dans la carte du réglage touché.
 export function FriendShelvesSetting() {
   const { profile, refreshProfile } = useAuth();
   const { showToast } = useToast();
@@ -29,7 +36,7 @@ export function FriendShelvesSetting() {
   const stored = { wishes: showsWishes(profile), vault: showsVault(profile) };
   const [value, setValue] = useState(stored);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<Shelf | null>(null);
 
   useEffect(() => {
     setValue({ wishes: stored.wishes, vault: stored.vault });
@@ -40,14 +47,14 @@ export function FriendShelvesSetting() {
     const previous = value;
     setValue({ ...value, [shelf]: next });
     setSaving(true);
-    setError(false);
+    setError(null);
     try {
       await updateFriendShelves({ [shelf]: next });
       await refreshProfile();
       showToast(shelfToast(shelf, next, friendShelvesInformed(profile), collections.enabled));
     } catch {
       setValue(previous);
-      setError(true);
+      setError(shelf);
     } finally {
       setSaving(false);
     }
@@ -56,7 +63,7 @@ export function FriendShelvesSetting() {
   if (!friendShelvesSettingShown(profile)) return null;
 
   const row = (shelf: Shelf, title: string, help: string) => (
-    <View style={styles.block}>
+    <View style={styles.section}>
       <View style={styles.row}>
         <Text style={styles.title}>{title}</Text>
         <Switch
@@ -65,28 +72,27 @@ export function FriendShelvesSetting() {
           value={value[shelf]}
           disabled={saving}
           onValueChange={(next) => void save(shelf, next)}
-          trackColor={{ true: color.vert, false: color.filet }}
+          {...couleursInterrupteur(value[shelf])}
           testID={shelf === "wishes" ? "interrupteur-envies-amis" : "interrupteur-vault-amis"}
         />
       </View>
       <Text style={styles.hint}>{help}</Text>
+      {error === shelf ? <ErrorMessage style={styles.hint}>{t.friendShelves.settingError}</ErrorMessage> : null}
     </View>
   );
 
   return (
-    <View style={styles.section} testID="etageres-amis">
-      <FriendShelvesNotice />
+    <View testID="etageres-amis">
+      <FriendShelvesNotice style={styles.notice} />
       {row("wishes", t.friendShelves.settingWishesTitle, t.friendShelves.settingWishesHelp)}
       {row("vault", t.friendShelves.settingVaultTitle, t.friendShelves.settingVaultHelp)}
-      {error ? <ErrorMessage style={styles.hint}>{t.friendShelves.settingError}</ErrorMessage> : null}
     </View>
   );
 }
 
-const styles = themedStyles(() => ({
-  section: { marginBottom: space.lg },
-  block: { marginBottom: space.md },
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.md, minHeight: 44 },
-  title: { flex: 1, fontSize: font.secondary, color: color.encre, fontWeight: "600" },
-  hint: { fontSize: font.secondary, color: color.acier, marginTop: space.sm, lineHeight: 19 },
-}));
+// Cartes de Réglages sans surtitre (components/settings-group.tsx) : la vue de chaque réglage EST la carte (marge du
+// haut : suite du groupe « Confidentialité du compte » au-dessus) ; jamais de marge du bas (40 pt entre deux cartes sinon).
+const styles = themedStyles(() => {
+  const g = settingsGroupValues();
+  return { notice: { marginTop: space.sm }, section: { ...g.card, marginTop: space.sm }, row: g.row, title: g.rowTitle, hint: g.hint };
+});

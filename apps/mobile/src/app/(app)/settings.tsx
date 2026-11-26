@@ -191,7 +191,8 @@ export default function SettingsScreen() {
         <MentionsFromSetting />
         {/* Migration 0050 : « Proposer mon compte aux autres membres », caché tant que le serveur n'a pas le réglage. */}
         <DiscoverableSetting />
-        {/* Migration 0058 : « Montrer mes Envies / mon Vault à mes amis », éteints au départ, cachés tant que le serveur ne les a pas. */}
+        {/* Migration 0058 : « Montrer mes Envies / mon Vault à mes amis », allumés au départ (rien n'est montré avant
+            la carte d'information), une carte par réglage, cachés tant que le serveur ne les a pas. */}
         <FriendShelvesSetting />
         <PieceSendsSetting />
         <MessagesFromSetting />

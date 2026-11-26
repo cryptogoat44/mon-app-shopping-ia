@@ -85,11 +85,14 @@ describe("les réglages : seulement quand le serveur les a, allumés sur un vrai
     }
     expect(setting).toContain("accessibilityLabel={title}");
     expect(setting).toContain("value={value[shelf]}");
-    expect(setting).toMatch(/minHeight: 44/);
+    // Raccord avec la nouvelle interface : chaque ligne prend la ligne commune de Réglages, de 44 points.
+    expect(setting).toContain("row: g.row");
+    expect(source("components/settings-group.tsx")).toContain("row: { minHeight: 44");
     // Échec : l'interrupteur revient et un message le dit.
     expect(setting).toContain("setValue(previous);");
     // L'information est aussi montrée dans Réglages, au-dessus des interrupteurs.
-    expect(setting.indexOf("<FriendShelvesNotice />")).toBeLessThan(setting.indexOf('row("wishes"'));
+    expect(setting.indexOf("<FriendShelvesNotice")).toBeGreaterThan(-1);
+    expect(setting.indexOf("<FriendShelvesNotice")).toBeLessThan(setting.indexOf('row("wishes"'));
     expect(source("app/(app)/settings.tsx")).toContain("<FriendShelvesSetting />");
   });
 
