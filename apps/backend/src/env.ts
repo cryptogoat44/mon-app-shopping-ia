@@ -152,6 +152,17 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((value) => value === "true"),
+  // Grande image lue sur la page de la boutique pour les RÉSULTATS d'une
+  // recherche (retours du build 3, décision du fondateur) : les 8 premières
+  // propositions "boutiques" et "vos mots" sans grande image. ÉTEINTE par
+  // défaut : seule la valeur exacte "true" l'allume ; à allumer seulement une
+  // fois la politique de confidentialité mise à jour. Indépendante de
+  // MERCHANT_IMAGE_UPGRADE_ENABLED. Lu seulement par lib/merchantImage.ts ; le
+  // fondateur seul la règle, à la main, dans Render.
+  MERCHANT_IMAGE_RESULTS_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value === "true"),
   // Facultatif : jeton d'accès d'Expo, seulement si la « sécurité renforcée
   // des notifications » est activée dans le compte Expo. Absent : les
   // notifications partent sans jeton (le service d'Expo est gratuit). Une

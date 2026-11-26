@@ -18,7 +18,7 @@ import {
 import { deferredPending, deferredStateOf } from "./deferredComplement.js";
 import { parisDayStart } from "./matchFeedback.js";
 import { FAILURE_KINDS } from "./searchMeasure.js";
-import { reviewOffers, sectionOrder, type TrustOffer } from "./shopTrust.js";
+import { reviewOffers, sectionOrder, type OfferReview, type TrustOffer } from "./shopTrust.js";
 import { luxuryResaleOf } from "./luxuryResale.js";
 import { searchVerdict } from "./verdict.js";
 
@@ -152,20 +152,67 @@ export function keptMatchRows<T extends Pick<MatchRow, "merchant_url" | "price_m
  * seulement (« shopping »). */
 function trustedMatches(matches: readonly MatchRow[]): { match: MatchRow; mark: OfferMark | null; demoted: boolean }[] {
   const sorted = [...matches].sort((a, b) => a.rank - b.rank);
-  const reviews = reviewOffers(sorted.map(trustOfferOf));
-  const sections = new Map<MatchOrigin, number[]>();
-  sorted.forEach((match, index) => {
+  const sections = new Map<MatchOrigin, MatchRow[]>();
+  for (const match of sorted) {
     const origin = match.origin ?? "lens";
-    sections.set(origin, [...(sections.get(origin) ?? []), index]);
-  });
-  return [...sections].flatMap(([origin, indices]) =>
-    sectionOrder(
+    sections.set(origin, [...(sections.get(origin) ?? []), match]);
+  }
+  return [...sections].flatMap(([origin, rows]) =>
+    displayedSection(
       origin,
-      indices,
-      indices.map((index) => reviews[index]!),
-      indices.map((index) => ({ brandShop: sorted[index]!.brand_shop === true }))
-    ).map((index) => ({ match: sorted[index]!, mark: reviews[index]!.mark, demoted: origin === "shopping" && reviews[index]!.demoted }))
+      rows,
+      sorted.filter((match) => (match.origin ?? "lens") !== origin).map(trustOfferOf)
+    ).map(({ row, review }) => ({ match: row, mark: review.mark, demoted: origin === "shopping" && review.demoted }))
   );
+}
+
+/** Une proposition d'une section, telle que l'ordre affiché la lit. */
+export type DisplayedRow = Pick<MatchRow, "merchant_url" | "price_min" | "currency"> & { brand_shop?: boolean | null };
+
+/** L'ordre AFFICHÉ d'une section (celui de GET /api/searches/:id, ci-dessus),
+ * pour une section dont on tient les lignes (`rows`, par rang) et les autres
+ * propositions de la recherche (`others` : les prix se comparent d'une section
+ * à l'autre). Sert aussi aux grandes images des résultats
+ * (lib/merchantImage.ts) : les 8 cartes lues sont les 8 premières affichées.
+ * Les règles jugent chaque offre parmi toutes celles de la recherche, quel que
+ * soit leur ordre : le même jugement qu'en une fois. */
+export function displayedSection<T extends DisplayedRow>(
+  origin: MatchOrigin,
+  rows: readonly T[],
+  others: readonly TrustOffer[]
+): { row: T; review: OfferReview }[] {
+  const reviews = reviewOffers([...rows.map(trustOfferOf), ...others]).slice(0, rows.length);
+  const indices = rows.map((_, index) => index);
+  return sectionOrder(
+    origin,
+    indices,
+    reviews,
+    rows.map((row) => ({ brandShop: row.brand_shop === true }))
+  ).map((index) => ({ row: rows[index]!, review: reviews[index]! }));
+}
+
+/** Les lignes d'une section qui viennent d'être rangées (routes/searches.ts,
+ * saveComplementRows), dans l'ordre où GET /api/searches/:id les affichera
+ * (displayedSection) : prix, devise et boutique de la marque (seulement quand
+ * le oui a été noté, `brandShopNoted`) repris de ce qui vient d'être inséré,
+ * `inserted` et `sent` ligne pour ligne. Si l'insertion ne les rend pas ligne
+ * pour ligne dans l'ordre envoyé : l'ordre reçu (le rang), sans tri. */
+export function resultImageOrder<R extends { id: string; merchant_url: string }>(
+  inserted: readonly R[],
+  sent: readonly { merchantUrl: string; priceValue: number | null; currency: string | null; brandShop?: boolean }[],
+  origin: MatchOrigin,
+  brandShopNoted: boolean,
+  others: readonly TrustOffer[]
+): R[] {
+  if (inserted.length !== sent.length || inserted.some((row, index) => row.merchant_url !== sent[index]!.merchantUrl)) return [...inserted];
+  const section = inserted.map((row, index) => ({
+    row,
+    merchant_url: row.merchant_url,
+    price_min: sent[index]!.priceValue,
+    currency: sent[index]!.currency,
+    brand_shop: brandShopNoted && sent[index]!.brandShop === true,
+  }));
+  return displayedSection(origin, section, others).map(({ row }) => row.row);
 }
 
 /** « Que cherchez-vous ? » peut-il encore être compté ? Une recherche servie

@@ -26,12 +26,14 @@ import {
   parseMatchRows,
   parseSearchRow,
   parseSearchRows,
+  resultImageOrder,
   textSearchCountable,
   toProductSearch,
   trustOfferOf,
   type MatchRow,
   type SearchRow,
 } from "../lib/searchRows.js";
+import type { TrustOffer } from "../lib/shopTrust.js";
 import {
   COMPLEMENT_LOG_MESSAGE,
   complementLogLine,
@@ -51,6 +53,7 @@ import { purgeExpiredSearches } from "../lib/searchRetention.js";
 import { launchDating } from "../lib/launchDating.js";
 import { ANALYSIS_BUCKET, analysisImagePath, legacyAnalysisImagePath, purgeStaleAnalysisImages } from "../lib/storage.js";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
+import { queueResultMerchantImages } from "../lib/merchantImage.js";
 import { searchLocaleFor } from "../lib/locale.js";
 import { DatabaseReadError, INVALID_ID, idParamsSchema, parseInput } from "../lib/validation.js";
 import { IncompleteReadError } from "../lib/pagedReads.js";
@@ -285,13 +288,16 @@ async function saveMatches(
  * (lib/verdictColumn.ts) ; sans elle, rien n'est noté et aucun verdict n'est
  * montré. Insertion avec ce oui refusée malgré la sonde, ou avec ce palier
  * refusé pour une colonne inconnue : refaite une fois sans eux (la section
- * n'est jamais perdue pour eux). */
+ * n'est jamais perdue pour eux). `others` : les autres propositions déjà
+ * rangées de la recherche (prix comparés d'une section à l'autre), pour
+ * l'ordre affiché de la section (grandes images des résultats). */
 async function saveComplementRows(
   fastify: FastifyInstance,
   searchId: string,
   matches: readonly ShoppingMatch[],
   origin: Exclude<MatchOrigin, "lens">,
-  afterRank: number
+  afterRank: number,
+  others: readonly TrustOffer[]
 ): Promise<number | null> {
   if (matches.length === 0) return 0;
   const brandShops = origin === "shopping" && matches.some((m) => m.brandShop === true) && (await brandShopColumnReady(fastify));
@@ -312,6 +318,7 @@ async function saveComplementRows(
       )
       .select("id, merchant_url");
   let { data, error } = await insertRows(brandShops, titleTiers);
+  let brandShopNoted = brandShops;
   // Seulement un refus de la base (insertion unique : rien n'a été rangé) ;
   // jamais une réponse illisible, où les lignes sont peut-être déjà là.
   // Refaite UNE fois, sans le oui ni le palier (colonnes facultatives) : pour
@@ -323,12 +330,18 @@ async function saveComplementRows(
     if (brandShops) fastify.log.warn({ origin, code: error?.code ?? null }, "Boutique de la marque non notée : insertion refusée avec le oui, refaite sans lui");
     if (titleTiers) fastify.log.warn({ origin, code: error?.code ?? null }, "Verdict non noté : insertion refusée, refaite sans le palier");
     ({ data, error } = await insertRows(false, false));
+    brandShopNoted = false;
   }
   const inserted = INSERTED_MATCH_ROWS.safeParse(data);
   if (error || !inserted.success) {
     fastify.log.error({ origin, code: error?.code ?? null }, "Échec d'enregistrement des propositions du complément");
     return null;
   }
+  // Grandes images des 8 premières cartes AFFICHÉES, après la réponse
+  // (lib/merchantImage.ts, MERCHANT_IMAGE_RESULTS_ENABLED, éteint par
+  // défaut) : la section dans l'ordre de la relecture (resultImageOrder,
+  // lib/searchRows.ts), d'après ce qui vient d'être rangé, sans rien relire.
+  queueResultMerchantImages(fastify, fastify.log, () => resultImageOrder(inserted.data, matches, origin, brandShopNoted, others));
   // Liens « direct », comme pour Lens (voir saveMatches).
   const { error: linksError } = await fastify.supabaseAdmin.from("affiliate_links").insert(
     inserted.data.map((m) => ({
@@ -757,7 +770,7 @@ async function saveVoieCOutcome(
     // Boutiques ensuite : une recherche en panne n'attend aucune boutique.
     if (run.deferred) complement = { ...complement, reply: { status: null, suggestText: false, textStatus: null } };
   } else if (complement.matches.length > 0) {
-    const count = await saveComplementRows(fastify, launch.id, complement.matches, "shopping", outcome.matches.length);
+    const count = await saveComplementRows(fastify, launch.id, complement.matches, "shopping", outcome.matches.length, outcome.matches);
     if (count === null) complement = complementAfterSaveFailure(complement);
     else complementSaved = count;
   }
@@ -1104,7 +1117,7 @@ async function runDeferredComplement(
   let savedCount = 0;
   if (offered.matches.length > 0) {
     const lastRank = matches.reduce((max, match) => Math.max(max, match.rank), 0);
-    const count = await saveComplementRows(fastify, row.id, offered.matches, "shopping", lastRank);
+    const count = await saveComplementRows(fastify, row.id, offered.matches, "shopping", lastRank, matches.map(trustOfferOf));
     if (count === null) final = complementAfterSaveFailure(offered);
     else savedCount = count;
   }
@@ -1587,7 +1600,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
         reservationId: reservation.reservationId,
       });
       const lastRank = existing.reduce((max, m) => Math.max(max, m.rank), 0);
-      const saved = await saveComplementRows(fastify, id, text.matches, "words", lastRank);
+      const saved = await saveComplementRows(fastify, id, text.matches, "words", lastRank, existing.map(trustOfferOf));
       const textStatus = saved === null ? "shopping_failed" : text.textStatus;
       if (text.textStatus === "shopping_failed") noteFailure(request.log, "google_shopping");
       // « Rien trouvé » complété par vos mots : terminée. Les colonnes de la
