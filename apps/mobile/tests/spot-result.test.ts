@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { MatchOrigin, ProductMatch, ProductSearch } from "@monapp/shared-types";
 import type { SpotResult } from "../src/api/types";
-import { chooseInitialResult, hdRereadDue, noPriceShown, pieceTitle, toSpotResult, withHdImages } from "../src/lib/spot-result";
+import { chooseInitialResult, hdRereadDue, noPriceShown, pieceTitle, toSpotResult, withHdImages, withTextSearch } from "../src/lib/spot-result";
 
 function search(overrides: Partial<ProductSearch> = {}): ProductSearch {
   return {
@@ -246,5 +246,73 @@ describe("relecture des grandes images (withHdImages, hdRereadDue)", () => {
     // Sans complément, échec ou résultat absent : jamais.
     expect(hdRereadDue(toSpotResult(search()))).toBe(false);
     expect(hdRereadDue(null)).toBe(false);
+  });
+});
+
+// Lot « couleur des bords » (retours du build 3) : la couleur unie des bords
+// de la vignette, mesurée par le serveur, arrive dans un champ facultatif et
+// sert de fond à la tuile ; la relecture du lot « vitrine » l'apporte aussi.
+describe("couleur des bords (edgeColor)", () => {
+  function colored(id: string, origin: MatchOrigin, edgeColor?: string, imageHdUrl: string | null = null): ProductMatch {
+    return { ...search().matches[0]!, id, origin, imageHdUrl, ...(edgeColor ? { edgeColor } : {}) };
+  }
+
+  it("permis : matchToPiece recopie la couleur ; absente (serveur plus ancien ou coupé) : null", () => {
+    const result = toSpotResult(search({ matches: [colored("a", "lens", "#f2f1ee"), colored("b", "lens")] }));
+    expect(result.pieces.map((piece) => piece.edgeColor)).toEqual(["#f2f1ee", null]);
+  });
+
+  it("permis : la relecture apporte une couleur mesurée après la première réponse, sans rien changer d'autre", () => {
+    const before = toSpotResult(search({ matches: [colored("l", "lens"), colored("s", "shopping")] }));
+    const next = withHdImages(before, search({ matches: [colored("s", "shopping", "#e8e8e8"), colored("l", "lens", "#ffffff")] }));
+    expect(next.pieces[0]!.edgeColor).toBe("#ffffff");
+    expect(next.complement?.shopping[0]!.edgeColor).toBe("#e8e8e8");
+    expect({ ...next.pieces[0], edgeColor: null }).toEqual(before.pieces[0]);
+    expect(next.complement?.shopping[0]!.imageHdUrl).toBeNull();
+  });
+
+  it("refusé : une couleur déjà là n'est jamais remplacée par du vide ; rien de neuf : le même objet", () => {
+    const before = toSpotResult(search({ matches: [colored("l", "lens", "#ffffff")] }));
+    expect(withHdImages(before, search({ matches: [colored("l", "lens")] }))).toBe(before);
+    expect(withHdImages(before, search({ matches: [colored("l", "lens", "#ffffff")] }))).toBe(before);
+    expect(withHdImages(before, search({ id: "autre", matches: [colored("l", "lens", "#000000")] }))).toBe(before);
+  });
+
+  it("grande image et couleur arrivent ensemble ; chacune garde sa règle", () => {
+    const before = toSpotResult(search({ matches: [colored("s", "shopping", "#ffffff")] }));
+    const next = withHdImages(before, search({ matches: [colored("s", "shopping", undefined, "https://shop.test/s.jpg")] }));
+    expect(next.complement?.shopping[0]).toMatchObject({ imageHdUrl: "https://shop.test/s.jpg", edgeColor: "#ffffff" });
+  });
+  it("permis : couleurs en cours de mesure (edgeColorsPending) → relecture, même Lens seul ou grandes images toutes là", () => {
+    const lensOnly = toSpotResult(search({ edgeColorsPending: true, matches: [colored("l", "lens")] }));
+    expect(lensOnly.edgeColorsPending).toBe(true);
+    expect(lensOnly.complement).toBeUndefined();
+    expect(hdRereadDue(lensOnly)).toBe(true);
+    const allHd = toSpotResult(search({ edgeColorsPending: true, matches: [colored("s", "shopping", undefined, "https://shop.test/s.jpg")] }));
+    expect(hdRereadDue(allHd)).toBe(true);
+  });
+
+  it("refusé : sans le champ (rien en file, fonction coupée, ancien serveur), ou une valeur autre que true → aucune relecture de plus", () => {
+    const plain = toSpotResult(search({ matches: [colored("l", "lens")] }));
+    expect("edgeColorsPending" in plain).toBe(false);
+    expect(hdRereadDue(plain)).toBe(false);
+    const odd = toSpotResult(search({ edgeColorsPending: "oui" as unknown as boolean, matches: [colored("l", "lens")] }));
+    expect(hdRereadDue(odd)).toBe(false);
+    expect(hdRereadDue(toSpotResult(search({ edgeColorsPending: true, matches: [] })))).toBe(false);
+  });
+
+  it("refusé : la réponse des mots sans le champ n'efface pas des couleurs encore en mesure (relecture gardée, grandes images toutes là)", () => {
+    const allHd = [colored("s", "shopping", undefined, "https://shop.test/s.jpg")];
+    const before = toSpotResult(search({ edgeColorsPending: true, matches: allHd }));
+    const next = withTextSearch(before, search({ matches: allHd }));
+    expect(next.edgeColorsPending).toBe(true);
+    expect(hdRereadDue(next)).toBe(true);
+  });
+
+  it("permis : sans le champ ni avant ni après, grandes images toutes là → aucune relecture de plus", () => {
+    const allHd = [colored("s", "shopping", undefined, "https://shop.test/s.jpg")];
+    const next = withTextSearch(toSpotResult(search({ matches: allHd })), search({ matches: allHd }));
+    expect("edgeColorsPending" in next).toBe(false);
+    expect(hdRereadDue(next)).toBe(false);
   });
 });

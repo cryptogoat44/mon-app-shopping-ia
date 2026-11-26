@@ -130,3 +130,16 @@ export function honestSize(natural: Dimensions | null, frame: Dimensions, varian
 export function edgeBackground(value: string | null | undefined): string | null {
   return typeof value === "string" && /^#[0-9A-Fa-f]{6}$/.test(value) ? value : null;
 }
+
+/** Lot « couleur des bords » : le serveur ne mesure que les deux bords où une
+ * photo contenue dans la tuile 4:5 laisse des bandes ; il suppose qu'elle
+ * touche les deux autres côtés. Le fond uni ne vaut donc que si la photo
+ * affichée touche le cadre sur un axe : toujours en grille, et en grande
+ * image seulement quand la règle d'un point par pixel ne la réduit pas en
+ * une petite boîte centrée (bandes sur les quatre côtés : copie floue).
+ * Taille ou cadre encore inconnus : oui. */
+export function edgeColorApplies(natural: Dimensions | null, frame: Dimensions, variant: PieceTileVariant): boolean {
+  if (variant === "grid" || !known(natural) || !(frame.width > 0) || !(frame.height > 0)) return true;
+  const shown = honestSize(natural, frame, variant);
+  return Math.abs(shown.width - frame.width) < 1 || Math.abs(shown.height - frame.height) < 1;
+}

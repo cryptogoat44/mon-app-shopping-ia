@@ -3,7 +3,7 @@ import { StyleSheet, View, type ImageStyle, type LayoutChangeEvent, type StylePr
 import { Image } from "expo-image";
 import { SpotImage, type ImageNaturalSize } from "@/components/spot-image";
 import { EnlargeableImage, type ZoomState } from "@/components/image-viewer";
-import { edgeBackground, fillsTile, honestSize, type PieceImageSize, type PieceTileVariant } from "@/lib/piece-image";
+import { edgeBackground, edgeColorApplies, fillsTile, honestSize, type PieceImageSize, type PieceTileVariant } from "@/lib/piece-image";
 import { color, getActiveScheme, radius } from "@/theme/tokens";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -81,7 +81,8 @@ export function PieceTile({
     setFrame((previous) => (previous.width === width && previous.height === height ? previous : { width, height }));
   };
 
-  const background = edgeBackground(edgeColor);
+  // Fond uni seulement si la photo touche le cadre sur l'axe que le serveur n'a pas mesuré (lib/piece-image.ts).
+  const background = edgeColorApplies(naturalSize, frame, variant) ? edgeBackground(edgeColor) : null;
   // Taille inconnue : contenue sur toute la tuile ; sinon remplie, ou une
   // boîte centrée à la taille honnête. Taille connue : un fond opaque juste
   // sous la photo, pour qu'un détourage transparent ne laisse pas voir la

@@ -456,7 +456,7 @@ function MyWishlist({ news, switcher, profileHeader }: { news: WishAlertNewsStat
                   >
                     {/* La tuile « Écrin » des grilles (components/piece-tile.tsx) : 4:5, la pièce entière ; le libellé est celui du bouton. */}
                     {item.imageUrl ? (
-                      <PieceTile variant="grid" size="card" hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} recyclingKey={item.id} style={styles.tile} />
+                      <PieceTile variant="grid" size="card" hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} edgeColor={item.edgeColor} recyclingKey={item.id} style={styles.tile} />
                     ) : (
                       <View style={styles.thumb}>
                         <ClockIcon size={30} tint={color.encre} />

@@ -116,7 +116,7 @@ describe("la tuile de pièce (components/piece-tile.tsx)", () => {
     expect(tile).toContain("blurRadius={24}");
     expect(tile).toMatch(/blurRadius=\{24\}\s+cachePolicy="memory-disk"\s+recyclingKey=\{recyclingKey\}\s+accessible=\{false\}/);
     expect(tile).toContain("transform: [{ scale: 1.2 }]");
-    expect(tile).toContain("const background = edgeBackground(edgeColor);");
+    expect(tile).toContain("const background = edgeColorApplies(naturalSize, frame, variant) ? edgeBackground(edgeColor) : null;");
     expect(tile).toContain("{ backgroundColor: background }");
   });
 
@@ -339,5 +339,45 @@ describe("coins doux partout où une pièce s'affiche", () => {
     expect(styleOf(read("src/components/post-card.tsx"), "media")).toContain('overflow: "hidden"');
     expect(styleOf(read("src/components/spot-entry.tsx"), "thumb")).toContain('overflow: "hidden"');
     expect(styleOf(read("src/components/moderation-item.tsx"), "postImage")).toContain('overflow: "hidden"');
+  });
+});
+
+// Lot « couleur des bords » : chaque tuile de pièce des écrans qui montrent
+// une proposition, une envie ou une pièce du Vault reçoit la couleur des
+// bords mesurée par le serveur (la tuile la vérifie : edgeBackground).
+describe("couleur des bords transmise à chaque tuile", () => {
+  const cases: [string, string][] = [
+    ["src/app/(app)/spot/result.tsx", "edgeColor={piece.edgeColor}"],
+    ["src/components/proposal-card.tsx", "edgeColor={piece.edgeColor}"],
+    ["src/app/(app)/envie.tsx", "edgeColor={item.edgeColor}"],
+    ["src/app/(app)/vault-item/[id].tsx", "edgeColor={item.edgeColor}"],
+    ["src/components/wishlist-panel.tsx", "edgeColor={item.edgeColor}"],
+    ["src/app/(app)/(tabs)/profile/index.tsx", "edgeColor={item.edgeColor}"],
+  ];
+
+  it.each(cases)("%s : chaque PieceTile ou ProductFrame reçoit %s", (path, prop) => {
+    const source = read(path);
+    const tiles = source.match(/<(PieceTile|ProductFrame)\b[^>]*\/>/g) ?? [];
+    expect(tiles.length, path).toBeGreaterThan(0);
+    for (const tile of tiles) expect(tile, path).toContain(prop);
+  });
+
+  it("le cadre d'une envie transmet la couleur à la tuile ; les envies de la liste la reçoivent du serveur", () => {
+    const frame = read("src/components/product-frame.tsx");
+    expect(frame).toContain("edgeColor?: string | null;");
+    expect(frame).toContain("edgeColor={edgeColor}");
+    expect(read("src/api/client.ts")).toContain("edgeColor: row.edgeColor ?? null,");
+  });
+
+  it("« Changer la photo » : refusé, garder la couleur de l'ancienne vignette ; permis, la réponse du serveur (copie floue de la nouvelle photo sinon)", () => {
+    const source = read("src/app/(app)/vault-item/[id].tsx");
+    const change = source.slice(source.indexOf("async function handleChangePhoto"), source.indexOf("function safeBack"));
+    expect(change).toContain("const { edgeColor: _oldEdgeColor, ...rest } = current;");
+    expect(change).toContain("return { ...rest, ...updated };");
+    expect(change).not.toContain("{ ...current, ...updated }");
+  });
+
+  it("refusé : une valeur qui n'est pas « #rrggbb » ne colore jamais la tuile (copie floue)", () => {
+    expect(read("src/lib/piece-image.ts")).toContain("/^#[0-9A-Fa-f]{6}$/.test(value)");
   });
 });

@@ -54,6 +54,7 @@ import { launchDating } from "../lib/launchDating.js";
 import { ANALYSIS_BUCKET, analysisImagePath, legacyAnalysisImagePath, purgeStaleAnalysisImages } from "../lib/storage.js";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
 import { queueResultMerchantImages } from "../lib/merchantImage.js";
+import { queueSearchEdgeColors } from "../lib/edgeColor.js";
 import { searchLocaleFor } from "../lib/locale.js";
 import { DatabaseReadError, INVALID_ID, idParamsSchema, parseInput } from "../lib/validation.js";
 import { IncompleteReadError } from "../lib/pagedReads.js";
@@ -616,7 +617,10 @@ async function writeOutcome(fastify: FastifyInstance, request: FastifyRequest, i
   // Recherche toute neuve : aucune proposition n'a encore pu être signalée.
   // Toutes ses propositions sont là : le verdict est calculé (lib/verdict.ts), sur une base qui a 0055.
   // Seconde main de luxe (lib/luxuryResale.ts) : calculée aussi, sans migration.
-  return toProductSearch(search, matches, affiliateUrlByMatchId, new Map(), false, { verdict: await verdictColumnReady(fastify), luxuryResale: true });
+  const outcome = toProductSearch(search, matches, affiliateUrlByMatchId, new Map(), false, { verdict: await verdictColumnReady(fastify), luxuryResale: true });
+  // Couleur des bords des 12 premières vignettes, après la réponse (lib/edgeColor.ts, éteint par défaut) ;
+  // edgeColorsPending (facultatif) seulement si une vignette vient d'être mise en file : l'app relira.
+  return queueSearchEdgeColors(request.log, outcome) ? { ...outcome, edgeColorsPending: true } : outcome;
 }
 
 /** Enregistre l'issue de l'appel et sa mesure, et renvoie la recherche
@@ -976,7 +980,10 @@ async function readSearchForReply(fastify: FastifyInstance, request: FastifyRequ
   const matchIds = matches.map((m) => m.id);
   const affiliateUrlByMatchId = await fetchAffiliateUrls(fastify, matchIds);
   const feedbackByMatchId = await fetchFeedbackReasons(fastify, userId, matchIds);
-  return toProductSearch(row, matches, affiliateUrlByMatchId, feedbackByMatchId, true, { verdict: await verdictColumnReady(fastify), luxuryResale: true });
+  const full = toProductSearch(row, matches, affiliateUrlByMatchId, feedbackByMatchId, true, { verdict: await verdictColumnReady(fastify), luxuryResale: true });
+  // Couleur des bords des 12 premières vignettes, après la réponse (lib/edgeColor.ts, éteint par défaut) ;
+  // edgeColorsPending (facultatif) seulement si une vignette vient d'être mise en file : l'app relira.
+  return queueSearchEdgeColors(request.log, full) ? { ...full, edgeColorsPending: true } : full;
 }
 
 // ---- Boutiques ensuite (POST /api/searches/:id/complement, 0031) ----
@@ -1701,6 +1708,8 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
     const verdict = await verdictColumnReady(fastify);
     const reread: ProductSearch = { ...toProductSearch(row, matches, affiliateUrlByMatchId, feedbackByMatchId, textSearchOn, { verdict, luxuryResale: true }), wishlistMatchIds, vaultMatchIds };
 
-    return reply.send(reread);
+    // Couleur des bords des 12 premières vignettes, après la réponse (lib/edgeColor.ts, éteint par défaut) ;
+    // edgeColorsPending (facultatif) seulement si une vignette vient d'être mise en file : l'app relira.
+    return reply.send(queueSearchEdgeColors(request.log, reread) ? { ...reread, edgeColorsPending: true } : reread);
   });
 }

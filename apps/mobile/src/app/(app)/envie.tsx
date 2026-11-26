@@ -221,7 +221,7 @@ export default function WishlistItemScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.content} scrollEnabled={zoomState !== "zooming"}>
-          <ProductFrame hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} accessibilityLabel={item.title} fullResolution onZoomStateChange={setZoomState} enlargeable />
+          <ProductFrame hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} edgeColor={item.edgeColor} accessibilityLabel={item.title} fullResolution onZoomStateChange={setZoomState} enlargeable />
           <Text style={styles.title} accessibilityRole="header">{item.title}</Text>
           <Text style={styles.meta}>{[item.merchantName, displayPrice(item)].filter(Boolean).join(" · ")}</Text>
           {(() => {

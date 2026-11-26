@@ -21,6 +21,7 @@ import { FAILURE_KINDS } from "./searchMeasure.js";
 import { reviewOffers, sectionOrder, type OfferReview, type TrustOffer } from "./shopTrust.js";
 import { luxuryResaleOf } from "./luxuryResale.js";
 import { searchVerdict } from "./verdict.js";
+import { edgeColorField } from "./edgeColor.js";
 
 export const SEARCH_ROW = z.object({
   id: z.string(),
@@ -338,6 +339,8 @@ export function toProductSearch(
         brand: m.brand,
         imageUrl: m.image_url,
         imageHdUrl: m.image_hd_url,
+        // Couleur des bords de la vignette (lib/edgeColor.ts) : seulement si elle est déjà mesurée (absente sinon, et toujours interrupteur éteint).
+        ...edgeColorField(m.image_url),
         priceMin: priceOf(m.price_min),
         priceMax: priceOf(m.price_max),
         currency: m.currency,

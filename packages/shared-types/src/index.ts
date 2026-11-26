@@ -265,6 +265,10 @@ export interface ProductMatch {
    * vignette) si elle ne se charge pas : certains marchands bloquent
    * l'affichage de leurs images hors de leur site. */
   imageHdUrl: string | null;
+  /** Couleur unie des bords de la vignette ("#rrggbb"), mesurée par le
+   * serveur (lot couleur des bords) ; absente : bords non uniformes, pas
+   * encore mesurée, ou fonction coupée. */
+  edgeColor?: string;
   /** Lien à ouvrir au clic — affilié si un programme d'affiliation est
    * rejoint pour ce marchand, sinon identique à `merchantUrl`. Renvoyé dès
    * les résultats de recherche pour que l'app puisse l'ouvrir immédiatement,
@@ -376,6 +380,12 @@ export interface ProductSearch {
    * à chaque relecture. Absent : aucune entrée (dans le doute, historique,
    * ancien serveur). Une app plus ancienne l'ignore. */
   luxuryResale?: LuxuryResale;
+  /** Couleur des bords (lot « couleur des bords ») : présent (true)
+   * seulement quand cette réponse vient de mettre en file la mesure d'au
+   * moins une vignette ; l'app relit alors la recherche à +6 s et +16 s pour
+   * recevoir les couleurs. Absent : rien en file, fonction coupée, ancien
+   * serveur. Une app plus ancienne l'ignore. */
+  edgeColorsPending?: boolean;
 }
 
 /** Seconde main de luxe : la maison retenue et les liens vers la recherche
@@ -681,6 +691,10 @@ export interface VaultItem {
    * garde son image d'origine — à afficher en priorité, avec repli sur
    * `imageUrl`. Null pour une photo personnelle. */
   imageHdUrl: string | null;
+  /** Couleur unie des bords de la vignette ("#rrggbb"), mesurée par le
+   * serveur (lot couleur des bords) ; absente : bords non uniformes, pas
+   * encore mesurée, ou fonction coupée. */
+  edgeColor?: string;
   category: VaultCategory;
   verified: boolean;
   productMatchId: string | null;
@@ -733,6 +747,10 @@ export interface WishlistItem {
   /** Image haute définition du marchand (pièce venue du Spotter), avec
    * repli sur `imageUrl`. */
   imageHdUrl: string | null;
+  /** Couleur unie des bords de la vignette ("#rrggbb"), mesurée par le
+   * serveur (lot couleur des bords) ; absente : bords non uniformes, pas
+   * encore mesurée, ou fonction coupée. */
+  edgeColor?: string;
   reference: string | null;
   priceMin: number | null;
   currency: string | null;

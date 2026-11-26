@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   edgeBackground,
+  edgeColorApplies,
   FILL_TOLERANCE,
   fillsTile,
   HERO_MAX_POINTS_PER_PIXEL,
@@ -280,5 +281,19 @@ describe("tuile de pièce : remplir, taille honnête, couleur des bords", () => 
     for (const refused of ["red", "#FFF", "rgba(0,0,0,1)", "#F2F1EEAA", "", null, undefined]) {
       expect(edgeBackground(refused)).toBeNull();
     }
+  });
+
+  it("couleur des bords : refusé, une petite photo en grande image (bandes sur les quatre côtés : copie floue) ; permis, une photo qui touche le cadre", () => {
+    // 200 × 300 px dans une grande image de 358 pt : 200 × 300 pt au centre, rien ne touche le cadre.
+    expect(edgeColorApplies({ width: 200, height: 300 }, HERO, "hero")).toBe(false);
+    expect(edgeColorApplies({ width: 300, height: 300 }, HERO, "hero")).toBe(false);
+    // Assez grande : elle touche le cadre sur un axe.
+    expect(edgeColorApplies({ width: 1000, height: 1000 }, HERO, "hero")).toBe(true);
+    expect(edgeColorApplies({ width: 600, height: 1200 }, HERO, "hero")).toBe(true);
+    // Grille : la photo touche toujours deux côtés ; taille ou cadre inconnus : oui.
+    expect(edgeColorApplies({ width: 100, height: 100 }, GRID, "grid")).toBe(true);
+    expect(edgeColorApplies(null, HERO, "hero")).toBe(true);
+    expect(edgeColorApplies({ width: 200, height: 300 }, { width: 0, height: 0 }, "hero")).toBe(true);
+    expect(readFileSync(join(__dirname, "../src/components/piece-tile.tsx"), "utf8")).toContain("const background = edgeColorApplies(naturalSize, frame, variant) ? edgeBackground(edgeColor) : null;");
   });
 });

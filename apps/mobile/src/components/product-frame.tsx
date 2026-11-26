@@ -23,6 +23,7 @@ export function ProductFrame({
   enlargeable = false,
   onZoomStateChange,
   fullResolution = false,
+  edgeColor,
 }: {
   hdUri?: string | null;
   fallbackUri: string;
@@ -34,6 +35,8 @@ export function ProductFrame({
   onZoomStateChange?: (state: ZoomState) => void;
   /** La grande image de la fiche d'une envie seulement : décodée en entier, nette au zoom. */
   fullResolution?: boolean;
+  /** Couleur des bords mesurée par le serveur (lot « couleur des bords ») : voir PieceTile. */
+  edgeColor?: string | null;
 }) {
   return (
     <PieceTile
@@ -45,6 +48,7 @@ export function ProductFrame({
       enlargeable={enlargeable}
       onZoomStateChange={onZoomStateChange}
       fullResolution={fullResolution}
+      edgeColor={edgeColor}
       style={styles.frame}
     />
   );

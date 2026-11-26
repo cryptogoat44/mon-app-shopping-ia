@@ -913,6 +913,7 @@ export default function ResultScreen() {
               enlargeable
               hdUri={piece.imageHdUrl}
               fallbackUri={piece.imageUrl}
+              edgeColor={piece.edgeColor}
               accessibilityLabel={piece.name}
               onLayout={heroReveal.onHeroLayout}
               fullResolution

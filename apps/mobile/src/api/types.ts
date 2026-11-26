@@ -10,6 +10,11 @@ export interface Piece {
   /** Image originale du marchand (haute définition) quand elle existe ;
    * à afficher en priorité, avec repli sur `imageUrl`. */
   imageHdUrl?: string | null;
+  /** Couleur unie des bords de la vignette (« #rrggbb »), mesurée par le
+   * serveur (lot « couleur des bords ») : fond de la tuile derrière une photo
+   * qui ne la remplit pas (components/piece-tile.tsx). Absente ou null :
+   * la copie floue. */
+  edgeColor?: string | null;
   priceFrom: number | null;
   currency: string | null;
   merchantName: string | null;
@@ -102,6 +107,10 @@ export interface SpotResult {
    * liens vers la recherche des sites de revente, décidés par le serveur
    * (lib/luxury-resale.ts). Absent : aucune entrée (dans le doute, ancien serveur). */
   luxuryResale?: LuxuryResale;
+  /** Couleur des bords (lot « couleur des bords ») : le serveur vient de
+   * mettre en file la mesure d'au moins une vignette ; l'écran relit la
+   * recherche (lib/spot-result.ts, hdRereadDue). Absent : rien à attendre. */
+  edgeColorsPending?: true;
 }
 
 /** Complément des propositions de la recherche visuelle (voie C, lot c) :
