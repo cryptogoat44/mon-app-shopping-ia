@@ -19,7 +19,7 @@ import { addVaultItemFromMatch, fetchMessagesStatus, fetchSearch, fetchShops, fe
 import { openMerchantLink } from "@/lib/merchant-links";
 import { chooseInitialResult, hdRereadDue, pieceTitle, withHdImages, withoutTextPrompt, withTextSearch, type InitialResultState } from "@/lib/spot-result";
 import { afterShops, requestShops, shopsPending } from "@/lib/spot-shops";
-import { allPieces, merchantContextFor, merchantMarkFor, opensOfferPage } from "@/lib/result-sections";
+import { allPieces, merchantContextFor, merchantMarkFor, opensOfferPage, rowHasMarksAt } from "@/lib/result-sections";
 import {
   bestProposalIndex,
   bigCardLabel,
@@ -76,7 +76,7 @@ import { ForeignShopNote } from "@/components/foreign-shop-note";
 import { OfferMarkNote } from "@/components/offer-mark";
 import { StockNote } from "@/components/stock-note";
 import { VerdictLine, verdictLineShown } from "@/components/verdict-line";
-import { actionsInTwoRows } from "@/lib/text-fit";
+import { actionsInTwoRows, marksUnderLink } from "@/lib/text-fit";
 import { verdictToTrack } from "@/lib/verdict";
 import { LuxuryResaleEntry } from "@/components/luxury-resale";
 import { luxuryResaleToTrack } from "@/lib/luxury-resale";
@@ -146,6 +146,10 @@ export default function ResultScreen() {
   const [categoryTarget, setCategoryTarget] = useState<Piece | null>(null);
   const [reportTarget, setReportTarget] = useState<Piece | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // Grande carte : où sont « Ce n'est pas la bonne pièce ? » (bord gauche) et la fin de la rangée des mentions
+  // (bord droit), mesurés ; les mentions ne remontent sur la ligne du prix que si elles ne sont pas sous le lien.
+  const [correctionsLinkLeft, setCorrectionsLinkLeft] = useState<number | null>(null);
+  const [marksRight, setMarksRight] = useState<number | null>(null);
   // La page look (lot « page look ») : « Partager le look » quand le serveur
   // le permet, une feuille de confirmation, puis la feuille de partage.
   const lookStatus = useLookPagesStatus();
@@ -889,8 +893,10 @@ export default function ResultScreen() {
   // Cases de la rangée d'actions : filet à gauche des cases 2 à 4 ; grand texte, deux rangées de deux
   // (filet en haut des cases 3 et 4, pas à gauche de la case 3) ; avec trois cases, la troisième prend toute la largeur.
   const actionCount = piece.real ? 4 : 3;
-  // Les libellés de départ (jamais ceux d'après un toucher : la rangée ne change pas de forme sous le doigt).
-  const actionLabels = [t.result.keep, t.result.markAsBought, lookAllowed ? t.look.share : t.result.share, ...(piece.real ? [t.result.moreShort] : [])];
+  // Les libellés de départ (jamais ceux d'après un toucher : la rangée ne change pas de forme sous le doigt), ceux qui
+  // doivent tenir sur une ligne. « Partager le look » n'en est pas (correctif du lot « finitions de l'œil ») : il passe
+  // à la ligne dans sa case (contenu calé en haut), au lieu de mettre toute la rangée sur deux rangées à 390 points.
+  const actionLabels = [t.result.keep, t.result.markAsBought, t.result.share, ...(piece.real ? [t.result.moreShort] : [])];
   const wideText = actionsInTwoRows(windowWidth, fontScale, actionLabels, actionCount);
   const actionCell = (position: number) =>
     wideText
@@ -972,13 +978,25 @@ export default function ResultScreen() {
               <Text style={styles.meta}>
                 {[piece.merchantName, displayPrice(piece)].filter(Boolean).join(" · ")}
               </Text>
-              {sheetActions.length > 0 ? <CorrectionsLink style={styles.notRight} onPress={() => setCorrectionsOpen(true)} /> : null}
+              {/* Correctif du lot « finitions de l'œil » : le lien ne compte que pour la hauteur du texte (18 points) ;
+                  sa zone de 44 points déborde vers le haut, sur le nom (components/spot-corrections.tsx). */}
+              {sheetActions.length > 0 ? (
+                <CorrectionsLink inline onLayout={(event) => setCorrectionsLinkLeft(event.nativeEvent.layout.x)} onPress={() => setCorrectionsOpen(true)} />
+              ) : null}
             </View>
-            {selectedIndex === cheapest ? <CheapestBadge /> : null}
             <ForeignShopNote piece={piece} />
-            {/* Rien à dire (ni mention, ni stock) : pas de rangée, sa marge négative ne tire pas le bouton sur le prix. */}
-            {piece.offerMark || typeof piece.inStock === "boolean" ? (
-              <View style={styles.marks}>
+            {/* Rien à dire (ni pastille, ni mention, ni stock) : pas de rangée, sa marge négative ne tire pas le bouton sur le prix.
+                « Le moins cher » est sur la rangée des mentions (correctif du lot « finitions de l'œil » : pas de ligne de plus). */}
+            {selectedIndex === cheapest || piece.offerMark || typeof piece.inStock === "boolean" ? (
+              <View
+                style={[
+                  styles.marks,
+                  selectedIndex === cheapest ? styles.marksWithBadge : null,
+                  sheetActions.length > 0 && marksUnderLink(correctionsLinkLeft, marksRight) ? styles.marksUnderLink : null,
+                ]}
+                onLayout={(event) => setMarksRight(event.nativeEvent.layout.width)}
+              >
+                {selectedIndex === cheapest ? <CheapestBadge inline /> : null}
                 {/* Boutiques douteuses : « Boutique connue » ou « Prix inhabituellement bas » (components/offer-mark.tsx). */}
                 <OfferMarkNote piece={piece} />
                 {/* Stock affiché : « En stock » ou « Épuisée » d'après Google, au moment de la recherche (components/stock-note.tsx). */}
@@ -1082,7 +1100,7 @@ export default function ResultScreen() {
                 </View>
                 <View style={styles.grid}>
                   {/* Cartes (image, nom, boutique, prix, « Voir chez … ») : components/proposal-card.tsx. Deux colonnes à 8 pt. */}
-                  {visibleOthers.map(({ piece: p, index }, i) => (
+                  {visibleOthers.map(({ piece: p, index }, i, list) => (
                     <ProposalCard
                       key={p.id}
                       piece={p}
@@ -1090,6 +1108,7 @@ export default function ResultScreen() {
                       placement={placements.get(index)}
                       cheapest={index === cheapest}
                       column={i % 2 === 0 ? "left" : "right"}
+                      rowHasMarks={rowHasMarksAt(list.map((entry) => entry.piece), i)}
                     />
                   ))}
                 </View>
@@ -1300,8 +1319,13 @@ const styles = themedStyles(() => ({
   // Sans grande carte, le lien garde sa place (à gauche, en haut de la liste).
   notRight: { alignItems: "flex-start", marginTop: 0 },
   // Les mentions (zones touchables de 32 points pour un texte de 16) ne réservent plus leur marge vide à l'œil :
-  // leur zone déborde sur l'espace de la ligne du prix et du bouton, sans les recouvrir.
-  marks: { flexDirection: "row", flexWrap: "wrap", columnGap: space.sm, alignItems: "center", marginVertical: -8 },
+  // leur zone déborde sur l'espace de la ligne du prix et du bouton, sans les recouvrir. alignSelf : la rangée a la
+  // largeur de son contenu (mesurée : est-elle sous le lien ?) ; minHeight : « Le moins cher » seul y reste centré.
+  marks: { flexDirection: "row", flexWrap: "wrap", columnGap: space.sm, alignItems: "center", alignSelf: "flex-start", minHeight: 32, marginVertical: -8 },
+  // Sous « Ce n'est pas la bonne pièce ? » : elles ne remontent plus (leur zone de l'iPhone dépasse de 6 points vers le haut).
+  marksUnderLink: { marginTop: 6 },
+  // Avec « Le moins cher » (une pastille pleine de 19 points, centrée) : 2 points de moins vers le prix, pour qu'elle ne le touche pas.
+  marksWithBadge: { marginTop: -6 },
   primary: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: 12 },
   primaryLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600", flexShrink: 1 },
   secondary: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: space.sm },

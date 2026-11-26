@@ -53,3 +53,14 @@ export function placeholderFor(long: string, short: string, fieldWidth: number, 
   if (!(fieldWidth > 0)) return fontScale > 1 ? short : long;
   return fitsOnOneLine(long, fontSize, fontScale, fieldWidth) ? long : short;
 }
+
+/** Grande carte du Résultat : les mentions (« En stock », « Boutique connue », zone de 32 points élargie de 8 sur
+ * les côtés et de 6 en haut sur l'iPhone) sont-elles sous « Ce n'est pas la bonne pièce ? » ? Oui quand le lien est
+ * passé à la ligne (à gauche, au-dessus d'elles) ou que la rangée des mentions va jusque sous lui. Il faut alors
+ * qu'elles ne remontent plus sur la ligne du prix, sinon elles mangent le bas du lien. Mesures inconnues : non
+ * (premier dessin ; la mise en page se corrige à la mesure). `linkLeft` et `marksRight` : depuis le bord gauche du contenu. */
+export const MARK_SLOP_SIDE = 8;
+export function marksUnderLink(linkLeft: number | null, marksRight: number | null): boolean {
+  if (linkLeft === null || marksRight === null) return false;
+  return marksRight + MARK_SLOP_SIDE > linkLeft;
+}

@@ -3,7 +3,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { setActiveLocale } from "../src/i18n";
 import { EDGE_INSET_NATIVE, EDGE_INSET_PER_BLUR, EDGE_STRIP, edgeBands, fillsTile } from "../src/lib/piece-image";
-import { actionsInTwoRows, estimatedTextWidth, pairStacked, placeholderFor } from "../src/lib/text-fit";
+import { actionsInTwoRows, estimatedTextWidth, marksUnderLink, pairStacked, placeholderFor } from "../src/lib/text-fit";
+import { rowHasMarksAt } from "../src/lib/result-sections";
 import { recentDayLabel, recentDayShort } from "../src/lib/recent-searches";
 import { fr } from "../src/i18n/fr";
 import { en } from "../src/i18n/en";
@@ -185,9 +186,53 @@ describe("3 · le haut du Résultat : une seule ligne grise sous les pastilles",
   it("deux lignes de 36 points, zone touchable de 44 sur l'iPhone ; les mentions ne réservent plus leur marge vide", () => {
     expect(verdict).toContain('box: { minHeight: 36, justifyContent: "center" }');
     expect(verdict).toContain("hitSlop={{ top: 4, bottom: 4 }}");
-    expect(screen).toContain('marks: { flexDirection: "row", flexWrap: "wrap", columnGap: space.sm, alignItems: "center", marginVertical: -8 }');
+    expect(screen).toContain('marks: { flexDirection: "row", flexWrap: "wrap", columnGap: space.sm, alignItems: "center", alignSelf: "flex-start", minHeight: 32, marginVertical: -8 }');
     // Refusé : la rangée vide des mentions qui tirerait le bouton sur le prix.
-    expect(screen).toContain('{piece.offerMark || typeof piece.inStock === "boolean" ? (\n              <View style={styles.marks}>');
+    expect(screen).toContain('{selectedIndex === cheapest || piece.offerMark || typeof piece.inStock === "boolean" ? (\n              <View');
+  });
+});
+
+describe("3 · correctif : « Ce n'est pas la bonne pièce ? » ne grandit plus la ligne du prix, et les mentions ne le recouvrent pas", () => {
+  const screen = read("src/app/(app)/spot/result.tsx");
+  const link = read("src/components/spot-corrections.tsx");
+  const style = (source: string, name: string) => source.match(new RegExp(`\\n  ${name}: \\{([^}]*)\\}`))?.[1] ?? "";
+
+  it("refusé : le lien de 44 points posé tel quel sur la ligne du prix (elle passait de 18 à 44 points) ; permis : 18 points dans la ligne, 44 de zone vers le haut", () => {
+    const row = screen.slice(screen.indexOf("<View style={styles.metaRow}>"), screen.indexOf("<ForeignShopNote piece={piece} />"));
+    expect(row).toContain("<CorrectionsLink inline ");
+    expect(row).not.toContain("styles.notRight");
+    // La boîte garde 44 points (le site ignore les zones élargies), dont 26 au-dessus de la ligne : la ligne ne compte que 18.
+    expect(style(link, "link")).toContain("minHeight: 44");
+    expect(style(link, "linkInline")).toContain("minHeight: 44, marginTop: -CORRECTIONS_LINK_OVERFLOW_UP, paddingTop: CORRECTIONS_LINK_OVERFLOW_UP");
+    expect(link).toContain("export const CORRECTIONS_LINK_OVERFLOW_UP = 26;");
+    expect(44 - 26).toBe(18);
+    expect(style(screen, "meta")).toContain("lineHeight: 18");
+    expect(style(link, "linkLabelInline")).toContain("lineHeight: 18");
+    // Jamais vers le bas, où sont les mentions.
+    expect(style(link, "linkInline")).not.toContain("marginBottom");
+  });
+
+  it("« Le moins cher » sur la rangée des mentions : pas de ligne de plus sous le prix", () => {
+    const card = screen.slice(screen.indexOf("<View style={styles.metaRow}>"), screen.indexOf("{piece.merchantUrl ? (\n              <Pressable style={styles.primary}"));
+    expect(card.indexOf("<CheapestBadge inline />")).toBeGreaterThan(card.indexOf("<View\n                style={[styles.marks"));
+    expect(card.match(/<CheapestBadge/g)).toHaveLength(1);
+  });
+
+  it("mentions sous le lien (lien passé à la ligne, ou rangée qui va jusque sous lui) : elles ne remontent plus ; sinon elles remontent (8 points)", () => {
+    // Refusé : sous le lien.
+    expect(marksUnderLink(0, 70)).toBe(true);
+    expect(marksUnderLink(180, 175)).toBe(true);
+    // Permis : lien à droite, « En stock » à gauche, loin de lui ; mesures inconnues.
+    expect(marksUnderLink(183, 70)).toBe(false);
+    expect(marksUnderLink(null, 70)).toBe(false);
+    expect(marksUnderLink(183, null)).toBe(false);
+    expect(screen).toContain("sheetActions.length > 0 && marksUnderLink(correctionsLinkLeft, marksRight) ? styles.marksUnderLink : null,");
+    // Sous le lien, la règle l'emporte sur celle de la pastille (dernière du tableau de styles).
+    expect(screen.indexOf("styles.marksUnderLink : null,")).toBeGreaterThan(screen.indexOf("selectedIndex === cheapest ? styles.marksWithBadge : null,"));
+    // Zone des mentions sur l'iPhone : 6 points au-dessus ; le lien s'arrête au bas de la ligne : 6 points d'écart suffisent.
+    expect(style(screen, "marksUnderLink")).toBe(" marginTop: 6 ");
+    expect(read("src/components/stock-note.tsx")).toContain("hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}");
+    expect(read("src/components/offer-mark.tsx")).toContain("hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}");
   });
 });
 
@@ -290,6 +335,19 @@ describe("6 · petites largeurs et grand texte (lib/text-fit.ts)", () => {
     expect(actionsInTwoRows(1280, 1, actions)).toBe(false);
   });
 
+  it("« Partager le look » ne compte pas : une rangée à 390 pt (FR, texte normal) ; deux à 320 pt et à 390 pt texte × 1,3", () => {
+    const screen = read("src/app/(app)/spot/result.tsx");
+    expect(screen).toContain("const actionLabels = [t.result.keep, t.result.markAsBought, t.result.share, ...(piece.real ? [t.result.moreShort] : [])];");
+    expect(screen).not.toMatch(/const actionLabels = [^\n]*t\.look\.share/);
+    // Refusé : avec « Partager le look » (16 caractères), la rangée passait à deux rangées à 390 pt.
+    expect(actionsInTwoRows(390, 1, [...actions.slice(0, 2), fr.look.share, actions[3]])).toBe(true);
+    // Permis : les libellés qui doivent tenir sur une ligne.
+    expect(actionsInTwoRows(390, 1, actions)).toBe(false);
+    expect(actionsInTwoRows(393, 1, actions)).toBe(false);
+    expect(actionsInTwoRows(320, 1, actions)).toBe(true);
+    expect(actionsInTwoRows(390, 1.3, actions)).toBe(true);
+  });
+
   it("fiche d'une envie : côte à côte à 390 pt ; l'un sous l'autre à 320 pt et à 390 pt texte × 1,3 ; un seul bouton, jamais « empilé »", () => {
     const pair = [fr.result.markAsBought, fr.wishAlerts.bellOff];
     expect(pairStacked(390, 1, pair)).toBe(false);
@@ -369,7 +427,9 @@ describe("7 · l'accueil : la date courte des cases, le maillon du lien", () => 
     expect(tile).toContain("const spoken = [recentDayLabel(entry.createdAt, getActiveLocale()), piece.merchantName]");
     expect(tile).toContain("accessibilityLabel={`${piece.name}, ${spoken}`}");
     expect(tile).not.toMatch(/<Text style=\{styles\.meta\} numberOfLines=\{1\}>\s*\{meta\}/);
-    expect(tile).toMatch(/\n  metaDay: \{ flexShrink: 0 \}/);
+    // La date ne rétrécit pas avant la boutique, mais reste bornée à la case (refusé : elle débordait au grand texte).
+    expect(tile).toMatch(/\n  metaDay: \{ flexShrink: 0, maxWidth: "100%" \}/);
+    expect(tile).not.toMatch(/\n  metaDay: \{ flexShrink: 0 \}/);
     expect(tile).toMatch(/\n  metaShop: \{ flexShrink: 1 \}/);
     // La date longue reste celle d'avant (tests/retrouver-pieces.test.ts).
     expect(recentDayLabel(at(2026, 11, 23), "fr", NOW)).toBe("lundi 23 novembre");

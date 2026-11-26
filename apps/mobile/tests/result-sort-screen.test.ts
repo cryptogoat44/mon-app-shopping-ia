@@ -94,7 +94,8 @@ describe("« Pertinence » : l'écran d'avant, dans le même ordre", () => {
   });
 
   it("« Le moins cher » sur la carte concernée, grande carte comprise", () => {
-    expect(screen).toContain("{selectedIndex === cheapest ? <CheapestBadge /> : null}");
+    // Grande carte : sur la rangée des mentions (correctif du lot « finitions de l'œil »).
+    expect(screen).toContain("{selectedIndex === cheapest ? <CheapestBadge inline /> : null}");
     expect(screen).toContain("cheapest={index === cheapest}");
     expect(screen.match(/cheapestIndex=\{cheapest\}/g)?.length).toBe(3);
     expect(complement).toContain("cheapest={index === cheapestIndex}");

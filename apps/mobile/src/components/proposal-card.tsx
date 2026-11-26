@@ -8,7 +8,7 @@ import { getActiveLocale, t } from "@/i18n";
 import { formatPrice } from "@/lib/format";
 import { openMerchantLink } from "@/lib/merchant-links";
 import { useShopWatch } from "@/lib/use-purchase-question";
-import { merchantContextFor, merchantMarkFor, opensOfferPage } from "@/lib/result-sections";
+import { hasMarks, merchantContextFor, merchantMarkFor, opensOfferPage } from "@/lib/result-sections";
 import type { ClickPlacement } from "@/lib/price-first";
 import { SpotImage } from "@/components/spot-image";
 import { PieceTile } from "@/components/piece-tile";
@@ -43,6 +43,7 @@ export function ProposalCard({
   cheapest = false,
   variant = "grid",
   column,
+  rowHasMarks,
 }: {
   piece: Piece;
   onSelect: () => void;
@@ -51,11 +52,15 @@ export function ProposalCard({
   variant?: "grid" | "row";
   /** Grille de deux colonnes à 8 pt (lot « fidélité aux maquettes ») : la moitié de la largeur, l'écart porté par la carte. Absent : 48 %, comme avant. */
   column?: "left" | "right";
+  /** Grille : la carte voisine de la même rangée a une mention (rowHasMarks) ; la rangée des mentions est alors
+   * réservée, même vide, pour que « Voir chez … » soit à la même hauteur dans les deux cartes. Absent : cette carte seule. */
+  rowHasMarks?: boolean;
 }) {
   const price = piece.priceFrom !== null ? formatPrice(piece.priceFrom, piece.currency, getActiveLocale()) : null;
   // Ligne de la liste triée : « Prix à vérifier chez le marchand » s'affiche aussi sans prix, et se lit.
   const shownPrice = price ?? (variant === "row" ? t.result.priceOnSite : null);
   const label = [piece.name, piece.merchantName, shownPrice, cheapest ? t.result.cheapestBadge : null].filter(Boolean).join(", ");
+  const marksRow = hasMarks(piece) || rowHasMarks === true;
 
   if (variant === "row") {
     return (
@@ -110,8 +115,9 @@ export function ProposalCard({
         <ForeignShopNote piece={piece} compact />
       </Pressable>
       {/* Côte à côte quand elles tiennent (« Boutique connue · En stock »), sinon l'une sous l'autre (retours du build 3).
-          Rien à dire : pas de rangée (ses marges négatives, rythme de la maquette 5, ne tirent rien sur le prix). */}
-      {piece.offerMark || typeof piece.inStock === "boolean" ? (
+          Rien à dire dans la rangée (ni ici ni chez la voisine) : pas de rangée (ses marges négatives, rythme de la
+          maquette 5, ne tirent rien sur le prix). La voisine en a une : rangée vide de même hauteur (cartes alignées). */}
+      {marksRow ? (
         <View style={styles.marks}>
           {/* Boutiques douteuses : « Boutique connue » ou « Prix inhabituellement bas », touchable à part. */}
           <OfferMarkNote piece={piece} />
@@ -124,7 +130,9 @@ export function ProposalCard({
           <StockNote piece={piece} />
         </View>
       ) : null}
-      {piece.merchantUrl ? <ShopLink piece={piece} placement={placement} tight /> : null}
+      {/* Sous une rangée de mentions, le lien ne remonte pas : sa zone de 44 points s'arrête sous leur texte
+          (correctif du lot « finitions de l'œil » : toucher « En stock » n'ouvre jamais la boutique). */}
+      {piece.merchantUrl ? <ShopLink piece={piece} placement={placement} tight={!marksRow} /> : null}
     </View>
   );
 }
@@ -154,13 +162,22 @@ export function ShopAndPrice({ shop, price }: { shop: string | null | undefined;
  * carte, une ligne de la liste triée ou la grande carte. Lue avec la carte
  * par VoiceOver (son libellé la contient). `onTile` : posée sur le coin de la
  * photo d'une carte de grille (elle ne décale plus les lignes de la carte). */
-export function CheapestBadge({ onTile = false }: { onTile?: boolean } = {}) {
-  return (
-    <View style={onTile ? [styles.badge, styles.badgeOnTile] : styles.badge} testID="cheapest-badge">
+export function CheapestBadge({ onTile = false, inline = false }: { onTile?: boolean; inline?: boolean } = {}) {
+  const badge = (
+    <View style={onTile ? [styles.badge, styles.badgeOnTile] : inline ? [styles.badge, styles.badgeInline] : styles.badge} testID="cheapest-badge">
       <Text style={styles.badgeLabel} numberOfLines={1}>
         {t.result.cheapestBadge}
       </Text>
     </View>
+  );
+  // Sur la photo : une zone posée à 8 points des bords gauche ET droit de la tuile ; la pastille y garde sa largeur
+  // de contenu, bornée par la zone (au grand texte, son texte se raccourcit dans la tuile, jamais au-delà).
+  return onTile ? (
+    <View style={styles.badgeOnTileZone} pointerEvents="none">
+      {badge}
+    </View>
+  ) : (
+    badge
   );
 }
 
@@ -238,7 +255,9 @@ const styles = themedStyles(() => ({
   // Rythme de la maquette 5 (lot « finitions de l'œil ») : environ 21 points d'axe à axe entre le prix et la
   // mention, 24 entre la mention et « Voir chez … » ; les zones touchables (32 et 44 points) débordent sur
   // l'espace vide de leurs voisines, sans les recouvrir.
-  marks: { flexDirection: "row", flexWrap: "wrap", columnGap: space.sm, marginTop: -5, marginBottom: -8, alignItems: "center" },
+  // Sous les mentions (32 points, texte de 12 centré : 8 points vides en bas), le lien commence où finit leur texte :
+  // marginBottom -8 seul, jamais de marge négative du lien en plus (shopLinkTight). minHeight : rangée vide réservée.
+  marks: { flexDirection: "row", flexWrap: "wrap", columnGap: space.sm, marginTop: -5, marginBottom: -8, alignItems: "center", minHeight: 32 },
   markDot: { fontSize: 12, color: color.acier },
   fill: { width: "100%", height: "100%" },
   // Deux lignes réservées : les rangées restent alignées (minHeight, jamais height).
@@ -269,5 +288,8 @@ const styles = themedStyles(() => ({
   // Pastille pleine : blanc sur vert (contraste AA vérifié, tests/contrast.test.ts).
   badge: { alignSelf: "flex-start", backgroundColor: color.vert, borderRadius: radius.full, paddingHorizontal: space.sm, paddingVertical: 2, marginTop: 4 },
   badgeLabel: { fontSize: 12, color: color.blanc, fontWeight: "600" },
-  badgeOnTile: { position: "absolute", top: space.sm, left: space.sm, marginTop: 0 },
+  badgeOnTileZone: { position: "absolute", top: space.sm, left: space.sm, right: space.sm, alignItems: "flex-start" },
+  badgeOnTile: { marginTop: 0, maxWidth: "100%" },
+  // Sur la rangée des mentions de la grande carte : centrée sur la ligne, sans marge.
+  badgeInline: { marginTop: 0, alignSelf: "center" },
 }));

@@ -275,7 +275,7 @@ describe("Résultat, la grande carte (maquettes 4-resultat-grande-carte)", () =>
     const row = screen.slice(screen.indexOf("<View style={styles.metaRow}>"), screen.indexOf("<ForeignShopNote piece={piece} />"));
     expect(row).toContain("<CorrectionsLink");
     expect(styleOf(screen, "metaRow")).toContain('flexWrap: "wrap", justifyContent: "space-between"');
-    for (const mention of ["<CheapestBadge />", "<ForeignShopNote piece={piece} />", "<OfferMarkNote piece={piece} />", "<StockNote piece={piece} />", "<AffiliateMention"]) {
+    for (const mention of ["<CheapestBadge inline />", "<ForeignShopNote piece={piece} />", "<OfferMarkNote piece={piece} />", "<StockNote piece={piece} />", "<AffiliateMention"]) {
       expect(screen, mention).toContain(mention);
     }
     expect(styleOf(code("components/stock-note.tsx"), "inStock")).not.toContain('fontWeight: "600"');
