@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -266,8 +266,19 @@ export default function UserProfileScreen() {
           <FriendCollections userId={profile.id} displayName={profile.displayName} refreshKey={String(profile.isFollowing)} />
           {tabs.length > 1 ? (
             <>
-              {/* Étagères des amis : les onglets, seulement ceux que le serveur annonce. */}
-              <View style={styles.tabs} accessibilityRole="tablist" accessibilityLabel={t.friendShelves.tabsLabel} testID="onglets-ami">
+              {/* Étagères des amis : les onglets, seulement ceux que le serveur annonce. Une seule rangée, qui
+                  défile sur le côté quand elle ne tient pas (320 points avec un grand texte) : jamais un onglet
+                  seul sur une deuxième ligne, où il se lirait comme un titre. */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                alwaysBounceHorizontal={false}
+                style={styles.tabsRow}
+                contentContainerStyle={styles.tabs}
+                accessibilityRole="tablist"
+                accessibilityLabel={t.friendShelves.tabsLabel}
+                testID="onglets-ami"
+              >
                 {tabs.map((name) => (
                   <Pressable
                     key={name}
@@ -280,7 +291,7 @@ export default function UserProfileScreen() {
                     <Text style={[styles.tabLabel, activeTab === name ? styles.tabLabelActive : null]}>{tabLabel(name)}</Text>
                   </Pressable>
                 ))}
-              </View>
+              </ScrollView>
               {activeTab === "posts" ? null : <Text style={styles.shelfHint}>{t.friendShelves.shownBecauseFriends}</Text>}
             </>
           ) : (
@@ -433,7 +444,8 @@ const styles = themedStyles(() => ({
   photosMark: { position: "absolute", top: 6, right: 6, width: 22, height: 22, borderRadius: radius.full, backgroundColor: color.voileImage, alignItems: "center", justifyContent: "center" },
   pinMark: { position: "absolute", top: 6, left: 6, width: 22, height: 22, borderRadius: radius.full, backgroundColor: color.voileImage, alignItems: "center", justifyContent: "center" },
   empty: { fontSize: font.secondary, color: color.acier, textAlign: "center", marginTop: space.md },
-  tabs: { alignSelf: "stretch", flexDirection: "row", flexWrap: "wrap", gap: space.lg, marginTop: space.xl, borderBottomWidth: 1, borderBottomColor: color.filet },
+  tabsRow: { alignSelf: "stretch", flexGrow: 0, marginTop: space.xl, borderBottomWidth: 1, borderBottomColor: color.filet },
+  tabs: { flexDirection: "row", gap: space.lg },
   tab: { minHeight: 44, justifyContent: "center" },
   tabLabel: { fontSize: font.body, color: color.acier },
   tabLabelActive: { color: color.encre, fontWeight: "600" },

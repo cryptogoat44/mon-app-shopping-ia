@@ -116,3 +116,24 @@ describe("la barre flottante : l'espace du bas sur les onglets, rien sur les éc
     expect(source("app/(app)/profil.tsx")).not.toContain("useTabBarSpace");
   });
 });
+
+describe("les onglets du profil d'un ami : une seule rangée, jamais un onglet seul sur une deuxième ligne", () => {
+  const profil = source("app/(app)/profil.tsx");
+
+  it("permis : la rangée défile sur le côté quand elle ne tient pas (320 points, grand texte)", () => {
+    const row = profil.slice(profil.indexOf("<ScrollView"), profil.indexOf('testID="onglets-ami"'));
+    expect(row).toContain("horizontal");
+    expect(row).toContain("contentContainerStyle={styles.tabs}");
+    expect(row).toContain('accessibilityRole="tablist"');
+    expect(styleOf(profil, "tabs")).toContain('flexDirection: "row"');
+    // Le filet du bas reste sur toute la largeur de l'écran, pas seulement sous les onglets.
+    expect(styleOf(profil, "tabsRow")).toContain('alignSelf: "stretch"');
+    expect(styleOf(profil, "tabsRow")).toContain("borderBottomWidth: 1");
+  });
+
+  it("refusé : le retour à la ligne, qui laissait « Vault » seul comme un titre", () => {
+    expect(styleOf(profil, "tabs")).not.toContain("flexWrap");
+    expect(styleOf(profil, "tabsRow")).not.toContain("flexWrap");
+    expect(profil).not.toContain('<View style={styles.tabs}');
+  });
+});
