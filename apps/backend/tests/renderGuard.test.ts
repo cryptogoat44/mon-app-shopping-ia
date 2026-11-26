@@ -95,6 +95,7 @@ describe("garde-fou de Render : VIDEO_LINK_FRAME_ENABLED (image du moment, retou
   it("permis : les variables déjà autorisées le restent (SENTRY_ENVIRONMENT sur spotto-api)", () => {
     expect(assertEditableVariable("spotto-api", "SENTRY_ENVIRONMENT", "production")).toEqual({ key: "SENTRY_ENVIRONMENT", value: "production", mustExist: false });
   });
+});
 
 // Retours du build 3 : l'interrupteur de la grande image des RÉSULTATS ne
 // s'allume qu'une fois la politique de confidentialité mise à jour, sur la
