@@ -395,7 +395,7 @@ const styles = themedStyles(() => ({
   post: { paddingHorizontal: space.lg, paddingBottom: 26 },
   author: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
   avatar: { width: 32, height: 32, borderRadius: radius.full },
-  media: { width: "100%", aspectRatio: 1, borderRadius: radius.sm },
+  media: { width: "100%", aspectRatio: 1, borderRadius: radius.piece, borderCurve: "continuous", overflow: "hidden" },
   divider: { height: 1, backgroundColor: color.filet, marginHorizontal: space.lg, marginBottom: 26 },
   footerLoader: { paddingVertical: space.lg },
 }));

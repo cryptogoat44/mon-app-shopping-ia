@@ -149,10 +149,15 @@ export const space = {
 } as const;
 
 export const radius = {
-  sm: 4, // panneau « vitrine » des pièces — volontairement presque carré
+  sm: 4, // bulles, verdict, squelettes — plus les pièces (voir piece, pieceGrid, pieceThumb)
   md: 10, // boutons
   lg: 16, // feuilles (sheets) — coins hauts uniquement
   full: 999, // pastilles, avatar
+  // Pièces, direction « Écrin » (retours du build 3, 26 novembre 2026) :
+  // coins doux, en courbe continue sur iPhone (borderCurve: "continuous").
+  piece: 14, // vidéo, grandes images des pièces (grande carte, fiches, look)
+  pieceGrid: 10, // tuiles des grilles (100 à 300 pt)
+  pieceThumb: 6, // vignettes de moins de 100 pt
 } as const;
 
 // Dimensions communes des contrôles (2026-10-15) : zone tactile minimale

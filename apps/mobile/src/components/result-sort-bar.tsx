@@ -11,6 +11,9 @@ import { themedStyles } from "@/theme/themed-styles";
 // seulement ». Annoncés comme un groupe de boutons radio et un interrupteur ;
 // sur le site, l'état passe par aria-checked (react-native-web ignore
 // accessibilityState). Zones tactiles de 44 points au moins.
+// Retours du build 3 (« trop d'espace partout ») : la ligne des prix seule,
+// puis une seule ligne de pastilles, « Avec prix seulement » et « En stock
+// seulement » côte à côte (l'une sous l'autre si elles ne tiennent pas).
 
 function sortOptions(): { value: ResultSort; label: string }[] {
   return [
@@ -20,7 +23,18 @@ function sortOptions(): { value: ResultSort; label: string }[] {
   ];
 }
 
-export function ResultSortBar({ view, onChange, summary }: { view: ResultView; onChange: (view: ResultView) => void; summary: string | null }) {
+export function ResultSortBar({
+  view,
+  onChange,
+  summary,
+  stockShown = false,
+}: {
+  view: ResultView;
+  onChange: (view: ResultView) => void;
+  summary: string | null;
+  /** « En stock seulement » : quand une offre dit son stock, ou qu'il est déjà choisi (lib/result-sort.ts, stockFilterShown). */
+  stockShown?: boolean;
+}) {
   return (
     <View style={styles.bar} testID="result-sort-bar">
       <View style={styles.segments} accessibilityRole="radiogroup" accessibilityLabel={t.result.sortLabel}>
@@ -44,11 +58,11 @@ export function ResultSortBar({ view, onChange, summary }: { view: ResultView; o
           );
         })}
       </View>
-      <View style={styles.line}>
-        {/* Mise à jour à l'arrivée des boutiques : annoncée sans couper (site, Android). */}
-        <Text style={styles.summary} accessibilityLiveRegion="polite" testID="price-summary">
-          {summary ?? ""}
-        </Text>
+      {/* Mise à jour à l'arrivée des boutiques : annoncée sans couper (site, Android). */}
+      <Text style={styles.summary} accessibilityLiveRegion="polite" testID="price-summary">
+        {summary ?? ""}
+      </Text>
+      <View style={styles.filters}>
         <Pressable
           accessibilityRole="switch"
           accessibilityState={{ checked: view.withPriceOnly }}
@@ -64,21 +78,21 @@ export function ResultSortBar({ view, onChange, summary }: { view: ResultView; o
             {t.result.withPriceOnly}
           </Text>
         </Pressable>
+        {stockShown ? <InStockOnlyToggle view={view} onChange={onChange} /> : null}
       </View>
     </View>
   );
 }
 
-/** « En stock seulement » (lot « stock visible ») : sur sa propre ligne, juste
- * sous « Avec prix seulement » et aligné sur lui (place sur un écran de
- * 320 points et en grand texte). Retire les offres que Google disait
+/** « En stock seulement » (lot « stock visible ») : à côté de « Avec prix
+ * seulement », sur la même ligne de pastilles (dessous si la place manque :
+ * écran de 320 points, grand texte). Retire les offres que Google disait
  * épuisées au moment de la recherche ; garde celles au stock inconnu (le
  * libellé lu par VoiceOver le dit). Même interrupteur, mêmes zones tactiles. */
 export function InStockOnlyToggle({ view, onChange }: { view: ResultView; onChange: (view: ResultView) => void }) {
   const checked = view.inStockOnly === true;
   return (
-    <View style={styles.stockLine}>
-      <Pressable
+    <Pressable
         accessibilityRole="switch"
         accessibilityState={{ checked }}
         aria-checked={checked}
@@ -93,7 +107,6 @@ export function InStockOnlyToggle({ view, onChange }: { view: ResultView; onChan
           {t.result.inStockOnly}
         </Text>
       </Pressable>
-    </View>
   );
 }
 
@@ -126,7 +139,7 @@ export function WithPriceOnlyEmpty({ onShowAll }: { onShowAll: () => void }) {
 }
 
 const styles = themedStyles(() => ({
-  bar: { marginBottom: space.md },
+  bar: { marginBottom: 12 },
   segments: { flexDirection: "row", borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: 2, gap: 2 },
   segment: {
     flex: 1,
@@ -139,10 +152,8 @@ const styles = themedStyles(() => ({
   segmentActive: { backgroundColor: color.vert },
   segmentLabel: { fontSize: font.caption, color: color.encre, textAlign: "center" },
   segmentLabelActive: { color: color.blanc, fontWeight: "600" },
-  line: { flexDirection: "row", alignItems: "center", gap: space.sm, marginTop: space.sm },
-  // Sous la barre (sa marge du bas : space.md) : rapprochée de « Avec prix seulement ».
-  stockLine: { flexDirection: "row", justifyContent: "flex-end", marginTop: -space.sm, marginBottom: space.md },
-  summary: { flex: 1, fontSize: font.caption, color: color.encre, fontWeight: "600" },
+  summary: { fontSize: font.caption, color: color.encre, fontWeight: "600", marginTop: space.sm },
+  filters: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginTop: space.sm },
   filter: {
     minHeight: size.touchTarget,
     paddingHorizontal: 12,

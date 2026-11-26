@@ -11,6 +11,7 @@ import { useShopWatch } from "@/lib/use-purchase-question";
 import { merchantContextFor, merchantMarkFor, opensOfferPage } from "@/lib/result-sections";
 import type { ClickPlacement } from "@/lib/price-first";
 import { SpotImage } from "@/components/spot-image";
+import { PieceTile } from "@/components/piece-tile";
 import { ForeignShopNote } from "@/components/foreign-shop-note";
 import { OfferMarkNote } from "@/components/offer-mark";
 import { StockNote } from "@/components/stock-note";
@@ -90,9 +91,8 @@ export function ProposalCard({
   return (
     <View style={styles.card}>
       <Pressable onPress={onSelect} accessibilityRole="button" accessibilityLabel={label} accessibilityHint={t.result.showLargeHint}>
-        <View style={styles.cardImage}>
-          <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} size="card" />
-        </View>
+        {/* La tuile « Écrin » des grilles (components/piece-tile.tsx) ; le libellé est celui du bouton. */}
+        <PieceTile variant="grid" size="card" hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} />
         <Text style={styles.cardName} numberOfLines={2}>
           {piece.name}
         </Text>
@@ -103,10 +103,13 @@ export function ProposalCard({
         {/* Lot premier essai : prix dans la devise d'un autre pays que celui de la recherche. */}
         <ForeignShopNote piece={piece} compact />
       </Pressable>
-      {/* Boutiques douteuses : « Boutique connue » ou « Prix inhabituellement bas », touchable à part. */}
-      <OfferMarkNote piece={piece} />
-      {/* Stock affiché : « En stock » ou « Épuisée » d'après Google, touchable à part (components/stock-note.tsx). */}
-      <StockNote piece={piece} />
+      {/* Côte à côte quand elles tiennent (« Boutique connue · En stock »), sinon l'une sous l'autre (retours du build 3). */}
+      <View style={styles.marks}>
+        {/* Boutiques douteuses : « Boutique connue » ou « Prix inhabituellement bas », touchable à part. */}
+        <OfferMarkNote piece={piece} />
+        {/* Stock affiché : « En stock » ou « Épuisée » d'après Google, touchable à part (components/stock-note.tsx). */}
+        <StockNote piece={piece} />
+      </View>
       {piece.merchantUrl ? <ShopLink piece={piece} placement={placement} /> : null}
     </View>
   );
@@ -188,7 +191,7 @@ const ROW_IMAGE_WIDTH = 76;
 // tactile minimale (44 points).
 const styles = themedStyles(() => ({
   card: { width: "48%" },
-  cardImage: { width: "100%", aspectRatio: 4 / 5, backgroundColor: color.plinthe, borderRadius: radius.sm, overflow: "hidden" },
+  marks: { flexDirection: "row", flexWrap: "wrap", columnGap: space.sm },
   fill: { width: "100%", height: "100%" },
   cardName: { fontSize: font.caption, color: color.encre, marginTop: 8, lineHeight: 17 },
   cardMeta: { fontSize: 12, color: color.acier, marginTop: 2 },
@@ -198,7 +201,8 @@ const styles = themedStyles(() => ({
   // Ligne de la liste triée par prix : vignette à gauche, texte et prix à droite, le lien sous le texte.
   row: { width: "100%", paddingVertical: space.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.filet },
   rowMain: { flexDirection: "row", gap: 12 },
-  rowImage: { width: ROW_IMAGE_WIDTH, aspectRatio: 4 / 5, backgroundColor: color.plinthe, borderRadius: radius.sm, overflow: "hidden" },
+  // Vignette de moins de 100 points : contenue sur la plinthe, coins doux (retours du build 3).
+  rowImage: { width: ROW_IMAGE_WIDTH, aspectRatio: 4 / 5, backgroundColor: color.plinthe, borderRadius: radius.pieceThumb, borderCurve: "continuous", overflow: "hidden" },
   rowText: { flex: 1, minWidth: 0 },
   rowPrice: { fontSize: font.secondary, color: color.encre, fontWeight: "600", marginTop: 4 },
   rowNoPrice: { fontSize: 12, color: color.acier, marginTop: 4 },

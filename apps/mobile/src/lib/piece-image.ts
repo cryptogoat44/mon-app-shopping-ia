@@ -63,15 +63,70 @@ export interface TwoStepState {
   thumbLoaded: boolean;
   thumbWidth: number | null;
   thumbFailed: boolean;
+  /** false tant que l'originale arrivée apparaît en fondu (HD_FADE_MS) :
+   * la vignette reste dessous, sinon le fond opaque de la tuile se verrait
+   * un instant (lot « vitrine »). Absent : fondu terminé. */
+  hdFaded?: boolean;
 }
+
+/** Durée du fondu de l'originale par-dessus la vignette (millisecondes). */
+export const HD_FADE_MS = 180;
 
 /** Ce qui est affiché. L'originale reste par-dessus sauf en échec ou plus
  * étroite que la vignette. La vignette est retirée seulement quand
  * l'originale arrivée est gardée ET que la vignette est réglée (arrivée ou en
- * échec) : avant, on ne pourrait plus comparer les deux largeurs. */
+ * échec) : avant, on ne pourrait plus comparer les deux largeurs. Et
+ * seulement une fois le fondu de l'originale fini (hdFaded). */
 export function twoStepLayers(state: TwoStepState): { showThumb: boolean; showHd: boolean } {
   const showHd = state.hd !== "failed" && !(state.hd === "loaded" && !keepHdImage(state.hdWidth, state.thumbWidth));
   const thumbSettled = state.thumbLoaded || state.thumbFailed;
-  const showThumb = !state.thumbFailed && !(showHd && state.hd === "loaded" && thumbSettled);
+  const showThumb = !state.thumbFailed && !(showHd && state.hd === "loaded" && thumbSettled && state.hdFaded !== false);
   return { showThumb, showHd };
+}
+
+// Tuile de pièce « Écrin » (retours du build 3, 26 novembre 2026,
+// components/piece-tile.tsx) : la même tuile 4:5 partout. La photo entière
+// est posée sur une copie floue d'elle-même ; quand son ratio est proche de
+// celui de la tuile, elle la remplit simplement (rognage léger accepté).
+// Grilles : la pièce remplit toujours sa tuile (la plus grande possible).
+// Grandes images : une petite image n'est jamais étirée au-delà d'un point
+// d'écran par pixel de l'image (sinon elle devient floue en grand).
+
+/** Ratio largeur / hauteur de toute tuile de pièce. */
+export const TILE_RATIO = 4 / 5;
+/** Écart de ratio en dessous duquel la photo remplit la tuile (12 %). */
+export const FILL_TOLERANCE = 0.12;
+/** Grandes images seulement : au plus ce nombre de points d'écran par pixel de l'image (1 = une vignette de 260 px ne dépasse pas 260 pt). */
+export const HERO_MAX_POINTS_PER_PIXEL = 1;
+
+export type PieceTileVariant = "hero" | "grid";
+
+type Dimensions = { width: number; height: number };
+
+function known(natural: Dimensions | null | undefined): natural is Dimensions {
+  return Boolean(natural) && Number.isFinite(natural!.width) && Number.isFinite(natural!.height) && natural!.width > 0 && natural!.height > 0;
+}
+
+/** La photo remplit-elle la tuile ? Grille : dès que le ratio est à 12 % près. Grande image : en plus, seulement si remplir ne dépasse pas HERO_MAX_POINTS_PER_PIXEL. */
+export function fillsTile(natural: Dimensions | null, frame: Dimensions, variant: PieceTileVariant): boolean {
+  if (!known(natural)) return false;
+  const gap = Math.abs(natural.width / natural.height / TILE_RATIO - 1);
+  if (gap > FILL_TOLERANCE) return false;
+  if (variant === "grid") return true;
+  // Remplir (comme cover) agrandit l'image du plus grand des deux rapports.
+  const scale = Math.max(frame.width / natural.width, frame.height / natural.height);
+  return scale <= HERO_MAX_POINTS_PER_PIXEL;
+}
+
+/** Taille d'affichage, en points : tient dans le cadre (comme contain). Grille : toujours le plus grand possible dans le cadre. Grande image : jamais plus de HERO_MAX_POINTS_PER_PIXEL point par pixel de l'image. Dimensions inconnues ou nulles : le cadre. */
+export function honestSize(natural: Dimensions | null, frame: Dimensions, variant: PieceTileVariant): Dimensions {
+  if (!known(natural)) return { width: frame.width, height: frame.height };
+  const contain = Math.min(frame.width / natural.width, frame.height / natural.height);
+  const scale = variant === "hero" ? Math.min(contain, HERO_MAX_POINTS_PER_PIXEL) : contain;
+  return { width: natural.width * scale, height: natural.height * scale };
+}
+
+/** Couleur de fond donnée par le serveur (lot 9) : "#RRGGBB" seulement, sinon null. */
+export function edgeBackground(value: string | null | undefined): string | null {
+  return typeof value === "string" && /^#[0-9A-Fa-f]{6}$/.test(value) ? value : null;
 }

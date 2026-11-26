@@ -22,7 +22,7 @@ import { CollectionSettingsSheet } from "@/components/collection-settings-sheet"
 import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
-import { SpotImage } from "@/components/spot-image";
+import { PieceTile } from "@/components/piece-tile";
 import { SegmentedChoice } from "@/components/segmented-choice";
 import { ReceivedPieces } from "@/components/received-pieces";
 import { isAffiliateLink } from "@/lib/affiliate-link";
@@ -454,13 +454,14 @@ function MyWishlist({ news, switcher, profileHeader }: { news: WishAlertNewsStat
                     accessibilityRole="button"
                     accessibilityLabel={[item.name, dropLabel(item.id)].filter(Boolean).join(", ")}
                   >
-                    <View style={styles.thumb}>
-                      {item.imageUrl ? (
-                        <SpotImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} style={styles.thumbImage} fit="cover" size="card" accessibilityLabel={item.name} />
-                      ) : (
+                    {/* La tuile « Écrin » des grilles (components/piece-tile.tsx) : 4:5, la pièce entière ; le libellé est celui du bouton. */}
+                    {item.imageUrl ? (
+                      <PieceTile variant="grid" size="card" hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} recyclingKey={item.id} style={styles.tile} />
+                    ) : (
+                      <View style={styles.thumb}>
                         <ClockIcon size={30} tint={color.encre} />
-                      )}
-                    </View>
+                      </View>
+                    )}
                     <Text style={styles.name} numberOfLines={1}>
                       {item.name}
                     </Text>
@@ -567,8 +568,9 @@ const styles = themedStyles(() => ({
   gridRow: { flexDirection: "row", gap: space.md, marginBottom: space.md },
   card: { width: "31%" },
   bell: { position: "absolute", top: space.xs, right: space.xs },
-  thumb: { backgroundColor: color.plinthe, borderRadius: radius.sm, aspectRatio: 1, alignItems: "center", justifyContent: "center", marginBottom: space.xs, overflow: "hidden" },
-  thumbImage: { width: "100%", height: "100%" },
+  tile: { marginBottom: space.xs },
+  // Sans image (et squelette) : la même forme que la tuile, sans photo donc sans bande.
+  thumb: { backgroundColor: color.plinthe, borderRadius: radius.pieceGrid, borderCurve: "continuous", aspectRatio: 4 / 5, alignItems: "center", justifyContent: "center", marginBottom: space.xs, overflow: "hidden" },
   name: { fontSize: font.caption, color: color.encre },
   price: { fontSize: 11, color: color.acier, marginTop: 2 },
   // Parcours 3 : « Baisse de prix · 89 € », en vert (le seul accent).

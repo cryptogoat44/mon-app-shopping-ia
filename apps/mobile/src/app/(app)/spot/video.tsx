@@ -249,7 +249,7 @@ const styles = themedStyles(() => ({
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: serifLineHeight.title },
   caption: { fontSize: font.caption, color: color.acier, marginTop: 6, lineHeight: 18 },
   lead: { fontSize: font.secondary, color: color.acier, lineHeight: 21 },
-  previewBox: { marginTop: space.md, borderRadius: radius.sm, overflow: "hidden", backgroundColor: color.plinthe },
+  previewBox: { marginTop: space.md, borderRadius: radius.piece, borderCurve: "continuous", overflow: "hidden", backgroundColor: color.plinthe },
   fill: { width: "100%", height: "100%" },
   hidden: { opacity: 0 },
   overlay: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 },

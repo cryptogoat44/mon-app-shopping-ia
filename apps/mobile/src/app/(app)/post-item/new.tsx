@@ -27,7 +27,7 @@ import { Avatar } from "@/components/avatar";
 import { PrivateAccountNote } from "@/components/private-account-note";
 import { SpotImage } from "@/components/spot-image";
 import { PRIVACY_LEVELS } from "@/lib/vault-labels";
-import { color, font, radius, space } from "@/theme/tokens";
+import { color, font, radius, size, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { getRecentlySpotted } from "@/api/client";
 import type { Piece } from "@/api/types";
@@ -368,7 +368,7 @@ export default function NewPostScreen() {
         ) : (
         <>
         <Pressable
-          style={styles.photo}
+          style={imageUri ? styles.photoFilled : styles.photoEmpty}
           onPress={handlePickPhoto}
           disabled={extras.carousel && remainingSlots(photos) === 0}
           accessibilityRole="button"
@@ -574,10 +574,10 @@ const styles = themedStyles(() => ({
   navTitle: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
   publishLabel: { fontSize: font.secondary, fontWeight: "600", color: color.vert },
   publishLabelDisabled: { color: color.acier },
-  body: { paddingHorizontal: space.md, paddingTop: 18, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
+  body: { paddingHorizontal: space.md, paddingTop: space.sm, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   error: { fontSize: font.caption, color: color.acier, marginBottom: space.md },
-  modes: { flexDirection: "row", gap: 8, marginBottom: space.md },
-  mode: { flex: 1, minHeight: 40, borderRadius: radius.full, borderWidth: 1, borderColor: color.filet, alignItems: "center", justifyContent: "center" },
+  modes: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  mode: { flex: 1, minHeight: size.touchTarget, borderRadius: radius.full, borderWidth: 1, borderColor: color.filet, alignItems: "center", justifyContent: "center" },
   modeActive: { backgroundColor: color.encre, borderColor: color.encre },
   modeLabel: { fontSize: font.caption, color: color.encre, fontWeight: "600" },
   modeLabelActive: { color: color.blanc },
@@ -586,13 +586,16 @@ const styles = themedStyles(() => ({
   vaultGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   vaultCell: { width: "31.5%", borderRadius: radius.sm, borderWidth: 2, borderColor: "transparent", padding: 2 },
   vaultCellActive: { borderColor: color.vert },
-  vaultThumb: { width: "100%", aspectRatio: 1, borderRadius: radius.sm, overflow: "hidden", backgroundColor: color.plinthe },
+  vaultThumb: { width: "100%", aspectRatio: 1, borderRadius: radius.pieceThumb, borderCurve: "continuous", overflow: "hidden", backgroundColor: color.plinthe },
   vaultTitle: { fontSize: 11.5, color: color.encre, marginTop: 4 },
-  photo: { width: "100%", aspectRatio: 1, backgroundColor: color.plinthe, borderRadius: radius.sm, alignItems: "center", justifyContent: "center", gap: 8, overflow: "hidden" },
+  // Retours du build 3 (« tout est espacé ») : la case vide n'est plus un grand carré gris, mais une
+  // case pointillée de 168 points ; avec une photo, le carré d'avant, coins doux.
+  photoEmpty: { width: "100%", height: 168, borderWidth: 1, borderStyle: "dashed", borderColor: color.filet, backgroundColor: "transparent", borderRadius: radius.piece, borderCurve: "continuous", alignItems: "center", justifyContent: "center", gap: 8 },
+  photoFilled: { width: "100%", aspectRatio: 1, backgroundColor: color.plinthe, borderRadius: radius.piece, borderCurve: "continuous", alignItems: "center", justifyContent: "center", overflow: "hidden" },
   photoPreview: { width: "100%", height: "100%" },
   photoLabel: { fontSize: font.caption, color: color.acier },
-  caption: { marginTop: 18, fontSize: font.secondary, color: color.encre, lineHeight: 21, minHeight: 44 },
-  label: { fontSize: font.caption, color: color.acier, marginTop: 22, marginBottom: 10 },
+  caption: { marginTop: 12, fontSize: font.secondary, color: color.encre, lineHeight: 21, minHeight: 44 },
+  label: { fontSize: font.caption, color: color.acier, marginTop: space.md, marginBottom: space.sm },
   tags: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   tag: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderColor: color.filet, borderRadius: radius.full, paddingVertical: 6, paddingLeft: 6, paddingRight: 10 },
   tagDot: { width: 20, height: 20, borderRadius: radius.sm - 1, backgroundColor: color.plinthe },
@@ -623,7 +626,7 @@ const styles = themedStyles(() => ({
   progressButton: { minHeight: 44, paddingHorizontal: space.md, borderRadius: radius.full, borderWidth: 1, borderColor: color.filet, justifyContent: "center" },
   progressButtonLabel: { fontSize: font.caption, fontWeight: "600", color: color.encre },
   strip: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: space.sm },
-  stripCell: { width: 60, height: 60, borderRadius: radius.sm, overflow: "hidden", backgroundColor: color.plinthe },
+  stripCell: { width: 60, height: 60, borderRadius: radius.pieceThumb, borderCurve: "continuous", overflow: "hidden", backgroundColor: color.plinthe },
   stripRemove: { position: "absolute", top: 2, right: 2, width: 22, height: 22, borderRadius: radius.full, backgroundColor: color.voileImage, alignItems: "center", justifyContent: "center" },
   stripRemoveLabel: { fontSize: font.caption, color: color.surImage, fontWeight: "700", lineHeight: 15 },
   stripAdd: { borderWidth: 1, borderColor: color.filet, borderStyle: "dashed", alignItems: "center", justifyContent: "center", backgroundColor: "transparent" },

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { SpotImage } from "@/components/spot-image";
+import { PieceTile } from "@/components/piece-tile";
 import { ImageUnavailable } from "@/components/image-unavailable";
 import { WishlistPanel } from "@/components/wishlist-panel";
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
@@ -250,7 +251,7 @@ export default function ProfileScreen() {
           <View style={styles.grid}>
             {[0, 1, 2].map((i) => (
               <View key={i} style={styles.piece}>
-                <Skeleton style={styles.thumb} />
+                <Skeleton style={styles.vaultThumb} />
                 <Skeleton style={{ width: "80%", height: 11, marginTop: space.xs }} />
               </View>
             ))}
@@ -272,13 +273,14 @@ export default function ProfileScreen() {
                   style={styles.piece}
                   onPress={() => router.push({ pathname: "/vault-item/[id]", params: { id: item.id } })}
                 >
-                  <View style={styles.thumb}>
-                    {item.imageUrl ? (
-                      <SpotImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} style={styles.thumbImage} fit="cover" size="card" accessibilityLabel={item.title} />
-                    ) : (
+                  {/* La tuile « Écrin » des grilles (components/piece-tile.tsx) : 4:5, la pièce entière. */}
+                  {item.imageUrl ? (
+                    <PieceTile variant="grid" size="card" hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} accessibilityLabel={item.title} recyclingKey={item.id} />
+                  ) : (
+                    <View style={styles.vaultThumb}>
                       <ClockIcon size={30} tint={color.encre} />
-                    )}
-                  </View>
+                    </View>
+                  )}
                   {item.verified ? (
                     <View style={styles.verifiedBadge}>
                       <VerifiedIcon size={16} />
@@ -491,15 +493,19 @@ const styles = themedStyles(() => ({
   addPiece: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 6, minHeight: 44, marginBottom: space.xs },
   addPieceLabel: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   piece: { width: "31%" },
+  // Grille « Lifestyle » (photos des membres) : carrée, coins des tuiles de grille.
   thumb: {
     backgroundColor: color.plinthe,
-    borderRadius: radius.sm,
+    borderRadius: radius.pieceGrid,
+    borderCurve: "continuous",
     aspectRatio: 1,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
   },
   thumbImage: { width: "100%", height: "100%" },
+  // Vault sans image (et squelette) : la forme de la tuile, sans photo donc sans bande.
+  vaultThumb: { backgroundColor: color.plinthe, borderRadius: radius.pieceGrid, borderCurve: "continuous", aspectRatio: 4 / 5, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   verifiedBadge: {
     position: "absolute",
     top: 8,

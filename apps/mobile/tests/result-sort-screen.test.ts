@@ -48,7 +48,7 @@ describe("le contrôle de tri, en haut de la liste", () => {
   });
 
   it("l'écran le place en haut, avant « Votre pièce » et la grande carte ; le choix vient de l'appareil", () => {
-    const sortBar = screen.indexOf("<ResultSortBar view={view} onChange={changeView} summary={summaryText} />");
+    const sortBar = screen.indexOf("<ResultSortBar view={view} onChange={changeView} summary={summaryText} stockShown={stockFilterShown(result, view)} />");
     expect(sortBar).toBeGreaterThan(-1);
     expect(sortBar).toBeLessThan(screen.indexOf("<YourPiece image={yourPiece} />"));
     expect(sortBar).toBeLessThan(screen.indexOf("onLayout={heroReveal.onHeroLayout}"));

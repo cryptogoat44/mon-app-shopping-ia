@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { MatchOrigin, ProductMatch, ProductSearch } from "@monapp/shared-types";
 import type { SpotResult } from "../src/api/types";
-import { chooseInitialResult, noPriceShown, pieceTitle, toSpotResult } from "../src/lib/spot-result";
+import { chooseInitialResult, hdRereadDue, noPriceShown, pieceTitle, toSpotResult, withHdImages } from "../src/lib/spot-result";
 
 function search(overrides: Partial<ProductSearch> = {}): ProductSearch {
   return {
@@ -194,5 +194,57 @@ describe("toSpotResult, voie C (lot c)", () => {
     );
     expect(result).toMatchObject({ status: "failed", failReason: "no_match" });
     expect(result.complement).toMatchObject({ suggestText: true, shopping: [], words: [] });
+  });
+});
+
+// Lot « vitrine » (retours du build 3) : relecture de la recherche pour les
+// grandes images trouvées par le serveur ; seule imageHdUrl est reprise.
+describe("relecture des grandes images (withHdImages, hdRereadDue)", () => {
+  function shopMatch(id: string, origin: MatchOrigin, imageHdUrl: string | null): ProductMatch {
+    return { ...match(id, origin), imageHdUrl };
+  }
+  const before = toSpotResult(
+    search({ matches: [shopMatch("lens1", "lens", null), shopMatch("a", "shopping", null), shopMatch("b", "shopping", "https://shop.test/b.jpg"), shopMatch("w", "words", null)] })
+  );
+
+  it("permis : la grande image arrive par identifiant, ordre et sections inchangés", () => {
+    const reread = search({ matches: [shopMatch("w", "words", "https://shop.test/w.jpg"), shopMatch("a", "shopping", "https://shop.test/a.jpg")] });
+    const next = withHdImages(before, reread);
+    expect(next.complement?.shopping.map((p) => [p.id, p.imageHdUrl])).toEqual([
+      ["a", "https://shop.test/a.jpg"],
+      ["b", "https://shop.test/b.jpg"],
+    ]);
+    expect(next.complement?.words.map((p) => p.imageHdUrl)).toEqual(["https://shop.test/w.jpg"]);
+    expect(next.pieces).toBe(before.pieces);
+    // Rien d'autre ne change sur la proposition.
+    expect({ ...next.complement!.shopping[0], imageHdUrl: null }).toEqual(before.complement!.shopping[0]);
+    expect(next.status).toBe(before.status);
+  });
+
+  it("refusé : une grande image déjà là n'est jamais remplacée par du vide ; une proposition inconnue est ignorée", () => {
+    const reread = search({ matches: [shopMatch("b", "shopping", null), shopMatch("inconnue", "shopping", "https://shop.test/x.jpg")] });
+    const next = withHdImages(before, reread);
+    expect(next).toBe(before);
+    expect(next.complement?.shopping[1].imageHdUrl).toBe("https://shop.test/b.jpg");
+    expect(next.complement?.shopping.map((p) => p.id)).toEqual(["a", "b"]);
+  });
+
+  it("rien de neuf, ou une autre recherche : le même objet (aucun rendu inutile)", () => {
+    expect(withHdImages(before, search({ matches: [shopMatch("b", "shopping", "https://shop.test/b.jpg")] }))).toBe(before);
+    expect(withHdImages(before, search({ id: "autre", matches: [shopMatch("a", "shopping", "https://shop.test/a.jpg")] }))).toBe(before);
+  });
+
+  it("relire tant qu'une des 8 premières propositions « shopping » ou « words » n'a pas de grande image", () => {
+    expect(hdRereadDue(before)).toBe(true);
+    const complete = withHdImages(before, search({ matches: [shopMatch("a", "shopping", "https://a.jpg"), shopMatch("w", "words", "https://w.jpg")] }));
+    expect(hdRereadDue(complete)).toBe(false);
+    // Au-delà des 8 premières : pas de relecture pour elles.
+    const many = toSpotResult(
+      search({ matches: [...Array.from({ length: 8 }, (_, i) => shopMatch(`s${i}`, "shopping", `https://s${i}.jpg`)), shopMatch("neuvieme", "shopping", null)] })
+    );
+    expect(hdRereadDue(many)).toBe(false);
+    // Sans complément, échec ou résultat absent : jamais.
+    expect(hdRereadDue(toSpotResult(search()))).toBe(false);
+    expect(hdRereadDue(null)).toBe(false);
   });
 });

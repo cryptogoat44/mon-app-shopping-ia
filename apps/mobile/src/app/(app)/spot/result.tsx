@@ -14,9 +14,9 @@ import { closeSpotter } from "@/lib/spot-navigation";
 import { addToWishlist, loadSpotResult } from "@/api/client";
 import { clearLastSpotResult, getLastSpotResult, rememberLaunchExtras, withLaunchExtras } from "@/api/spotSession";
 import type { Piece, SpotFailReason, SpotResult } from "@/api/types";
-import { addVaultItemFromMatch, fetchMessagesStatus, fetchShops, fetchWishAlertsStatus } from "@/lib/api";
+import { addVaultItemFromMatch, fetchMessagesStatus, fetchSearch, fetchShops, fetchWishAlertsStatus } from "@/lib/api";
 import { openMerchantLink } from "@/lib/merchant-links";
-import { chooseInitialResult, pieceTitle, withoutTextPrompt, withTextSearch, type InitialResultState } from "@/lib/spot-result";
+import { chooseInitialResult, hdRereadDue, pieceTitle, withHdImages, withoutTextPrompt, withTextSearch, type InitialResultState } from "@/lib/spot-result";
 import { afterShops, requestShops, shopsPending } from "@/lib/spot-shops";
 import { allPieces, merchantContextFor, merchantMarkFor, opensOfferPage } from "@/lib/result-sections";
 import {
@@ -54,8 +54,7 @@ import { canSendToFriend, sendToFriend } from "@/lib/send-to-friend";
 import { useWishAlertsStatus } from "@/lib/use-wish-alerts-status";
 import { canReportResult, wishAlertsStatus, type StockReportTarget } from "@/lib/wish-alerts";
 import { Skeleton } from "@/components/skeleton";
-import { SpotImage } from "@/components/spot-image";
-import { EnlargeableImage } from "@/components/image-viewer";
+import { PieceTile } from "@/components/piece-tile";
 import { ErrorMessage } from "@/components/error-message";
 import { NoPriceNotice } from "@/components/no-price-notice";
 import { CorrectionButtons, CorrectionsLink, CorrectionsSheet, useCorrections } from "@/components/spot-corrections";
@@ -64,7 +63,7 @@ import { ReportedLine, ResultFeedbackButton, ResultFeedbackSheet } from "@/compo
 import { ResultComplement, ShopsPending, textSearchStatusNote } from "@/components/result-complement";
 import { TextSearchAlreadyUsed, TextSearchPrompt } from "@/components/text-search-prompt";
 import { CheapestBadge, ProposalCard } from "@/components/proposal-card";
-import { FiltersEmpty, InStockOnlyToggle, ResultSortBar, WithPriceOnlyEmpty } from "@/components/result-sort-bar";
+import { FiltersEmpty, ResultSortBar, WithPriceOnlyEmpty } from "@/components/result-sort-bar";
 import { PriceSortedList } from "@/components/price-sorted-list";
 import { NoPriceSection } from "@/components/no-price-section";
 import { YourPiece } from "@/components/your-piece";
@@ -288,6 +287,37 @@ export default function ResultScreen() {
   useEffect(() => {
     if (result && lateQuery) rememberLaunchExtras(result);
   }, [lateQuery]);
+
+  // Relecture des grandes images (lot « vitrine », retours du build 3) : une
+  // fois les boutiques arrivées (et de nouveau après la recherche par les
+  // mots), tant qu'une des 8 premières propositions « shopping » ou « words »
+  // n'a pas de grande image, la recherche est relue sur notre serveur (route
+  // existante) à +6 s puis +16 s, seulement tant que l'écran est ouvert. Seules
+  // les grandes images arrivées sont reprises (withHdImages) : ni l'ordre, ni
+  // les filtres, ni la grande carte ne bougent. Erreur réseau : ignorée.
+  const hdRereadSearchId = result && !shopsPending(result) && hdRereadDue(result) ? result.searchId : null;
+  const hdRereadRound = result?.complement?.words.length ?? 0;
+  useEffect(() => {
+    if (!hdRereadSearchId) return;
+    const controller = new AbortController();
+    const reread = () => {
+      fetchSearch(hdRereadSearchId, controller.signal)
+        .then((search) => {
+          if (controller.signal.aborted) return;
+          setState((current) => {
+            if (current.kind !== "ready") return current;
+            const next = withHdImages(current.result, search);
+            return next === current.result ? current : { kind: "ready", result: next };
+          });
+        })
+        .catch(() => {});
+    };
+    const timers = [setTimeout(reread, 6000), setTimeout(reread, 16000)];
+    return () => {
+      timers.forEach(clearTimeout);
+      controller.abort();
+    };
+  }, [hdRereadSearchId, hdRereadRound]);
 
   // Lien vidéo sans prix : une fois la recherche visuelle et les boutiques
   // connues, aucune proposition avec un prix — la recherche avec la
@@ -687,7 +717,7 @@ export default function ResultScreen() {
       <SafeAreaView style={styles.screen}>
         {nav}
         <View style={styles.content} accessibilityLabel={t.result.loading}>
-          <Skeleton style={styles.hero} />
+          <Skeleton style={styles.heroSkeleton} />
           <Skeleton style={{ width: "35%", height: 12, marginTop: space.md }} />
           <Skeleton style={{ width: "80%", height: 22, marginTop: space.sm }} />
         </View>
@@ -782,6 +812,7 @@ export default function ResultScreen() {
   // Le message « aucun prix » et le texte du tri suivent la grande carte d'office, pas celle que la personne choisit.
   const noticeShown = noPriceNoticeShown(result, startIndex);
   const wordsNote = wordsSortNote(result, startIndex);
+  const wordsLine = wordsNote && !priceSort ? (wordsNote === "words" ? t.result.sortedByWords : t.result.sortedByWordsPriceFirst) : null;
   // « Ce n'est pas la bonne pièce ? » : voir gratuitement les propositions repliées avant toute nouvelle recherche (relecture ORD-5).
   const successList = successCorrections(corrections.context);
   // Trié par prix, pas de section « Sans prix » où descendre : les propositions sans prix sont en fin de liste.
@@ -854,12 +885,15 @@ export default function ResultScreen() {
         {/* Voie C : le décompte, le tri et l'absence de prix parlent de la recherche visuelle seule.
             Prix d'abord : « aucun prix » quand la recherche visuelle n'en a aucun et que la grande carte
             d'office n'en a pas non plus (sinon elles sont toutes repliées en bas, avec le même texte). */}
-        {result.pieces.length > 0 ? <Text style={styles.count}>{t.result.count(result.pieces.length, result.query)}</Text> : null}
-        {wordsNote && !priceSort ? <Text style={styles.count}>{wordsNote === "words" ? t.result.sortedByWords : t.result.sortedByWordsPriceFirst}</Text> : null}
-        {/* Tri des résultats : en haut de la liste, la ligne des prix avec. */}
-        <ResultSortBar view={view} onChange={changeView} summary={summaryText} />
-        {/* Stock affiché : « En stock seulement », juste sous « Avec prix seulement », quand une offre dit son stock (ou qu'il est déjà choisi). */}
-        {stockFilterShown(result, view) ? <InStockOnlyToggle view={view} onChange={changeView} /> : null}
+        {/* Retours du build 3 (« trop d'espace partout ») : le décompte et l'ordre sur une seule ligne grise. */}
+        {result.pieces.length > 0 || wordsLine ? (
+          <Text style={styles.count}>
+            {[result.pieces.length > 0 ? t.result.count(result.pieces.length, result.query) : null, wordsLine].filter(Boolean).join(" · ")}
+          </Text>
+        ) : null}
+        {/* Tri des résultats : en haut de la liste, la ligne des prix avec ; « En stock seulement » à côté
+            de « Avec prix seulement », quand une offre dit son stock (ou qu'il est déjà choisi). */}
+        <ResultSortBar view={view} onChange={changeView} summary={summaryText} stockShown={stockFilterShown(result, view)} />
         {layout.emptyWithFilter ? <WithPriceOnlyEmpty onShowAll={() => changeView({ ...view, withPriceOnly: false })} /> : null}
         {/* Stock affiché : « En stock seulement » ne laisse plus rien ; un seul geste retire les deux filtres. */}
         {layout.emptyWithStockFilter ? <FiltersEmpty onShowAll={() => changeView({ ...view, withPriceOnly: false, inStockOnly: false })} /> : null}
@@ -869,11 +903,8 @@ export default function ResultScreen() {
         {/* Tri par prix : pas de grande carte, sauf une carte touchée dans la liste ; « Avec prix seulement » : pas sans prix. */}
         {showBigCard ? (
           <>
-            <View style={styles.hero} onLayout={heroReveal.onHeroLayout}>
-              <EnlargeableImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} label={piece.name} style={styles.fill}>
-                <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} accessibilityLabel={piece.name} />
-              </EnlargeableImage>
-            </View>
+            {/* La grande tuile « Écrin » (components/piece-tile.tsx) : coins doux, la photo entière sur une copie floue d'elle-même. */}
+            <PieceTile variant="hero" enlargeable hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} accessibilityLabel={piece.name} onLayout={heroReveal.onHeroLayout} />
 
             <Text style={styles.rankLabel}>{bigCardLabelText(bigCardLabel(selectedIndex, bestIndex, firstAvailableIndex(result), allPieces(result)[selectedIndex]))}</Text>
             <Text style={styles.name} accessibilityRole="header">
@@ -930,8 +961,13 @@ export default function ResultScreen() {
               title={piece.name}
               style={styles.extraActions}
             />
-            {canSendToFriend(piece, messages) ? <SendToFriendLink style={styles.sendToFriend} pieceName={piece.name} onPress={handleSendToFriend} /> : null}
-            {canReportResult(alerts, piece) ? <StockReportLink style={styles.sendToFriend} pieceName={piece.name} onPress={handleStockReport} /> : null}
+            {/* Deux liens visibles, à leur place, côte à côte quand ils tiennent (jamais sous « … » : décision du fondateur du 26 novembre). */}
+            {canSendToFriend(piece, messages) || canReportResult(alerts, piece) ? (
+              <View style={styles.quietLinks}>
+                {canSendToFriend(piece, messages) ? <SendToFriendLink style={styles.sendToFriend} pieceName={piece.name} onPress={handleSendToFriend} /> : null}
+                {canReportResult(alerts, piece) ? <StockReportLink style={styles.sendToFriend} pieceName={piece.name} onPress={handleStockReport} /> : null}
+              </View>
+            ) : null}
             {/* Seconde main de luxe : sous « Plus disponible ? », seulement quand le serveur a retenu une seule maison (components/luxury-resale.tsx). */}
             <LuxuryResaleEntry resale={result.luxuryResale} />
             {/* Sans clé (VoiceOver ne relit pas le message à chaque pièce) : « Couper l'alerte » en cours ou en échec reste à sa pièce par `pieceId`. */}
@@ -1156,30 +1192,30 @@ const styles = themedStyles(() => ({
   close: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
   navTitle: { fontSize: font.caption, color: color.acier },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
-  count: { fontSize: font.caption, color: color.acier, marginBottom: space.sm },
+  count: { fontSize: font.caption, color: color.acier, marginBottom: space.xs },
   verdictPlace: { minHeight: 1 },
-  hero: { width: "100%", aspectRatio: 4 / 5, backgroundColor: color.plinthe, borderRadius: radius.sm, overflow: "hidden" },
-  fill: { width: "100%", height: "100%" },
-  rankLabel: { fontSize: font.caption, color: color.acier, fontWeight: "600", marginTop: space.md },
+  heroSkeleton: { width: "100%", aspectRatio: 4 / 5, borderRadius: radius.piece, borderCurve: "continuous" },
+  rankLabel: { fontSize: font.caption, color: color.acier, fontWeight: "600", marginTop: 12 },
   name: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: serifLineHeight.title, marginTop: 4 },
   meta: { fontSize: font.secondary, color: color.acier, marginTop: 4 },
   notRight: { alignItems: "flex-start", marginTop: 0 },
-  primary: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: space.lg },
+  primary: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: space.sm },
   primaryLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
   secondary: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: space.sm },
   secondaryLabel: { color: color.encre, fontSize: font.body, fontWeight: "500" },
   textButton: { minHeight: 44, alignItems: "center", justifyContent: "center", marginTop: space.sm },
   textButtonLabel: { fontSize: font.secondary, color: color.acier, fontWeight: "600" },
   blockedLink: { ...lienSouligne, textAlign: "center", fontSize: font.caption, color: color.vert, fontWeight: "600", marginTop: 10 },
-  actions: { flexDirection: "row", gap: 10, marginTop: space.md },
+  actions: { flexDirection: "row", gap: space.sm, marginTop: space.sm },
   action: { flex: 1, minHeight: 44, borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
   actionLabel: { fontSize: font.caption, color: color.encre, fontWeight: "500", textAlign: "center" },
   actionError: { fontSize: font.caption, marginTop: space.sm },
   extraActions: { marginTop: space.sm },
-  sendToFriend: { alignSelf: "center", marginTop: 4 },
+  quietLinks: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", columnGap: space.lg },
+  sendToFriend: { alignSelf: "center", marginTop: 0 },
   luxuryResaleTop: { alignSelf: "flex-start", marginTop: 0 },
-  sectionTitle: { fontSize: font.body, fontWeight: "600", color: color.encre, marginTop: space.xl, marginBottom: space.md },
-  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: space.lg },
+  sectionTitle: { fontSize: font.body, fontWeight: "600", color: color.encre, marginTop: space.lg, marginBottom: 12 },
+  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: space.md },
   failContent: { flexGrow: 1, justifyContent: "center", paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   failTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: serifLineHeight.title },
   failTip: { fontSize: font.secondary, color: color.acier, lineHeight: 21, marginTop: space.sm },

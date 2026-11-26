@@ -10,8 +10,7 @@ import { t } from "@/i18n";
 import { ApiError, changeVaultItemPhoto, deleteVaultItem, fetchVaultItem, sharePurchasePost, updateVaultItem } from "@/lib/api";
 import { importPhotoForSpotter } from "@/lib/image-import";
 import { PrivateAccountNote } from "@/components/private-account-note";
-import { SpotImage } from "@/components/spot-image";
-import { EnlargeableImage } from "@/components/image-viewer";
+import { PieceTile } from "@/components/piece-tile";
 import { PRIVACY_LEVELS } from "@/lib/vault-labels";
 import { VerifiedIcon } from "@/components/icons";
 import { useToast } from "@/lib/toast-context";
@@ -233,12 +232,8 @@ export default function VaultItemDetailScreen() {
 
         {error ? <ErrorMessage style={styles.banner}>{error}</ErrorMessage> : null}
 
-        {/* Image entière (jamais rognée), en haute définition quand elle existe. */}
-        <View style={styles.image}>
-          <EnlargeableImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} label={item.title} style={styles.fill}>
-            <SpotImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} style={styles.fill} accessibilityLabel={item.title} />
-          </EnlargeableImage>
-        </View>
+        {/* Image entière, en haute définition quand elle existe, dans la grande tuile « Écrin » (components/piece-tile.tsx). */}
+        <PieceTile variant="hero" enlargeable hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} accessibilityLabel={item.title} />
         <Pressable
           onPress={handleChangePhoto}
           disabled={changingPhoto || busy}
@@ -422,16 +417,8 @@ const styles = themedStyles(() => ({
   backLabel: { color: color.encre, fontSize: font.secondary },
   errorText: { color: color.danger, fontSize: font.body, textAlign: "center" },
   banner: { fontSize: font.secondary, color: color.danger, marginBottom: space.md },
-  image: {
-    width: "100%",
-    maxWidth: 360,
-    aspectRatio: 4 / 5,
-    alignSelf: "center",
-    borderRadius: radius.sm,
-    backgroundColor: color.plinthe,
-    overflow: "hidden",
-  },
-  fill: { width: "100%", height: "100%" },
+  // Squelette de chargement : la forme de la grande tuile (components/piece-tile.tsx).
+  image: { width: "100%", aspectRatio: 4 / 5, borderRadius: radius.piece, borderCurve: "continuous" },
   changePhoto: { alignSelf: "center", minHeight: 40, justifyContent: "center", marginBottom: space.sm },
   changePhotoLabel: { fontSize: font.caption, color: color.acier, fontWeight: "600" },
   titleRow: { flexDirection: "row", alignItems: "center", gap: space.sm, marginBottom: space.xs },

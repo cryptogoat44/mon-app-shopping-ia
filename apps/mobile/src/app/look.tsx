@@ -20,7 +20,7 @@ import {
 } from "@/lib/look-page";
 import { fetchPublicLook, wakeServer } from "@/lib/look-public";
 import { WAKING_NOTICE_AFTER_MS } from "@/lib/root-route";
-import { SpotImage } from "@/components/spot-image";
+import { PieceTile } from "@/components/piece-tile";
 import { AffiliateMention } from "@/components/affiliate-mention";
 import { OfferMarkNote } from "@/components/offer-mark";
 import { PUBLIC_WEB_URL } from "@/constants/brand";
@@ -164,9 +164,7 @@ function LookContentView({ look, onFindMine }: { look: PublicLook; onFindMine: (
       {verdict ? <Text style={[styles.verdict, look.verdict?.level === "identified" ? styles.affirmed : null]}>{verdict}</Text> : null}
       <View style={styles.card}>
         {look.piece.image ? (
-          <View style={styles.hero}>
-            <SpotImage fallbackUri={look.piece.image} style={styles.fill} accessibilityLabel={look.piece.name} />
-          </View>
+          <PieceTile variant="hero" fallbackUri={look.piece.image} accessibilityLabel={look.piece.name} style={styles.hero} />
         ) : null}
         <Text style={styles.title} accessibilityRole="header">
           {look.piece.name}
@@ -264,8 +262,7 @@ const styles = themedStyles(() => ({
   kicker: { fontSize: font.caption, color: color.acier, marginBottom: space.md },
   block: { marginTop: space.lg },
   card: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md, gap: space.xs },
-  hero: { width: "100%", aspectRatio: 4 / 5, backgroundColor: color.plinthe, borderRadius: radius.sm, overflow: "hidden", marginBottom: space.sm },
-  fill: { width: "100%", height: "100%" },
+  hero: { marginBottom: space.sm },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre },
   brand: { fontSize: font.secondary, color: color.acier },
   verdict: { fontSize: font.secondary, color: color.encre, lineHeight: 21, marginBottom: space.md },

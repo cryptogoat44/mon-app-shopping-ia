@@ -62,8 +62,11 @@ describe("zoom et déplacement de l'image en grand", () => {
 describe("où l'image s'ouvre en grand (lecture du code)", () => {
   it("fiche d'une envie, pièce du Vault, grande carte d'un résultat", () => {
     expect(read("src/app/(app)/envie.tsx")).toMatch(/<ProductFrame [^>]*enlargeable \/>/);
-    expect(read("src/app/(app)/vault-item/[id].tsx")).toContain("<EnlargeableImage ");
-    expect(read("src/app/(app)/spot/result.tsx").match(/<EnlargeableImage /g)).toHaveLength(1);
+    // Lot « vitrine » : la grande tuile de pièce porte le geste (enlargeable → EnlargeableImage).
+    expect(read("src/app/(app)/vault-item/[id].tsx")).toMatch(/<PieceTile variant="hero" enlargeable /);
+    expect(read("src/app/(app)/spot/result.tsx").match(/<PieceTile variant="hero" enlargeable /g)).toHaveLength(1);
+    expect(read("src/components/piece-tile.tsx")).toContain("<EnlargeableImage ");
+    expect(read("src/components/piece-tile.tsx")).toContain("enlargeable = false");
   });
 
   it("jamais sur les images des grilles ni dans le fil", () => {
@@ -76,6 +79,7 @@ describe("où l'image s'ouvre en grand (lecture du code)", () => {
       const source = read(path);
       expect(source, path).not.toContain("EnlargeableImage");
       expect(source, path).not.toMatch(/ProductFrame[^>]*enlargeable/);
+      expect(source, path).not.toMatch(/PieceTile[^>]*enlargeable/);
     }
     // ProductFrame n'agrandit que si on le lui demande.
     expect(read("src/components/product-frame.tsx")).toContain("enlargeable = false");

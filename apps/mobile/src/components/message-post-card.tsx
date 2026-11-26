@@ -53,7 +53,7 @@ const styles = themedStyles(() => ({
   unavailableText: { fontSize: font.secondary, color: color.acier, fontStyle: "italic" },
   author: { flexDirection: "row", alignItems: "center", gap: space.xs, padding: space.xs },
   authorName: { flex: 1, fontSize: font.caption, fontWeight: "600", color: color.encre },
-  image: { width: "100%", aspectRatio: 1, backgroundColor: color.plinthe },
+  image: { width: "100%", aspectRatio: 1, backgroundColor: color.plinthe, borderRadius: radius.pieceGrid, borderCurve: "continuous", overflow: "hidden" },
   fill: { width: "100%", height: "100%" },
   caption: { padding: space.sm, fontSize: font.secondary, color: color.encre, lineHeight: 19 },
 }));

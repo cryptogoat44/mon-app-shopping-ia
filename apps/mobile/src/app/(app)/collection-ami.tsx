@@ -242,7 +242,7 @@ const styles = themedStyles(() => ({
   owner: { flexShrink: 1, fontSize: font.secondary, color: color.acier },
   empty: { fontSize: font.secondary, color: color.acier, lineHeight: 20 },
   row: { flexDirection: "row", gap: space.md, paddingVertical: space.md, borderTopWidth: 1, borderTopColor: color.filet },
-  thumb: { width: 96, height: 96, borderRadius: radius.sm, overflow: "hidden", backgroundColor: color.plinthe },
+  thumb: { width: 96, height: 96, borderRadius: radius.pieceThumb, borderCurve: "continuous", overflow: "hidden", backgroundColor: color.plinthe },
   fill: { width: "100%", height: "100%" },
   rowText: { flex: 1, gap: 4 },
   itemTitle: { fontSize: font.secondary, fontWeight: "600", color: color.encre },

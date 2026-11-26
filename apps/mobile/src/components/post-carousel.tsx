@@ -99,7 +99,7 @@ export function PostCarousel({ photos, label, recyclingKey, onPress }: { photos:
 }
 
 const styles = themedStyles(() => ({
-  frame: { width: "100%", aspectRatio: 1, backgroundColor: color.plinthe, borderRadius: radius.sm, overflow: "hidden" },
+  frame: { width: "100%", aspectRatio: 1, backgroundColor: color.plinthe, borderRadius: radius.piece, borderCurve: "continuous", overflow: "hidden" },
   media: { width: "100%", aspectRatio: 1 },
   counter: { position: "absolute", top: space.sm, right: space.sm, backgroundColor: color.voileImage, borderRadius: radius.full, paddingHorizontal: 9, paddingVertical: 3 },
   counterText: { fontSize: 12, fontWeight: "600", color: color.surImage },
