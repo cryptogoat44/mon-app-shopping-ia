@@ -112,6 +112,41 @@ describe("réglages du service vidéo (lus une fois, au démarrage)", () => {
     expect(JSON.stringify(warn.mock.calls)).not.toMatch(/spotto-video|video\.example|court|secret-de-test/);
   });
 
+  it("image du moment (retours du build 3) : les deux interrupteurs coupés → off ; l'un ou l'autre allumé → réglages lus", () => {
+    // Refusé : les deux coupés (ou l'image du moment absente) : ni l'adresse ni le secret ne sont lus.
+    const untouchable = {
+      VIDEO_LINK_ANALYSIS_ENABLED: false,
+      VIDEO_LINK_FRAME_ENABLED: false,
+      get VIDEO_WORKER_URL(): string {
+        throw new Error("l'adresse ne doit pas être lue");
+      },
+      get VIDEO_WORKER_SECRET(): string {
+        throw new Error("le secret ne doit pas être lu");
+      },
+    } as VideoWorkerEnvSource;
+    expect(readVideoWorkerConfig(untouchable)).toEqual({ state: "off" });
+    // Permis : l'image du moment seule suffit à lire et vérifier les réglages.
+    expect(readVideoWorkerConfig(source({ VIDEO_LINK_FRAME_ENABLED: true, VIDEO_WORKER_URL: "http://spotto-video:10000", VIDEO_WORKER_SECRET: SECRET }))).toEqual({
+      state: "ready",
+      config: { baseUrl: "http://spotto-video:10000", secret: SECRET },
+    });
+    expect(readVideoWorkerConfig(source({ VIDEO_LINK_FRAME_ENABLED: true })).state).toBe("invalid");
+    expect(readVideoWorkerConfig(source({ VIDEO_LINK_ANALYSIS_ENABLED: true, VIDEO_LINK_FRAME_ENABLED: true, VIDEO_WORKER_URL: "http://spotto-video:10000", VIDEO_WORKER_SECRET: SECRET })).state).toBe("ready");
+  });
+
+  it("image du moment seule : pas de clé d'Anthropic = normal, aucun avertissement ; analyse allumée : l'avertissement reste", () => {
+    const warn = vi.fn();
+    const ready = { state: "ready", config: { baseUrl: "http://spotto-video:10000", secret: SECRET } } as const;
+    logVideoWorkerConfigState(ready, false, { warn }, false);
+    expect(warn).not.toHaveBeenCalled();
+    logVideoWorkerConfigState(ready, false, { warn }, true);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]![0]).toEqual({ problems: [AI_KEY_MISSING] });
+    // Réglages invalides : signalés, que l'analyse soit allumée ou non.
+    logVideoWorkerConfigState({ state: "invalid", problems: ["VIDEO_WORKER_SECRET : absent"] }, false, { warn }, false);
+    expect(warn).toHaveBeenCalledTimes(2);
+  });
+
   it("réseau privé : noms internes sans point, localhost, adresses IPv4 locales ou privées", () => {
     for (const host of ["spotto-video", "spotto-video-x7k2", "localhost", "127.0.0.1", "10.1.2.3", "172.16.0.1", "172.31.255.255", "192.168.0.10", "[::1]"]) {
       expect(isPrivateNetworkHost(host), host).toBe(true);
@@ -250,6 +285,22 @@ describe("client du service vidéo (fetchVideoFrames)", () => {
     // Effacées à la demande, une fois utilisées.
     wipeFrames(result.frames);
     expect(result.frames.every((frame) => frame.data.every((byte) => byte === 0))).toBe(true);
+  });
+
+  it("image du moment : atSeconds envoyé seulement s'il est donné (0 compris) ; sans lui, le corps d'avant, à l'identique", async () => {
+    handler = json(200, framesBody({ frames: [{ timeSeconds: 3.2, width: 720, height: 1280, jpegBase64: frameA.toString("base64") }] }));
+    const result = await fetchVideoFrames(config(), { ...request, atSeconds: 3.217 });
+    expect(received[0]!.body).toEqual({ url: CANONICAL, platform: "tiktok", atSeconds: 3.217 });
+    // Une seule image : acceptée telle quelle (le schéma demande au moins 1 image).
+    expect(result.frames.map((frame) => frame.timeSeconds)).toEqual([3.2]);
+    wipeFrames(result.frames);
+    await fetchVideoFrames(config(), { ...request, atSeconds: 0 });
+    expect(received[1]!.body).toEqual({ url: CANONICAL, platform: "tiktok", atSeconds: 0 });
+    // Refusé : aucun champ atSeconds (même pas null) quand il n'est pas donné.
+    handler = json(200, framesBody());
+    await fetchVideoFrames(config(), request);
+    expect(received[2]!.body).toEqual({ url: CANONICAL, platform: "tiktok" });
+    expect(Object.keys(received[2]!.body as object)).not.toContain("atSeconds");
   });
 
   it("chaque erreur du contrat : le code JSON fait foi, quel que soit le statut", async () => {

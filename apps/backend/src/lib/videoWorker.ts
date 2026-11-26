@@ -38,8 +38,9 @@ import { imageFormatOf } from "./imageSafety.js";
 
 // ---- Réglages (lus une seule fois, au démarrage) ----
 
-/** Les variables lues (celles de src/env.ts). */
-export type VideoWorkerEnvSource = Pick<typeof env, "VIDEO_LINK_ANALYSIS_ENABLED" | "VIDEO_WORKER_URL" | "VIDEO_WORKER_SECRET">;
+/** Les variables lues (celles de src/env.ts). VIDEO_LINK_FRAME_ENABLED (image
+ * du moment, retours du build 3) : absente, elle vaut « coupée ». */
+export type VideoWorkerEnvSource = Pick<typeof env, "VIDEO_LINK_ANALYSIS_ENABLED" | "VIDEO_WORKER_URL" | "VIDEO_WORKER_SECRET"> & Partial<Pick<typeof env, "VIDEO_LINK_FRAME_ENABLED">>;
 
 export interface VideoWorkerConfig {
   /** Adresse du service, sans « / » final (ex. http://spotto-video:10000). */
@@ -119,10 +120,11 @@ function readWorkerSecret(raw: string | undefined, problems: string[]): string |
   return raw;
 }
 
-/** Réglages du service vidéo, vérifiés. Interrupteur coupé : ni l'adresse ni
- * le secret ne sont lus. */
+/** Réglages du service vidéo, vérifiés. Les deux interrupteurs qui s'en
+ * servent (analyse des liens, image du moment) coupés : ni l'adresse ni le
+ * secret ne sont lus. Chaque route vérifie ensuite SON interrupteur. */
 export function readVideoWorkerConfig(source: VideoWorkerEnvSource): VideoWorkerConfigState {
-  if (source.VIDEO_LINK_ANALYSIS_ENABLED !== true) return { state: "off" };
+  if (source.VIDEO_LINK_ANALYSIS_ENABLED !== true && source.VIDEO_LINK_FRAME_ENABLED !== true) return { state: "off" };
   const problems: string[] = [];
   const baseUrl = readWorkerUrl(source.VIDEO_WORKER_URL, problems);
   const secret = readWorkerSecret(source.VIDEO_WORKER_SECRET, problems);
@@ -136,12 +138,14 @@ interface WarnLog {
 
 export const CONFIG_WARNING = "Analyse des liens vidéo coupée : réglages invalides";
 
-/** Une seule ligne de journal, au démarrage, quand l'interrupteur est allumé
- * mais que l'analyse ne peut pas marcher : les variables à corriger, jamais
- * leur valeur (ni l'adresse, ni le secret). */
-export function logVideoWorkerConfigState(state: VideoWorkerConfigState, aiAvailable: boolean, log: WarnLog): void {
+/** Une seule ligne de journal, au démarrage, quand un interrupteur est allumé
+ * mais que le service vidéo ne peut pas marcher : les variables à corriger,
+ * jamais leur valeur (ni l'adresse, ni le secret). La clé d'Anthropic manquante
+ * n'est signalée que si l'ANALYSE est allumée (`analysisOn`) : l'image du
+ * moment, seule, n'en a pas besoin. */
+export function logVideoWorkerConfigState(state: VideoWorkerConfigState, aiAvailable: boolean, log: WarnLog, analysisOn = true): void {
   if (state.state === "invalid") log.warn({ problems: state.problems }, CONFIG_WARNING);
-  else if (state.state === "ready" && !aiAvailable) log.warn({ problems: [AI_KEY_MISSING] }, CONFIG_WARNING);
+  else if (state.state === "ready" && analysisOn && !aiAvailable) log.warn({ problems: [AI_KEY_MISSING] }, CONFIG_WARNING);
 }
 
 // ---- Adresse envoyée au service vidéo ----
@@ -219,6 +223,10 @@ export interface VideoWorkerRequest {
   /** Adresse canonique (workerVideoUrl). */
   url: string;
   platform: VideoPlatform;
+  /** Image du moment (retours du build 3) : instant en secondes (0 à 90) ;
+   * le service vidéo rend alors UNE image de cet instant. Absent : le corps
+   * envoyé est exactement celui d'avant. */
+  atSeconds?: number;
 }
 
 /** Une image rendue par le service vidéo, décodée (JPEG). */
@@ -358,7 +366,7 @@ export async function fetchVideoFrames(config: VideoWorkerConfig, request: Video
       method: "POST",
       redirect: "manual",
       headers: { authorization: `Bearer ${config.secret}`, "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify({ url: request.url, platform: request.platform }),
+      body: JSON.stringify({ url: request.url, platform: request.platform, ...(request.atSeconds !== undefined ? { atSeconds: request.atSeconds } : {}) }),
       signal,
     });
   } catch {

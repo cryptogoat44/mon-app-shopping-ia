@@ -34,6 +34,17 @@
 // seul l'appel à l'IA change (askVideoPieces, dans la langue de l'app), et la
 // réponse porte en plus le nom de chaque pièce (labels), jamais gardé ni
 // journalisé. Toujours une seule analyse comptée par demande.
+//
+// Image du moment (retours du build 3, accord du fondateur du 26 novembre
+// 2026) : POST /api/video-links/frame { url, atSeconds }, derrière
+// l'interrupteur VIDEO_LINK_FRAME_ENABLED (coupé par défaut, indépendant de
+// VIDEO_LINK_ANALYSIS_ENABLED). Pour une vidéo TikTok mise en pause dans le
+// lecteur de l'app, le service vidéo rend UNE image nette de l'instant exact
+// (sans les pictogrammes de TikTok), réencodée ici. AUCUNE IA, aucun appel
+// payant : ni consentement « analyse_video_ia » (il parle de l'IA), ni
+// compteur de l'IA, ni plafond des recherches. Instagram est refusé (son
+// lecteur ne donne pas le temps). Rien n'est gardé, comme pour l'analyse ;
+// le journal ne note que des durées (jamais l'adresse, l'instant ni l'image).
 import type { FastifyBaseLogger, FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import {
@@ -46,6 +57,8 @@ import {
   type VideoLinkFailureCause,
   type VideoLinkAnalysisResponse,
   type VideoLinkAnalysisStatus,
+  type VideoLinkFrameErrorCode,
+  type VideoLinkFrameResponse,
   type VideoLinkMoment,
   type VideoPlatform,
 } from "@monapp/shared-types";
@@ -95,6 +108,8 @@ const MIN_FRAME_EDGE = 64;
 export const MAX_PARALLEL_ANALYSES = 3;
 /** Le corps attendu tient en quelques centaines d'octets (lien et texte). */
 const BODY_LIMIT = 16 * 1024;
+/** Image du moment : instant de 0 à 90 s (la durée maximale du service vidéo). */
+const momentField = z.number().finite().min(0).max(90);
 
 const querySchema = z.string().trim().min(VIDEO_AI.queryMinLength).max(SEARCH_QUERY_MAX_LENGTH);
 const urlField = z.string().min(1).max(VIDEO_LINK_INPUT_MAX_LENGTH);
@@ -163,6 +178,16 @@ const AI_GLOBAL_LIMIT: ErrorBody = {
   error: "video_ai_global_limit",
   message: "L'analyse automatique est très demandée aujourd'hui et momentanément indisponible. Faites une capture de la vidéo.",
 };
+
+// Image du moment : l'app retombe sur l'image prise sur l'appareil (si elle
+// est nette) ou sur le secours ; ces messages ne s'affichent pas d'eux-mêmes.
+type FrameErrorBody = { error: VideoLinkFrameErrorCode; message: string; cause?: VideoLinkFailureCause };
+const FRAME_DISABLED: FrameErrorBody = {
+  error: "video_frame_disabled",
+  message: "L'image de ce moment ne peut pas être préparée par nos serveurs en ce moment.",
+};
+const INVALID_MOMENT: FrameErrorBody = { error: "invalid_moment", message: "Ce moment de la vidéo n'est pas valable." };
+const INVALID_TIKTOK_LINK: FrameErrorBody = { error: "invalid_link", message: "Ce lien n'est pas celui d'une vidéo TikTok." };
 
 /** Réponse du serveur pour chaque échec du service vidéo. Le code suit le
  * contrat partagé ; le statut distingue ce qui vient de la vidéo (4xx, rien
@@ -247,6 +272,26 @@ async function frameForAi(frame: WorkerFrame): Promise<FrameForAi> {
   return prepared;
 }
 
+/** Image du moment : comme momentImage (1 280 px au plus, qualité 92, sans
+ * métadonnées), avec sa largeur et sa hauteur. Les octets réencodés sont
+ * effacés aussitôt. */
+async function momentImageWithSize(frame: WorkerFrame): Promise<{ image: string; width: number; height: number }> {
+  let encoded: Buffer;
+  let width: number;
+  let height: number;
+  try {
+    ({ data: encoded, width, height } = await optimizePhotoWithSize(frame.data, VIDEO_LINK_MOMENT_EDGE, MOMENT_QUALITY));
+  } catch (error) {
+    if (error instanceof ImageQueueFullError) throw new AnalysisStop(503, BUSY);
+    throw new VideoWorkerError("invalid_response");
+  }
+  try {
+    return { image: `data:image/jpeg;base64,${encoded.toString("base64")}`, width, height };
+  } finally {
+    encoded.fill(0);
+  }
+}
+
 /** L'image entière d'un moment, réencodée (1 280 px au plus, sans
  * métadonnées), en « data URI ». Les octets sont effacés aussitôt. */
 async function momentImage(frame: WorkerFrame): Promise<string> {
@@ -277,38 +322,59 @@ export interface VideoLinkAnalysisOptions {
   askPieces?: typeof askVideoPieces;
 }
 
+/** Interrupteur de l'analyse automatique des liens (lu à chaque demande : les tests le règlent). */
+export function videoLinkAnalysisEnabled(): boolean {
+  return env.VIDEO_LINK_ANALYSIS_ENABLED === true;
+}
+
+/** Interrupteur de l'image du moment (retours du build 3), coupé par défaut. */
+export function videoLinkFrameEnabled(): boolean {
+  return env.VIDEO_LINK_FRAME_ENABLED === true;
+}
+
 export default async function videoLinkAnalysisRoutes(fastify: FastifyInstance, options: VideoLinkAnalysisOptions) {
-  // Réglages lus et vérifiés une seule fois, au démarrage (interrupteur coupé :
-  // ni l'adresse ni le secret ne sont lus). Un avertissement au plus.
+  // Réglages lus et vérifiés une seule fois, au démarrage (interrupteurs
+  // coupés : ni l'adresse ni le secret ne sont lus). Un avertissement au plus ;
+  // la clé d'Anthropic n'est réclamée que si l'analyse est allumée.
   const configState = options.workerConfig ?? readVideoWorkerConfig(env);
-  logVideoWorkerConfigState(configState, videoAiApiKey() !== null, fastify.log);
+  logVideoWorkerConfigState(configState, videoAiApiKey() !== null, fastify.log, videoLinkAnalysisEnabled());
   const askMoments = options.askMoments ?? askVideoMoments;
   const askPieces = options.askPieces ?? askVideoPieces;
   let running = 0;
 
-  /** Le service vidéo et la clé d'Anthropic si l'analyse est possible, sinon null. */
-  function ready(): { config: VideoWorkerConfig; apiKey: string } | null {
-    if (configState.state !== "ready") return null;
+  /** Le service vidéo et la clé d'Anthropic si l'ANALYSE est possible, sinon
+   * null. Des réglages prêts ne suffisent plus : ils le sont aussi quand seule
+   * l'image du moment est allumée. */
+  function analysisReady(): { config: VideoWorkerConfig; apiKey: string } | null {
+    if (configState.state !== "ready" || !videoLinkAnalysisEnabled()) return null;
     const apiKey = videoAiApiKey();
     return apiKey ? { config: configState.config, apiKey } : null;
   }
 
+  /** Le service vidéo si l'image du moment est possible (sans IA), sinon null. */
+  function frameReady(): VideoWorkerConfig | null {
+    if (configState.state !== "ready" || !videoLinkFrameEnabled()) return null;
+    return configState.config;
+  }
+
   /** Échec du service vidéo : journal (codes seulement), alerte si c'est une panne. */
-  function workerFailed(log: FastifyBaseLogger, platform: VideoPlatform, error: VideoWorkerError) {
+  function workerFailed(log: FastifyBaseLogger, platform: VideoPlatform, error: VideoWorkerError, what = "Analyse d'un lien vidéo") {
     const fields = { platform, failure: error.kind, status: error.status };
-    if (CONFIG_FAILURES.has(error.kind)) log.error(fields, "Analyse d'un lien vidéo : service vidéo mal réglé");
-    else log.warn(fields, "Analyse d'un lien vidéo : service vidéo en échec");
+    if (CONFIG_FAILURES.has(error.kind)) log.error(fields, `${what} : service vidéo mal réglé`);
+    else log.warn(fields, `${what} : service vidéo en échec`);
     if (SERVICE_FAILURES.has(error.kind)) noteFailure(log, "service_video");
     return WORKER_FAILURE_REPLIES[error.kind];
   }
 
   // L'app demande d'abord si l'analyse d'un lien est possible, pour ne pas la
   // proposer (ni demander de consentement) quand elle ne l'est pas ; `pieces`
-  // (lot « propositions ») seulement si l'interrupteur est allumé aussi.
+  // (lot « propositions ») seulement si l'interrupteur est allumé aussi ;
+  // `frame` (image du moment) seulement si elle est possible, sinon absent.
   fastify.get("/api/video-links/analyze/status", { preHandler: fastify.requireAuth }, async (_request, reply) => {
     reply.header("Cache-Control", "no-store");
-    const enabled = ready() !== null;
+    const enabled = analysisReady() !== null;
     const status: VideoLinkAnalysisStatus = enabled && videoPiecesEnabled() ? { enabled, pieces: true } : { enabled };
+    if (frameReady()) status.frame = true;
     return reply.send(status);
   });
 
@@ -321,7 +387,7 @@ export default async function videoLinkAnalysisRoutes(fastify: FastifyInstance, 
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       reply.header("Cache-Control", "no-store");
-      const service = ready();
+      const service = analysisReady();
       if (!service) return reply.code(503).send(DISABLED);
       const userId = request.user!.id;
       const log = request.log;
@@ -471,6 +537,81 @@ export default async function videoLinkAnalysisRoutes(fastify: FastifyInstance, 
         // Effacées dès la réponse (ou dès l'échec) : le serveur ne garde rien.
         wipeFrames(workerFrames);
         for (const frame of aiFrames) frame.data.fill(0);
+      }
+    }
+  );
+
+  // Image du moment (retours du build 3) : UNE image nette de l'instant exact
+  // d'une vidéo TikTok, tirée par le service vidéo, sans IA. Mêmes protections
+  // que l'analyse (compte actif, plafond par membre, lien relu et revérifié,
+  // plafond commun des vidéos demandées, analyses en cours), aucun appel payant.
+  fastify.post(
+    "/api/video-links/frame",
+    {
+      preHandler: [fastify.requireAuth, fastify.requireActiveAccount, fastify.rateLimit("videoLinkFrame")],
+      config: { rateLimitName: "videoLinkFrame" as const },
+      bodyLimit: BODY_LIMIT,
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      reply.header("Cache-Control", "no-store");
+      const config = frameReady();
+      if (!config) return reply.code(503).send(FRAME_DISABLED);
+      const log = request.log;
+
+      const body = isRecord(request.body) ? request.body : {};
+      const input = urlField.safeParse(body.url);
+      // TikTok seulement (vidéo ou lien court), reconnu dans l'adresse elle-même :
+      // Instagram, un profil, un autre site sont refusés sans aucun appel.
+      const parsed = input.success ? parseVideoLink(input.data) : null;
+      if (!input.success || !parsed || (parsed.kind === "video" && parsed.link.platform !== "tiktok")) return reply.code(400).send(INVALID_TIKTOK_LINK);
+      const moment = momentField.safeParse(body.atSeconds);
+      if (!moment.success) return reply.code(400).send(INVALID_MOMENT);
+      const atSeconds = moment.data;
+
+      // Un lien court TikTok fait partir un appel (redirection seulement),
+      // compté comme sur les autres routes des liens vidéo.
+      const resolved = await resolveVideoLink(input.data, {
+        beforeFetch: () => consumeRateLimit(request, "videoShortLink") && consumeRateLimit(request, "videoShortLinkGlobal"),
+      });
+      if (!resolved.link) {
+        const transient = resolved.issue === "unreachable" || resolved.issue === "rate_limited";
+        return transient ? reply.code(503).send(UNAVAILABLE) : reply.code(400).send(INVALID_TIKTOK_LINK);
+      }
+      const link = resolved.link;
+      if (link.platform !== "tiktok") return reply.code(400).send(INVALID_TIKTOK_LINK);
+      const workerUrl = workerVideoUrl(link);
+      if (!workerUrl) return reply.code(400).send(INVALID_TIKTOK_LINK);
+
+      // Capacité : demandes en cours sur ce serveur (partagées avec l'analyse),
+      // puis plafond commun des vidéos demandées au service vidéo.
+      if (running >= MAX_PARALLEL_ANALYSES) return reply.code(503).send(BUSY);
+      if (!consumeRateLimit(request, "videoLinkFetchGlobal")) return reply.code(503).send(BUSY);
+
+      running += 1;
+      let workerFrames: WorkerFrame[] = [];
+      const startedAt = Date.now();
+      try {
+        const fetched = await fetchVideoFrames(config, { url: workerUrl, platform: "tiktok", atSeconds }, { fetcher: options.workerFetch, timeoutMs: options.workerTimeoutMs });
+        workerFrames = fetched.frames;
+        const workerMs = Date.now() - startedAt;
+        const frame = workerFrames[0];
+        if (!frame) throw new VideoWorkerError("invalid_response");
+        const { image, width, height } = await momentImageWithSize(frame);
+        // Des durées seulement : jamais l'adresse, l'instant ni l'image.
+        log.info({ platform: "tiktok", workerMs, totalMs: Date.now() - startedAt }, "Image du moment d'une vidéo");
+        const response: VideoLinkFrameResponse = { image, width, height, timeSeconds: frame.timeSeconds };
+        return reply.send(response);
+      } catch (error) {
+        if (error instanceof AnalysisStop) return reply.code(error.status).send(error.body);
+        if (error instanceof VideoWorkerError) {
+          const failure = workerFailed(log, "tiktok", error, "Image du moment d'une vidéo");
+          return reply.code(failure.status).send(failure.body);
+        }
+        throw error;
+      } finally {
+        running -= 1;
+        // Effacées dès la réponse (ou dès l'échec) : le serveur ne garde rien.
+        wipeFrames(workerFrames);
       }
     }
   );
