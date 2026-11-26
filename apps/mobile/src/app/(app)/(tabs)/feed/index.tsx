@@ -18,6 +18,7 @@ import { PostCard } from "@/components/post-card";
 import { useAuth } from "@/lib/auth-context";
 import { t } from "@/i18n";
 import { themedStyles } from "@/theme/themed-styles";
+import { useTabBarSpace } from "@/lib/use-tab-bar-space";
 
 function FeedSkeletonRow() {
   return (
@@ -34,6 +35,8 @@ function FeedSkeletonRow() {
 
 export default function FeedScreen() {
   const router = useRouter();
+  // Retours du build 3 (point 5) : la barre flotte au-dessus des deux listes ; la dernière publication remonte au-dessus d'elle.
+  const tabBarSpace = useTabBarSpace();
   const { session } = useAuth();
   const myId = session?.user.id;
   const [posts, setPosts] = useState<Post[] | null>(null);
@@ -180,7 +183,7 @@ export default function FeedScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
       <View style={styles.header}>
         <Text style={styles.title} accessibilityRole="header">{t.feed.title}</Text>
         {/* Retours du build 2 : une pastille en forme de champ de recherche, dans la même ligne que le titre
@@ -237,7 +240,8 @@ export default function FeedScreen() {
               maxToRenderPerBatch={3}
               windowSize={5}
               removeClippedSubviews={Platform.OS !== "web"}
-              contentContainerStyle={styles.content}
+              contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace }]}
+              scrollIndicatorInsets={{ bottom: tabBarSpace }}
               refreshControl={<RefreshControl refreshing={forYouRefreshing} onRefresh={handleForYouRefresh} tintColor={color.encre} />}
               renderItem={({ item: post }) => (
                 <PostCard
@@ -290,7 +294,8 @@ export default function FeedScreen() {
             maxToRenderPerBatch={3}
             windowSize={5}
             removeClippedSubviews={Platform.OS !== "web"}
-            contentContainerStyle={styles.content}
+            contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace }]}
+            scrollIndicatorInsets={{ bottom: tabBarSpace }}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
             renderItem={({ item: post }) => (
               <PostCard
