@@ -231,8 +231,11 @@ export interface PowderPath {
  * jointifs (légèrement recouverts), regroupés en au plus `layer.bands`
  * chemins. Les tranches sont découpées à pas égal d'opacité (et non de
  * longueur) : la queue, d'éclat presque constant, tient en peu de tranches,
- * la montée vers la tête en a le plus ; d'une tranche à l'autre, l'opacité ne
- * saute jamais de plus de `layer.alpha / layer.bands`. Une couleur et une
+ * la montée vers la tête en a le plus ; un pas vaut `layer.alpha / layer.bands`.
+ * Chaque tranche prend l'opacité moyenne de ses morceaux : d'une tranche à la
+ * suivante, l'écart reste d'environ un pas (moins de deux sur un tracé long,
+ * davantage sur un geste très court, où un morceau de 3 pt franchit plusieurs
+ * pas et des tranches restent vides). Une couleur et une
  * opacité par tranche (moyennes de ses morceaux) ; les morceaux éteints ne
  * sont pas dessinés (une copie avec `from` ne s'allume qu'à partir de là). Le bout arrondi (un disque à la tête) est dans
  * le chemin de la dernière tranche.

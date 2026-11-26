@@ -148,11 +148,26 @@ describe("le ruban en tranches", () => {
     }
   });
 
-  it("tranches à pas égal d'opacité : d'une tranche à la suivante, jamais un saut de plus de deux pas", () => {
+  it("tranches à pas égal d'opacité : sur un tracé long, d'une tranche à la suivante, jamais un saut de plus de deux pas", () => {
     for (const layer of powderLayers()) {
       const paths = powderBands(trail, layer);
       for (let index = 1; index < paths.length; index += 1) expect(paths[index].opacity - paths[index - 1].opacity).toBeLessThanOrEqual((2 * layer.alpha) / layer.bands + 1e-9);
     }
+  });
+
+  /** Geste très court (9 points) : l'écart peut dépasser deux pas (le commentaire de powderBands le dit), mais les tranches restent rangées de la plus pâle à la plus vive, sans dépasser l'éclat de la tête. */
+  const ordered = (paths: readonly { opacity: number }[], alpha: number) =>
+    paths.every((path, index) => path.opacity > 0 && path.opacity <= alpha + 1e-9 && (index === 0 || path.opacity > paths[index - 1].opacity));
+  const shortTrail = Array.from({ length: 9 }, (_, index) => ({ x: 100 + index * 3, y: 100 }));
+
+  it("permis : sur un geste très court, des tranches rangées de la plus pâle à la plus vive", () => {
+    for (const layer of powderLayers()) expect(ordered(powderBands(shortTrail, layer), layer.alpha)).toBe(true);
+  });
+
+  it("refusé : les mêmes tranches dans le désordre", () => {
+    const paths = powderBands(shortTrail, POWDER.core);
+    expect(paths.length).toBeGreaterThan(1);
+    expect(ordered([...paths].reverse(), POWDER.core.alpha)).toBe(false);
   });
 
   it("rien à dessiner pour un seul point", () => {
