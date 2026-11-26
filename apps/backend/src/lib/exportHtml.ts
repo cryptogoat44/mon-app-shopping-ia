@@ -420,6 +420,10 @@ function accountSection(ctx: Ctx): Html {
     .field("mentions_from", enumLabel(ctx, MENTIONS_FROM_LABELS, row.mentions_from))
     // Fil « Pour vous » (migration 0050) : oui / non ; rien sans la colonne.
     .field("discoverable")
+    // Étagères des amis (migration 0058) : oui / non ; rien sans les colonnes.
+    .field("wishes_shown_to_friends")
+    .field("vault_shown_to_friends")
+    .field("friend_shelves_informed_at")
     .field("created_at")
     .field("updated_at");
   return section(ctx, "account", [article(null, account.rows(), profile.rows()), ...quotaParts(ctx)]);

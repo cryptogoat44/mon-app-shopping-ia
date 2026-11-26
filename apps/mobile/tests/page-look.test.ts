@@ -351,8 +351,9 @@ describe("statistiques : rien chez le visiteur, catalogue fermé chez le membre"
 
 describe("textes FR et EN", () => {
   it("le bloc « look » est le dernier des deux catalogues, avec les mêmes clés et les textes de la fiche", () => {
-    expect(Object.keys(fr).at(-1)).toBe("look");
-    expect(Object.keys(en).at(-1)).toBe("look");
+    // Seule la section du lot « étagères des amis » (migration 0058) vient après elle.
+    expect(Object.keys(fr).slice(-2)).toEqual(["look", "friendShelves"]);
+    expect(Object.keys(en).slice(-2)).toEqual(["look", "friendShelves"]);
     expect(Object.keys(en.look)).toEqual(Object.keys(fr.look));
     expect(fr.look.sheetTitle).toBe("Créer un lien vers cette pièce ?");
     expect(en.look.goneTitle).toBe("This page is no longer available");

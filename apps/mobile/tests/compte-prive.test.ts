@@ -97,8 +97,10 @@ describe("profil d'un compte privé", () => {
   it("l'écran ne montre alors ni grille, ni nombre de publications, ni collections, et ne charge pas la suite", () => {
     const profil = read("app/(app)/profil.tsx");
     expect(profil).toContain("const isShell = showsPrivateShell(profile);");
-    expect(profil).toContain("data={isShell ? [] : chunk(posts ?? [], 3)}");
-    expect(profil).toContain("onEndReached={isShell ? undefined : handleLoadMore}");
+    // Étagères des amis (migration 0058) : la grille est celle de l'onglet ouvert ; un compte privé vu par un inconnu n'en a aucune.
+    expect(profil).toMatch(/data=\{\s*isShell\s*\?\s*\[\]\s*:\s*shelf\s*\?/);
+    expect(profil).toContain(': chunk(posts ?? [], 3).map((row) => ({ kind: "posts" as const, row }))');
+    expect(profil).toContain("onEndReached={isShell ? undefined : shelf ? shelf.loadMore : handleLoadMore}");
     expect(profil).toContain("{isShell ? null : <Text style={styles.count}>{`${t.userProfile.posts_count(profile.postsCount)}${COUNT_SEPARATOR}`}</Text>}");
     expect(profil).toContain("<Text style={styles.shellText}>{t.privateAccount.shellNotice}</Text>");
     const shell = profil.slice(profil.indexOf("{isShell ? ("), profil.indexOf("<Text style={styles.sectionTitle}>"));
@@ -209,9 +211,10 @@ describe("réglage « Compte privé »", () => {
     expect(account).toBeGreaterThan(-1);
     expect(pieces).toBeGreaterThan(account);
     // Entre les deux : seulement « Qui peut me mentionner » (migration 0046) et
-    // « Proposer mon compte aux autres membres » (migration 0050), du même bloc.
+    // « Proposer mon compte aux autres membres » (migration 0050), puis
+    // « Montrer mes Envies / mon Vault à mes amis » (migration 0058), du même bloc.
     const between = settings.slice(account + "<PrivateAccountSetting />".length, pieces).replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
-    expect(between.replace(/\s+/g, " ").trim()).toBe("<MentionsFromSetting /> <DiscoverableSetting />");
+    expect(between.replace(/\s+/g, " ").trim()).toBe("<MentionsFromSetting /> <DiscoverableSetting /> <FriendShelvesSetting />");
     expect(setting).toContain("<Text style={styles.label}>{t.privateAccount.sectionTitle}</Text>");
   });
 

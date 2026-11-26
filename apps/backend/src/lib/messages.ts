@@ -362,6 +362,10 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Ce lien n'est pas celui d'une vidéo TikTok.": "This link isn't a TikTok video.",
   "Vous avez demandé beaucoup d'images de vidéos en peu de temps. Réessayez dans un moment.":
     "You've requested a lot of video images in a short time. Please try again in a moment.",
+  // Étagères des amis (migration 0058).
+  "Montrer ses Envies ou son Vault à ses amis n'est pas encore disponible.": "Showing your Wishlist or your Vault to your friends isn't available yet.",
+  "Trop de pages ouvertes. Réessayez dans un moment.": "Too many pages opened. Please try again in a moment.",
+  "Vous avez changé souvent ce réglage. Réessayez dans une heure.": "You've changed this setting often. Please try again in an hour.",
 };
 
 /** Message dans la langue voulue. Un message inconnu (par exemple un texte

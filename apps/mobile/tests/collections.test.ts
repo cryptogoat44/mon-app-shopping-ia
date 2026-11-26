@@ -63,7 +63,8 @@ describe("cachées quand les collections ne sont pas disponibles", () => {
     const panel = source("components/wishlist-panel.tsx");
     expect(panel).toContain("collectionChips(collectionsAvailable, collections)");
     expect(panel).toMatch(/\{chips \? \(/);
-    expect(panel).toContain("collectionsAvailable.enabled ? t.wishlist.privateNoteCollections : t.wishlist.privateNote");
+    // Étagères des amis (refonte) : trois états, dans lib/friend-shelves.ts (tests/etageres-amis.test.ts).
+    expect(panel).toContain("wishlistPrivacyNote(profile, collectionsAvailable.enabled)");
     const wish = source("app/(app)/envie.tsx");
     expect(wish).toMatch(/\{collections\.enabled \? \(\s*<Pressable[\s\S]*?t\.collections\.addToCollection/);
     expect(wish).toContain("{collections.enabled ? <AddToCollectionSheet");

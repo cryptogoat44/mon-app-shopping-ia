@@ -20,6 +20,10 @@ interface AuthContextValue {
    * d'échec, le profil actuel est conservé : un simple rafraîchissement
    * raté ne doit jamais déconnecter l'app de son profil. */
   refreshProfile: () => Promise<void>;
+  /** Applique tout de suite au profil affiché un changement que le serveur
+   * vient d'accepter (seulement si c'est toujours ce membre), pour que l'app
+   * dise vrai même si le rechargement qui suit échoue. */
+  patchProfile: (memberId: string, patch: Partial<Profile>) => void;
   /** Relance le chargement complet (bouton "Réessayer" de l'écran de connexion au serveur). */
   retryProfile: () => void;
   signOut: () => Promise<void>;
@@ -163,6 +167,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const patchProfile = useCallback((memberId: string, patch: Partial<Profile>) => {
+    setProfile((current) => (current && current.id === memberId ? { ...current, ...patch } : current));
+  }, []);
+
   const retryProfile = useCallback(() => {
     loadProfile("retrying");
   }, [loadProfile]);
@@ -181,7 +189,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ session, profile, profileStatus, refreshProfile, retryProfile, signOut }}>
+    <AuthContext.Provider value={{ session, profile, profileStatus, refreshProfile, patchProfile, retryProfile, signOut }}>
       {children}
     </AuthContext.Provider>
   );

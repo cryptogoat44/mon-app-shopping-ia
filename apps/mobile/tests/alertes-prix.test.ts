@@ -779,7 +779,8 @@ describe("politique de confidentialité et App Privacy (brouillons « à vérifi
       "Une alerte qui n'a pas pu partir expire le 3e jour",
       "Les alertes sont effacées au bout de 30 jours",
       "aucun membre ne peut savoir qui c'était",
-      "Votre Vault reste visible par vous seul",
+      // Étagères des amis (refonte, décision du fondateur) : le Vault est vu par les amis par défaut.
+      "Vos amis voient votre Vault, sauf si vous l'éteignez dans Réglages, et seulement après que vous en avez été informé dans l'app",
       // La limite écrite honnêtement (section 5 de la liste).
       "Une limite, cependant",
       "retrouver la recherche probablement à l'origine d'une alerte",
@@ -849,7 +850,14 @@ describe("politique de confidentialité et App Privacy (brouillons « à vérifi
     const frText = all(privacyPolicy);
     const enText = all(privacyPolicyEn);
     expect(frText).toContain("Vos alertes prix et stock : les Envies dont vous allumez la cloche, ce que vous suivez (baisse de prix, retour en stock), vos seuils de prix");
-    expect(section(privacyPolicy, "Qui peut voir quoi dans Spotto")).toContain("Vos alertes, vos seuils de prix et vos signalements « Plus disponible » : vous seul");
+    // Étagères des amis (refonte) : l'alerte de prix et son seuil sont vus par les amis qui voient vos Envies.
+    expect(section(privacyPolicy, "Qui peut voir quoi dans Spotto")).toContain(
+      "Vos nouveautés d'alerte, vos notifications et vos signalements « Plus disponible » : vous seul. Votre alerte de prix sur une Envie (allumée ou non, et son seuil) : vous, et vos amis s'ils voient vos Envies"
+    );
+    // Refusé : l'ancienne promesse, devenue fausse.
+    expect(section(privacyPolicy, "Qui peut voir quoi dans Spotto")).not.toContain("Vos alertes, vos seuils de prix et vos signalements « Plus disponible » : vous seul");
+    expect(frText).not.toContain("Votre Vault reste visible par vous seul");
+    expect(enText).not.toContain("Your Vault remains visible to you alone");
     expect(section(privacyPolicy, "Combien de temps")).toContain("une alerte qui n'a pas pu partir expire le 3e jour");
     expect(section(privacyPolicy, "Combien de temps")).toContain("alertes et signalements « Plus disponible »");
     expect(section(privacyPolicy, "Vos droits")).toContain("Couper vos alertes prix et stock, ou ne plus aider les alertes des autres membres : Réglages → Alertes prix et stock.");

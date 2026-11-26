@@ -24,6 +24,7 @@ import { requestedProfileSegment, type ProfileSegment } from "@/lib/wishlist-lin
 import { memberListRoute } from "@/lib/member-lists";
 import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
+import { FriendShelvesNotice } from "@/components/friend-shelves-notice";
 import { themedStyles } from "@/theme/themed-styles";
 import { useTabBarSpace } from "@/lib/use-tab-bar-space";
 
@@ -210,6 +211,10 @@ export default function ProfileScreen() {
           <Text style={styles.statLabel}>{t.profile.followingCount}</Text>
         </Pressable>
       </View>
+
+      {/* Étagères des amis (refonte) : l'information « Ce que vos amis peuvent voir », tant que vous n'y avez pas répondu.
+          Sa marge n'existe que si elle est montrée : sinon, l'en-tête reste celui d'avant. */}
+      <FriendShelvesNotice style={styles.noticeWrap} />
 
       <View style={styles.seg}>
         <Pressable
@@ -447,6 +452,7 @@ const styles = themedStyles(() => ({
     borderColor: color.filet,
   },
   editLabel: { fontSize: font.caption, fontWeight: "600", color: color.encre },
+  noticeWrap: { paddingHorizontal: space.lg, paddingTop: space.md },
   seg: { flexDirection: "row", gap: 22, paddingHorizontal: space.lg, paddingTop: space.lg, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: color.filet },
   segItem: { fontSize: 14.5, color: color.acier, paddingBottom: 12 },
   segItemActive: { color: color.encre, fontWeight: "600" },

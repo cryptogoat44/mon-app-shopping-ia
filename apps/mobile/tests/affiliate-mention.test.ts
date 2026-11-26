@@ -159,6 +159,15 @@ const surfaces: Surface[] = [
     form: "explain",
   },
   {
+    // Lot « étagères des amis » (migration 0058) : une envie d'un ami, dans sa petite feuille.
+    name: "Envies d'un ami — une envie",
+    file: "components/friend-shelf-grid.tsx",
+    wiring: ["<MerchantLinkButton", "isAffiliate={entry.item.isAffiliate}"],
+    flag: serverFlag,
+    options: viaButton,
+    form: "explain",
+  },
+  {
     name: "Messages — l'envie jointe",
     file: "components/message-wish-card.tsx",
     wiring: ["<MerchantLinkButton", "isAffiliate={card.isAffiliate}"],

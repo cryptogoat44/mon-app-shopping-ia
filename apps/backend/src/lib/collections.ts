@@ -33,11 +33,12 @@ import {
   type SharedCollectionItem,
 } from "@monapp/shared-types";
 import { fetchAffiliateUrls, isAffiliateLink } from "./affiliateLinks.js";
-import { isSuspended } from "./moderation.js";
 import { chunks, readAll } from "./pagedReads.js";
 import { extractOwnedStoragePath } from "./storage.js";
 import { DatabaseReadError, parseDbRows, webUrlOrNull } from "./validation.js";
-import { isBlockedEitherWay, isFollowing } from "./visibility.js";
+import { isFollowing } from "./visibility.js";
+import { readAudienceOf } from "./audience.js";
+import { showsWishesToFriends } from "./friendShelves.js";
 import { WISH_COPY_BUCKET, WishImageError, copyWishImage, deleteWishCopy, wishRowSchema, type WishRow } from "./wishShare.js";
 
 // ---- Réponses ----
@@ -143,16 +144,17 @@ export function toCollectionSummary(row: CollectionRow, itemCount: number): Coll
 
 /** `viewerId` voit-il les collections « Mes amis » de `ownerId` ? Lui-même
  * toujours ; sinon seulement entre amis (chacun suit l'autre), sans blocage
- * dans un sens ou dans l'autre, et jamais celles d'un compte suspendu. */
+ * dans un sens ou dans l'autre, et jamais celles d'un compte suspendu. Lot
+ * « étagères des amis » (contre-lecture) : la règle passe par readAudience
+ * (lib/audience.ts) ; une lecture impossible (blocages, abonnements,
+ * suspension) relève DatabaseReadError, jamais « visible » par défaut. */
 export async function canSeeFriendCollections(fastify: FastifyInstance, viewerId: string, ownerId: string): Promise<boolean> {
   if (viewerId === ownerId) return true;
-  const [blocked, suspended, viewerFollows, ownerFollows] = await Promise.all([
-    isBlockedEitherWay(fastify, viewerId, ownerId),
-    isSuspended(fastify, ownerId),
-    isFollowing(fastify, viewerId, ownerId),
+  const [audience, ownerFollows] = await Promise.all([
+    readAudienceOf(fastify, viewerId, ownerId, { suspended: true, requested: false }),
     isFollowing(fastify, ownerId, viewerId),
   ]);
-  return !blocked && !suspended && viewerFollows && ownerFollows;
+  return !audience.blocked && !audience.suspended && audience.follows && ownerFollows;
 }
 
 /** La collection `id`, ou null. */
@@ -340,18 +342,83 @@ async function eachLimited<T>(items: readonly T[], limit: number, run: (item: T)
   await Promise.all(workers);
 }
 
+/** Lot « étagères des amis » (refonte) : ce que les collections de `userId`
+ * changent à son étagère des Envies, en deux lectures complètes (jamais
+ * tronquées : au plus COLLECTIONS_MAX collections de COLLECTION_ITEMS_MAX
+ * envies). Toutes les colonnes des collections, comme readCollection
+ * (hidden_at n'existe qu'après 0034).
+ * - `offShelf` : les envies rangées dans au moins une collection « Privée »
+ *   (« Privée » reste privée, décision du fondateur) ou masquée par la
+ *   modération. Elles ne sont jamais sur l'étagère des amis ; une collection
+ *   « Mes amis » non masquée les montre encore par elle-même (la règle des
+ *   collections, inchangée).
+ * - `friendNames` : pour chaque envie, le nom de ses collections « Mes amis »
+ *   non masquées (celles qu'un ami voit déjà sur le profil), dans l'ordre de
+ *   leur création ; jamais le nom d'une collection privée ou masquée.
+ * Lecture impossible : DatabaseReadError, jamais « aucune ». */
+export async function readShelfCollections(fastify: FastifyInstance, userId: string): Promise<{ offShelf: Set<string>; friendNames: Map<string, string[]> }> {
+  const db = fastify.supabaseAdmin;
+  const collections = parseDbRows(COLLECTION_ROWS, await db.from("collections").select(COLLECTION_COLUMNS).eq("user_id", userId), "Collections d'une étagère").sort(
+    (a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)
+  );
+  const offShelf = new Set<string>();
+  const friendNames = new Map<string, string[]>();
+  if (collections.length === 0) return { offShelf, friendNames };
+  let rows: unknown[];
+  try {
+    rows = await readAll<unknown>(
+      "Envies rangées dans les collections",
+      () => db.from("collection_items").select("id, collection_id, wishlist_item_id", { count: "exact" }).eq("user_id", userId),
+      ["id"]
+    );
+  } catch {
+    throw new DatabaseReadError("Envies rangées dans les collections illisibles");
+  }
+  const items = parseDbRows(z.array(z.object({ id: ID, collection_id: ID, wishlist_item_id: ID })), { data: rows, error: null }, "Envies rangées dans les collections");
+  const byCollection = new Map<string, string[]>();
+  for (const item of items) byCollection.set(item.collection_id, [...(byCollection.get(item.collection_id) ?? []), item.wishlist_item_id]);
+  for (const collection of collections) {
+    const wishIds = byCollection.get(collection.id) ?? [];
+    const shown = collection.visibility === "friends" && collection.hidden_at === null;
+    for (const wishId of wishIds) {
+      if (!shown) offShelf.add(wishId);
+      else friendNames.set(wishId, [...(friendNames.get(wishId) ?? []), collection.name]);
+    }
+  }
+  return { offShelf, friendNames };
+}
+
+/** Les envies de `userId` qui ne sont jamais sur l'étagère de ses amis
+ * (rangées dans une collection « Privée » ou masquée par la modération ; voir
+ * readShelfCollections). Lecture impossible : DatabaseReadError. */
+export async function wishesOffFriendShelf(fastify: FastifyInstance, userId: string): Promise<Set<string>> {
+  return (await readShelfCollections(fastify, userId)).offShelf;
+}
+
 /** Envies de `userId` visibles par ses amis (dans au moins une de ses
- * collections « Mes amis »), parmi `wishIds`. */
+ * collections « Mes amis »), parmi `wishIds`. Lot « étagères des amis »
+ * (migration 0058) : s'il montre ses Envies à ses amis (réglage allumé et
+ * information vue), toutes celles qui ne sont ni dans une collection
+ * « Privée » ni dans une collection masquée par la modération (celles-là ne
+ * sont pas sur l'étagère : seule une collection « Mes amis » les garde, comme
+ * avant ce lot). Lecture impossible : DatabaseReadError (rien n'est effacé). */
 async function friendVisibleWishes(fastify: FastifyInstance, userId: string, wishIds: string[]): Promise<Set<string>> {
   const db = fastify.supabaseAdmin;
+  const visible = new Set<string>();
+  let candidates = wishIds;
+  if (await showsWishesToFriends(fastify, userId)) {
+    const hidden = await wishesOffFriendShelf(fastify, userId);
+    for (const id of wishIds) if (!hidden.has(id)) visible.add(id);
+    candidates = wishIds.filter((id) => hidden.has(id));
+    if (candidates.length === 0) return visible;
+  }
   const shared = parseDbRows(
     z.array(z.object({ id: ID })),
     await db.from("collections").select("id").eq("user_id", userId).eq("visibility", "friends"),
     "Collections montrées aux amis"
   ).map((row) => row.id);
-  const visible = new Set<string>();
   if (shared.length === 0) return visible;
-  for (const part of chunks(wishIds)) {
+  for (const part of chunks(candidates)) {
     const rows = parseDbRows(
       z.array(z.object({ wishlist_item_id: ID })),
       await db.from("collection_items").select("wishlist_item_id").eq("user_id", userId).in("wishlist_item_id", part).in("collection_id", shared),
@@ -389,8 +456,15 @@ async function makeCopy(fastify: FastifyInstance, log: FastifyBaseLogger, userId
  * `userId` : une copie pour chaque envie visible par les amis (faite si elle
  * manque, réessayée si elle avait échoué), aucune pour les autres (fichier
  * effacé). À appeler après chaque changement : ajout ou retrait d'une envie,
- * changement de visibilité, collection supprimée. */
-export async function syncFriendCopies(fastify: FastifyInstance, log: FastifyBaseLogger, userId: string, wishIds: string[]): Promise<void> {
+ * changement de visibilité, collection supprimée. `noNewCopies` : efface
+ * seulement, ne copie rien (la vérification d'après les copies). */
+export async function syncFriendCopies(
+  fastify: FastifyInstance,
+  log: FastifyBaseLogger,
+  userId: string,
+  wishIds: string[],
+  options: { noNewCopies?: boolean } = {}
+): Promise<void> {
   const ids = [...new Set(wishIds)];
   if (ids.length === 0) return;
   const db = fastify.supabaseAdmin;
@@ -415,17 +489,24 @@ export async function syncFriendCopies(fastify: FastifyInstance, log: FastifyBas
     for (const copy of part) await deleteWishCopy(fastify, userId, [copy.image_url, copy.image_thumb_url]);
   }
 
+  if (options.noNewCopies) return;
   const missing = ids.filter((id) => visible.has(id) && !copies.has(id));
   if (missing.length === 0) return;
   const wishes: WishRow[] = [];
   for (const part of chunks(missing)) {
     wishes.push(...parseDbRows(z.array(wishRowSchema), await db.from("wishlist_items").select("*").eq("user_id", userId).in("id", part), "Envies à copier"));
   }
-  let failed = 0;
+  const copied: string[] = [];
   await eachLimited(wishes, COPY_CONCURRENCY, async (wish) => {
-    if (!(await makeCopy(fastify, log, userId, wish))) failed += 1;
+    if (await makeCopy(fastify, log, userId, wish)) copied.push(wish.id);
   });
-  if (wishes.length > 0) log.info({ copies: wishes.length - failed, failed }, "Collections : images copiées pour les amis");
+  if (wishes.length > 0) log.info({ copies: copied.length, failed: wishes.length - copied.length }, "Collections : images copiées pour les amis");
+  // Les copies prennent du temps (parfois en arrière-plan, routes/users.ts) :
+  // si, entre-temps, le membre a éteint « Montrer mes Envies à mes amis » ou
+  // retiré l'envie d'une collection montrée, la remise en ordre faite alors
+  // n'a pas vu ces nouvelles copies. On vérifie donc de nouveau, après coup,
+  // et on efface celles qui ne sont plus visibles.
+  if (copied.length > 0) await syncFriendCopies(fastify, log, userId, copied, { noNewCopies: true });
 }
 
 /** Comme syncFriendCopies, sans jamais faire échouer la demande : le
@@ -437,6 +518,24 @@ export async function syncFriendCopiesQuietly(fastify: FastifyInstance, log: Fas
     await syncFriendCopies(fastify, log, userId, wishIds);
   } catch (error) {
     log.error({ errorName: error instanceof Error ? error.name : "inconnue" }, "Collections : copies des images non mises à jour");
+  }
+}
+
+/** Lot « étagères des amis » : remet en ordre TOUTES les copies déjà faites de
+ * `userId` (après « Montrer mes Envies à mes amis » éteint : celles qui ne
+ * servent plus à aucune collection montrée aux amis sont effacées). Ne fait
+ * aucune nouvelle copie au-delà de celles déjà là. Jamais un échec de la
+ * demande : au pire une copie à effacer plus tard (elle part avec le compte). */
+export async function resyncAllFriendCopiesQuietly(fastify: FastifyInstance, log: FastifyBaseLogger, userId: string): Promise<void> {
+  try {
+    const rows = await readAll<{ wishlist_item_id: string }>(
+      "Copies des images montrées aux amis",
+      () => fastify.supabaseAdmin.from("collection_image_copies").select("wishlist_item_id", { count: "exact" }).eq("user_id", userId),
+      ["wishlist_item_id"]
+    );
+    await syncFriendCopies(fastify, log, userId, rows.map((row) => row.wishlist_item_id));
+  } catch (error) {
+    log.error({ errorName: error instanceof Error ? error.name : "inconnue" }, "Étagères des amis : copies des images non remises en ordre");
   }
 }
 

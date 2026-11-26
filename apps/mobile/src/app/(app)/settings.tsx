@@ -24,6 +24,7 @@ import { PieceSendsSetting } from "@/components/piece-sends-setting";
 import { PrivateAccountSetting } from "@/components/private-account-setting";
 import { MentionsFromSetting } from "@/components/mentions-from-setting";
 import { DiscoverableSetting } from "@/components/discoverable-setting";
+import { FriendShelvesSetting } from "@/components/friend-shelves-setting";
 import { MessagesFromSetting } from "@/components/messages-from-setting";
 import { ReadReceiptsSetting } from "@/components/read-receipts-setting";
 import { MessagePushSetting } from "@/components/message-push-setting";
@@ -190,6 +191,8 @@ export default function SettingsScreen() {
         <MentionsFromSetting />
         {/* Migration 0050 : « Proposer mon compte aux autres membres », caché tant que le serveur n'a pas le réglage. */}
         <DiscoverableSetting />
+        {/* Migration 0058 : « Montrer mes Envies / mon Vault à mes amis », éteints au départ, cachés tant que le serveur ne les a pas. */}
+        <FriendShelvesSetting />
         <PieceSendsSetting />
         <MessagesFromSetting />
         {/* Lot « messages vus » : « Confirmations de lecture », caché tant que le serveur ne le propose pas. */}

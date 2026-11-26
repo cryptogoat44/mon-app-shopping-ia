@@ -449,6 +449,24 @@ export const RATE_LIMITS = {
     error: "look_read_limit",
     message: "Trop de demandes en ce moment. Réessayez dans un instant.",
   },
+  // Étagères des amis (migration 0058) : ouvrir les Envies ou le Vault d'un
+  // ami. Une page de Envies peut faire copier jusqu'à 24 images (une seule
+  // fois chacune) : large pour qui fait défiler, juste assez pour arrêter un
+  // script qui ferait travailler le serveur en boucle.
+  friendShelfRead: {
+    max: 300,
+    windowMs: HOUR,
+    error: "friend_shelf_read_limit",
+    message: "Trop de pages ouvertes. Réessayez dans un moment.",
+  },
+  // Allumer ou éteindre « Montrer mes Envies / mon Vault à mes amis » :
+  // éteindre remet en ordre les copies des images.
+  friendShelvesSetting: {
+    max: 20,
+    windowMs: HOUR,
+    error: "friend_shelves_setting_limit",
+    message: "Vous avez changé souvent ce réglage. Réessayez dans une heure.",
+  },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;

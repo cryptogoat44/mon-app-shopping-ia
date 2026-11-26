@@ -13,6 +13,8 @@ import { useWishAlertsStatus } from "@/lib/use-wish-alerts-status";
 import { bellVisible, priceDropPrices, trackPriceDropsShown } from "@/lib/wish-alerts";
 import { collectionChips, selectedCollection } from "@/lib/collections";
 import { useCollectionsStatus } from "@/lib/use-collections-status";
+import { useAuth } from "@/lib/auth-context";
+import { wishlistPrivacyNote } from "@/lib/friend-shelves";
 import { useToast } from "@/lib/toast-context";
 import { BookmarkIcon, ClockIcon, LockIcon, MoreIcon, PlusIcon } from "@/components/icons";
 import { CollectionOptionsSheet } from "@/components/collection-options-sheet";
@@ -116,6 +118,8 @@ function MyWishlist({ news, switcher, profileHeader, bottomSpace }: { news: Wish
   const [query, setQuery] = useState("");
   const { wishlistSort: sort, chooseWishlistSort } = usePreferences();
   const collectionsAvailable = useCollectionsStatus();
+  // Étagères des amis : la phrase « Qui voit vos Envies » suit le réglage.
+  const { profile } = useAuth();
   const [collections, setCollections] = useState<CollectionSummary[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -387,7 +391,8 @@ function MyWishlist({ news, switcher, profileHeader, bottomSpace }: { news: Wish
 
   return (
     <>
-      {/* « Qui voit vos Envies » : la phrase de confidentialité, mot pour mot, derrière le cadenas. */}
+      {/* « Qui voit vos Envies » : la phrase de confidentialité, mot pour mot, derrière le cadenas ;
+          celle des amis quand « Montrer mes Envies à mes amis » est allumé (migration 0058). */}
       <Modal visible={privacyOpen} animationType="slide" transparent onRequestClose={() => setPrivacyOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setPrivacyOpen(false)} accessibilityRole="button" accessibilityLabel={t.common.close} />
         <View style={styles.sheet}>
@@ -395,7 +400,9 @@ function MyWishlist({ news, switcher, profileHeader, bottomSpace }: { news: Wish
           <Text style={styles.sheetTitle} accessibilityRole="header">
             {t.wishlist.privacyTitle}
           </Text>
-          <Text style={styles.sheetBody}>{collectionsAvailable.enabled ? t.wishlist.privateNoteCollections : t.wishlist.privateNote}</Text>
+          <Text style={styles.sheetBody}>
+            {wishlistPrivacyNote(profile, collectionsAvailable.enabled)}
+          </Text>
           <Pressable style={[styles.sheetButton, styles.sheetPrimary]} onPress={() => setPrivacyOpen(false)} accessibilityRole="button" testID="compris-confidentialite">
             <Text style={[styles.sheetButtonLabel, styles.sheetPrimaryLabel]}>{t.wishlist.privacyOk}</Text>
           </Pressable>

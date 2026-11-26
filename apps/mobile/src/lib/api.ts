@@ -102,6 +102,9 @@ import type {
   ForYouPage,
   SuggestionsResponse,
   UpdateDiscoverableRequest,
+  FriendVaultPage,
+  FriendWishPage,
+  UpdateFriendShelvesRequest,
 } from "@monapp/shared-types";
 import { CLIENT_LEVEL, COMPLEMENT_DEFERRED, CONSENT_VERSIONS, parseSearchCapacity, parseVideoMomentsResponse, type SearchCapacityStatus } from "@monapp/shared-types";
 import { CLIENT_LEVEL_QUERY, parseFollowResponse } from "./follow-state";
@@ -649,6 +652,23 @@ export async function removeMyMention(commentId: string): Promise<void> {
 export async function updateDiscoverable(discoverable: boolean): Promise<void> {
   const payload: UpdateDiscoverableRequest = { discoverable };
   await authorizedFetch("/api/me/discoverable", { method: "PUT", body: JSON.stringify(payload) });
+}
+
+/** Réglages « Montrer mes Envies / mon Vault à mes amis » (migration 0058). */
+export async function updateFriendShelves(payload: UpdateFriendShelvesRequest): Promise<void> {
+  await authorizedFetch("/api/me/friend-shelves", { method: "PUT", body: JSON.stringify(payload) });
+}
+
+/** Les Envies d'un ami, s'il les montre à ses amis (page vide sinon). */
+export async function fetchUserWishlist(userId: string, cursor?: string | null): Promise<FriendWishPage> {
+  const response = await authorizedFetch(`/api/users/${encodeURIComponent(userId)}/wishlist${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+  return response.json();
+}
+
+/** Le Vault d'un ami, s'il le montre à ses amis (page vide sinon). */
+export async function fetchUserVault(userId: string, cursor?: string | null): Promise<FriendVaultPage> {
+  const response = await authorizedFetch(`/api/users/${encodeURIComponent(userId)}/vault${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+  return response.json();
 }
 
 /** Réglage « Qui peut me mentionner ». */
