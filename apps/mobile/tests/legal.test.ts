@@ -712,7 +712,16 @@ describe("politique de confidentialité : retours du build 3 (lot du 2026-11-26)
     expect(fr).toContain("Ni cette vidéo ni cette image ne sont conservées par Spotto");
     expect(fr).toContain("Chaque membre peut demander au plus 30 de ces images par heure.");
     expect(en).toContain("Each member can request at most 30 of these images per hour.");
-    expect(fr).toContain("sauf si l'app la juge noire, blanche ou floue : elle est alors effacée sans être envoyée");
+    // Le refus pour flou ne vaut que pour TikTok (blurCheckApplies) : écrit une fois, à sa place.
+    const playerState = readFileSync(join(__dirname, "../src/lib/player-state.ts"), "utf8");
+    expect(playerState).toMatch(/export function blurCheckApplies\(platform: PlayerPlatform\): boolean \{\s*return platform === "tiktok";\s*\}/);
+    expect(fr).toContain("sauf si l'app la juge noire ou blanche (ou, pour une vidéo TikTok, floue) : elle est alors effacée sans être envoyée");
+    expect(en).toContain("unless the app judges it black or white (or, for a TikTok video, blurred): it is then deleted without being sent");
+    expect(frText).not.toContain("juge noire, blanche ou floue");
+    expect(enText).not.toContain("judges it black, white or blurred");
+    const buildDoc = readFileSync(join(__dirname, "../BUILD-IPHONE.md"), "utf8").replace(/\s+/g, " ");
+    expect(buildDoc).toContain("une image que l'app juge noire ou blanche est effacée et refusée, et pour TikTok seulement une image floue aussi");
+    expect(buildDoc).not.toContain("juge noire, blanche ou floue");
     // Refusé : la promesse absolue d'une image « nette », et l'indicatif qui dirait la fonction toujours active.
     expect(frText).not.toContain("notre serveur prépare lui-même l'image");
     expect(enText).not.toContain("our server prepares the image");

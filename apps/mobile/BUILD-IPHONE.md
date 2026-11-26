@@ -284,10 +284,12 @@ téléphone dès que la recherche est partie.
   pictogrammes de TikTok, sans IA et sans rien garder. Elle passe avant
   l'instantané, alors effacé. Jamais pour Instagram ;
 - **l'instantané contrôlé**, en secours (et seule voie pour Instagram) : une
-  image que l'app juge noire, blanche ou floue est effacée et refusée (seuil
-  de netteté encore à calibrer sur l'iPhone, `BLUR_LIMITS`,
+  image que l'app juge noire ou blanche est effacée et refusée, et pour
+  TikTok seulement une image floue aussi (seuil de netteté encore à calibrer
+  sur l'iPhone, avec des vidéos TikTok, `BLUR_LIMITS`, `blurCheckApplies`,
   `apps/mobile/src/lib/player-state.ts`) ; l'app passe alors à l'analyse, ou
-  à l'écran de secours ;
+  à l'écran de secours (après un refus pour flou, le lecteur reste proposé :
+  `playerStaysOffered`, `apps/mobile/src/lib/player-decision.ts`) ;
 - **l'accord** : plus d'écran à part, le premier appui sur Lecture vaut
   accord (rien n'est chargé chez TikTok ou Meta avant), retenu par
   plateforme et retirable dans Réglages (`PLAYER_CONSENT_BY_PLAY_BUTTON`,
