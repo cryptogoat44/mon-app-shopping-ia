@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { MIN_CROP, WHOLE_IMAGE, isAdjustedCrop, isDefaultCrop, type Size } from "../src/lib/crop-geometry";
 import {
@@ -6,9 +8,14 @@ import {
   TRACE_STEP,
   WHOLE_IMAGE_ZONE,
   extendTrace,
+  framePoints,
+  isFrameTrace,
   outsidePath,
+  roundedRectPath,
+  smoothPath,
   toTracePoint,
   tracePath,
+  traceShape,
   traceSurface,
   zoneFromCrop,
   zoneFromTrace,
@@ -463,5 +470,173 @@ describe("textes du tracé", () => {
   it("plus aucun texte ne parle de faire glisser le cadre ou ses coins, ni d'essayer un autre cadre", () => {
     for (const text of [fr.targeting.caption, fr.crop.hint("x", "y"), fr.launch.frameHint, fr.result.noPriceText]) expect(text).not.toMatch(/cadre|coins/);
     for (const text of [en.targeting.caption, en.crop.hint("x", "y"), en.launch.frameHint, en.result.noPriceText]) expect(text).not.toMatch(/frame|corners/i);
+  });
+});
+
+// Lot « entourer en poudre » : la lumière suit la forme tracée (plus le
+// rectangle), le dessin seul change ; la zone envoyée reste celle de
+// zoneFromTrace (tous les tests ci-dessus, inchangés).
+describe("la forme éclairée : le tracé refermé, sans queue", () => {
+  const at = (image: Size) => ({ left: 10, top: 20, ...image });
+  const near = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
+
+  it("un tour qui dépasse son départ est coupé à son retour (permis) : plus de queue", () => {
+    for (const image of IMAGES) {
+      const trace = replay(arc(image.width / 2, image.height / 2, 40, 55, 0, 480, 90), image);
+      const shape = traceShape(trace, at(image))!;
+      expect(shape).not.toBeNull();
+      expect(shape.length).toBeLessThan(trace.length);
+      // Le dernier point gardé est le retour vers le départ.
+      expect(near(shape[shape.length - 1], shape[0])).toBeLessThan(10);
+      expect(shape[0]).toEqual(framePoints(trace, at(image))[0]);
+    }
+  });
+
+  it("un « C » de 300° est gardé entier, refermé par le dessin", () => {
+    for (const image of IMAGES) {
+      const trace = replay(arc(image.width / 2, image.height / 2, 30, 60, 0, 300), image);
+      const shape = traceShape(trace, at(image))!;
+      expect(shape).toHaveLength(trace.length);
+      expect(smoothPath(shape, true)).toMatch(/Z$/);
+    }
+  });
+
+  it("pièce au bord d'un côté : refermée par le bord (la corde le long du bas)", () => {
+    for (const image of IMAGES) {
+      const fingers = arc(image.width / 2, image.height, 50, 60, 180, 180, 40);
+      fingers[fingers.length - 1] = { x: fingers.at(-1)!.x, y: image.height - 8 };
+      const trace = replay(fingers, image);
+      const shape = traceShape(trace, at(image))!;
+      expect(shape).toEqual(framePoints(trace, at(image)));
+    }
+  });
+
+  it("pièce dans un coin : la forme reçoit le point du coin", () => {
+    for (const image of IMAGES) {
+      const trace = replay(arc(image.width, 0, 60, 70, 180, -90, 30), image);
+      const shape = traceShape(trace, at(image))!;
+      expect(shape).toHaveLength(trace.length + 1);
+      expect(shape[shape.length - 1]).toEqual({ x: 10 + image.width, y: 20 });
+    }
+  });
+
+  it("le cadre de l'IA passe tel quel ; un tracé au doigt n'est jamais pris pour lui", () => {
+    const zone = zoneFromCrop({ x: 0.2, y: 0.3, width: 0.4, height: 0.3 });
+    expect(isFrameTrace(zone.trace!)).toBe(true);
+    expect(traceShape(zone.trace!, at(CIBLAGE))).toEqual(framePoints(zone.trace!, at(CIBLAGE)));
+    expect(isFrameTrace(replay(arc(100, 200, 40, 55, 0, 360, 4), CIBLAGE))).toBe(false);
+    expect(isFrameTrace(loop(0.5, 0.5, 0.2, 0.1, 5))).toBe(false);
+  });
+
+  it("tracé non retenu (refusé) : aucune forme, rien ne s'éclaire", () => {
+    for (const image of IMAGES) {
+      expect(traceShape(replay(goAndBack(3), image), at(image))).toBeNull();
+      expect(traceShape(replay(thumbSwipe({ x: 20, y: image.height - 20 }, 150, 300, -60, 1), image), at(image))).toBeNull();
+      expect(traceShape([{ x: 0.5, y: 0.5 }], at(image))).toBeNull();
+    }
+    expect(traceShape(loop(0.5, 0.5, 0.2, 0.1), { left: 0, top: 0, width: 0, height: 0 })).toBeNull();
+  });
+
+  it("le dessin ne change pas la zone envoyée : même rectangle, avant et après", () => {
+    for (const image of IMAGES) {
+      const trace = replay(arc(image.width / 2, image.height / 2, 40, 55, 0, 480, 90), image);
+      const before = zoneFromTrace(trace, image);
+      traceShape(trace, at(image));
+      expect(zoneFromTrace(trace, image)).toEqual(before);
+    }
+  });
+});
+
+describe("chemin lissé : courbes par les milieux, sans dépassement", () => {
+  const square = [
+    { x: 0, y: 0 },
+    { x: 10, y: 0 },
+    { x: 10, y: 10 },
+    { x: 0, y: 10 },
+  ];
+  const numbers = (d: string) => (d.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
+
+  it("fermé : part du milieu de p0-p1, une courbe Q par point, finit par Z", () => {
+    expect(smoothPath(square, true)).toBe("M5 0Q10 0 10 5Q10 10 5 10Q0 10 0 5Q0 0 5 0Z");
+  });
+
+  it("ouvert (pendant le geste) : part de p0, des Q, finit en pₙ par un L ; jamais de Z", () => {
+    const d = smoothPath(square, false);
+    expect(d).toBe("M0 0Q10 0 10 5Q10 10 5 10L0 10");
+    expect(d).not.toMatch(/Z/);
+    expect(d.replace(/[\d.\s-]/g, "")).toMatch(/^MQ+L$/);
+  });
+
+  it("chaque point de contrôle est un point du tracé, chaque extrémité un milieu : rien hors de l'enveloppe", () => {
+    const points = arc(50, 50, 30, 20, 0, 300, 25);
+    const d = smoothPath(points, true);
+    const segments = d.slice(d.indexOf("Q") + 1, -1).split("Q").map(numbers);
+    const pointsKey = new Set(points.map((point) => `${Math.round(point.x * 10) / 10} ${Math.round(point.y * 10) / 10}`));
+    for (const [cx, cy, ex, ey] of segments) {
+      expect(pointsKey.has(`${cx} ${cy}`)).toBe(true);
+      expect(ex).toBeGreaterThanOrEqual(20 - 0.1);
+      expect(ex).toBeLessThanOrEqual(80 + 0.1);
+      expect(ey).toBeGreaterThanOrEqual(30 - 0.1);
+      expect(ey).toBeLessThanOrEqual(70 + 0.1);
+    }
+  });
+
+  it("arrondi à 0,1 pt ; un ou deux points restent simples", () => {
+    expect(smoothPath([{ x: 1.234, y: 5.678 }, { x: 2.0, y: 3.0 }, { x: 4.5, y: 1.25 }], false)).toBe("M1.2 5.7Q2 3 3.3 2.1L4.5 1.3");
+    expect(smoothPath([{ x: 1, y: 2 }], false)).toBe("M1 2");
+    expect(smoothPath([], true)).toBe("");
+  });
+
+  it("le cadre de l'IA : un rectangle aux coins arrondis (rayon borné au demi-côté)", () => {
+    expect(roundedRectPath({ left: 10, top: 20, width: 100, height: 50 }, 6)).toBe("M16 20H104A6 6 0 0 1 110 26V64A6 6 0 0 1 104 70H16A6 6 0 0 1 10 64V26A6 6 0 0 1 16 20Z");
+    expect(roundedRectPath({ left: 0, top: 0, width: 8, height: 40 }, 6)).toContain("A4 4");
+  });
+});
+
+describe("le dessin du tracé : poudre de lumière, la lumière suit la forme", () => {
+  const source = readFileSync(join(__dirname, "../src/components/piece-tracer.tsx"), "utf8");
+  // Le code seul, sans les commentaires (ils citent ce qui a été retiré).
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+
+  it("masque à la forme, lueur de la tête, identifiant unique, vibration au lâcher, « Réduire les animations »", () => {
+    for (const needle of ["<Mask", "RadialGradient", "useId()", "Haptics.selectionAsync().catch(() => {})", "useReduceMotion()", "smoothPath(shape, true)", "traceShape("]) {
+      expect(code).toContain(needle);
+    }
+    // Sans « : » ni autre signe que url(#…) refuse sur le site.
+    expect(code).toMatch(/useId\(\)\.replace\(/);
+    expect(code).toMatch(/Platform\.OS !== "web"\) Haptics/);
+  });
+
+  it("refusé : le rectangle qui s'éclaire (outsidePath, evenodd), un filtre de flou, gesture-handler ou Reanimated", () => {
+    expect(code).not.toContain("outsidePath(");
+    expect(code).not.toContain('fillRule="evenodd"');
+    expect(code).not.toMatch(/FeGaussianBlur|filter=/);
+    expect(code).not.toMatch(/react-native-gesture-handler|react-native-reanimated/);
+    // Plus le trait d'accent sur liseré.
+    expect(code).not.toMatch(/color\.vert|color\.blanc|color\.voileImage|STROKE|HALO/);
+  });
+
+  it("le cadre prend la forme de l'image : coins de 14 pt, plus de bandes", () => {
+    expect(code).toContain("const IMAGE_RADIUS = 14;");
+    expect(code).toMatch(/frame: \{ position: "absolute", borderRadius: IMAGE_RADIUS, overflow: "hidden"/);
+    expect(code).toContain("left: imageBox.left, top: imageBox.top, width: imageBox.width, height: imageBox.height");
+  });
+
+  it("ce que le composant remonte ne change pas : la zone de zoneFromTrace et le tracé", () => {
+    expect(code).toContain("zoneFromTrace(current.trace, box)");
+    expect(code).toContain("latest.current.onChange({ crop, trace: current.trace })");
+  });
+});
+
+describe("la phrase sous « Entourez la pièce » (décision du fondateur)", () => {
+  it("exactement vraie : la recherche porte sur le rectangle autour du tracé", () => {
+    expect(fr.targeting.caption).toBe("La recherche porte sur la zone que vous entourez.");
+    expect(en.targeting.caption).toBe("The search covers the area you circle.");
+    expect(Object.keys(fr.targeting).sort()).toEqual(Object.keys(en.targeting).sort());
+  });
+
+  it("refusé : promettre que seule la forme dessinée est analysée", () => {
+    expect(fr.targeting.caption).not.toMatch(/Seule|analysée/);
+    expect(en.targeting.caption).not.toMatch(/Only|analyzed/);
   });
 });
