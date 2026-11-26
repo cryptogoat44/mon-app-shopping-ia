@@ -221,12 +221,15 @@ describe("l'historique en grille de deux colonnes (retours du build 3, point 7)"
     expect(tiles).not.toMatch(/name: \{[^}]*minHeight: 40/);
     expect(tile).toMatch(/<Text style=\{styles\.name\} numberOfLines=\{1\}>/);
     expect(tile).not.toMatch(/<Text style=\{styles\.name\} numberOfLines=\{2\}>/);
-    expect(tile).toMatch(/<Text style=\{styles\.meta\} numberOfLines=\{1\}>/);
+    // Lot « finitions de l'œil » : la méta sur une ligne, en deux textes (la date courte, puis la boutique qui se raccourcit).
+    expect(tile).toMatch(/<Text style=\{\[styles\.meta, styles\.metaDay\]\} numberOfLines=\{1\}>/);
+    expect(tile).toMatch(/<Text style=\{\[styles\.meta, styles\.metaShop\]\} numberOfLines=\{1\}>/);
   });
 
-  it("VoiceOver : refusé, une étiquette sur la tuile (l'image lue en plus) ; permis, une seule étiquette par case, « nom, jour · boutique »", () => {
+  it("VoiceOver : refusé, une étiquette sur la tuile (l'image lue en plus) ; permis, une seule étiquette par case, « nom, jour, boutique »", () => {
     expect(tile.match(/accessibilityLabel=/g)).toHaveLength(1);
-    expect(tile).toContain("accessibilityLabel={`${piece.name}, ${meta}`}");
+    // Lot « finitions de l'œil » : la date entière lue (la case écrit la date courte).
+    expect(tile).toContain("accessibilityLabel={`${piece.name}, ${spoken}`}");
     expect(tile).toContain('accessibilityRole="button"');
     const pieceTile = tile.slice(tile.indexOf("<PieceTile"), tile.indexOf("/>", tile.indexOf("<PieceTile")));
     expect(pieceTile).not.toContain("accessibilityLabel");
