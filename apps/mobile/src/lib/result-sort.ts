@@ -287,6 +287,18 @@ export function resultLayout(result: ResultLists, view: ResultView, options: { s
   };
 }
 
+/** Titre de la barre du Résultat (lot « fidélité aux maquettes ») : le nombre
+ * de propositions que l'écran peut montrer avec le tri et les filtres choisis
+ * — la grande carte comprise, et ce qui attend derrière « Voir plus » ou dans
+ * la section repliée « Sans prix ». Les sections et la liste triée ne
+ * contiennent jamais la grande carte (priceFirstSections, priceListShown) :
+ * elle n'est comptée qu'une fois. */
+export function shownProposalCount(layout: ResultLayout): number {
+  const { sections } = layout;
+  const listed = layout.priceList ? layout.priceList.length : sections.others.length + sections.shopping.length + sections.words.length + sections.withoutPrice.length;
+  return (layout.bigCard !== null ? 1 : 0) + listed;
+}
+
 /** Propriétés de l'événement « result_view_changed » (analytics-events.ts) :
  * le nouveau choix et ce qui a changé, des valeurs fermées seulement. */
 export function resultViewChangeProps(

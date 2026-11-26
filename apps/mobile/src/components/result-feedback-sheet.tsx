@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Modal, Pressable, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { MatchFeedbackReason } from "@monapp/shared-types";
 import { color, font, radius, serifFont, serifLineHeight, size, space } from "@/theme/tokens";
@@ -8,15 +8,22 @@ import { reportInconsistentResult, withdrawInconsistentReport } from "@/lib/api"
 import { feedbackErrorMessage, feedbackReasonChoices, feedbackReasonLabel } from "@/lib/result-feedback";
 import { useToast } from "@/lib/toast-context";
 import { ErrorMessage } from "@/components/error-message";
+import { MoreIcon } from "@/components/icons";
 import { themedStyles } from "@/theme/themed-styles";
 
 type Busy = "idle" | "sending" | "withdrawing";
 
 /** Bouton discret « … », au bout des actions d'une proposition. */
-export function ResultFeedbackButton({ onPress }: { onPress: () => void }) {
+/** La case « Plus » de la rangée d'actions (lot « fidélité aux maquettes ») : elle ne
+ * contient que « Signaler un résultat incohérent ». Le libellé visible commence
+ * le nom lu (Commande vocale : « Toucher Plus »). `style` : la case donnée par l'écran. */
+export function ResultFeedbackButton({ onPress, style }: { onPress: () => void; style?: StyleProp<ViewStyle> }) {
   return (
-    <Pressable style={styles.more} onPress={onPress} accessibilityRole="button" accessibilityLabel={t.result.reportMenuLabel}>
-      <Text style={styles.moreLabel}>…</Text>
+    <Pressable style={style} onPress={onPress} accessibilityRole="button" accessibilityLabel={`${t.result.moreShort}, ${t.result.reportMenuLabel}`}>
+      <View accessible={false}>
+        <MoreIcon size={18} tint={color.encre} />
+      </View>
+      <Text style={styles.actionLabel}>{t.result.moreShort}</Text>
     </Pressable>
   );
 }
@@ -140,16 +147,8 @@ export function ResultFeedbackSheet({
 }
 
 const styles = themedStyles(() => ({
-  more: {
-    width: size.touchTarget,
-    minHeight: size.touchTarget,
-    borderWidth: 1,
-    borderColor: color.filet,
-    borderRadius: radius.md,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  moreLabel: { fontSize: font.body, fontWeight: "600", color: color.encre },
+  // Même libellé que les autres cases de la rangée (app/(app)/spot/result.tsx, actionLabel) ; jamais coupé.
+  actionLabel: { fontSize: 12, lineHeight: 14, fontWeight: "500", color: color.encre, textAlign: "center" },
   reported: { minHeight: size.touchTarget, justifyContent: "center", alignSelf: "flex-start" },
   reportedLabel: { fontSize: font.caption, color: color.acier, textDecorationLine: "underline" },
   backdrop: { flex: 1, backgroundColor: color.voile },

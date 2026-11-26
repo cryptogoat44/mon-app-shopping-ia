@@ -834,6 +834,11 @@ export const fr = {
       leave: `Vous allez quitter ${BRAND} : le site s'ouvre dans votre navigateur. Aucun de ces liens n'est affilié : ${BRAND} ne touche rien sur ces achats.`,
       close: "Fermer",
     },
+    // Lot « fidélité aux maquettes » : la pastille du tri, les libellés courts des filtres (contenus dans leur nom lu), la case « Plus ».
+    sortMenuLabel: (choice: string) => `Trier les résultats : ${choice}`,
+    withPriceShort: "Avec prix",
+    inStockShort: "En stock",
+    moreShort: "Plus",
   },
   wishlistItem: {
     back: "Envies",

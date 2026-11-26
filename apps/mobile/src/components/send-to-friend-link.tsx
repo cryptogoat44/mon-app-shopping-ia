@@ -1,5 +1,6 @@
 import { Pressable, Text, type StyleProp, type ViewStyle } from "react-native";
 import { color, font, size } from "@/theme/tokens";
+import { lienSouligne } from "@/theme/accent";
 import { t } from "@/i18n";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -26,5 +27,5 @@ export function SendToFriendLink({ pieceName, onPress, style }: { pieceName: str
 
 const styles = themedStyles(() => ({
   link: { minHeight: size.touchTarget, justifyContent: "center", alignSelf: "flex-start" },
-  label: { fontSize: font.caption, color: color.acier, fontWeight: "600", lineHeight: 17 },
+  label: { ...lienSouligne, fontSize: font.caption, lineHeight: 17, color: color.vert, fontWeight: "400" },
 }));

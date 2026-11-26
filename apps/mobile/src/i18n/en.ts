@@ -743,6 +743,11 @@ export const en: Catalog = {
       leave: `You're about to leave ${BRAND}: the site opens in your browser. None of these links is an affiliate link: ${BRAND} earns nothing on these purchases.`,
       close: "Close",
     },
+    // "Matching the mockups" batch: the sort pill, the short filter labels (contained in their spoken names), the "More" cell.
+    sortMenuLabel: (choice: string) => `Sort results: ${choice}`,
+    withPriceShort: "With a price",
+    inStockShort: "In stock",
+    moreShort: "More",
   },
   wishlistItem: {
     back: "Wishlist",

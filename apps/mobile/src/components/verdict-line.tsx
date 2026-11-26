@@ -26,7 +26,6 @@ export function VerdictLine({ verdict }: { verdict: SearchVerdict | undefined })
     if (sentence && Platform.OS === "ios") AccessibilityInfo.announceForAccessibilityWithOptions(sentence, { queue: true });
   }, [sentence]);
   if (!verdict || !sentence) return null;
-  const affirmed = verdict.level === "identified";
   return (
     <View accessibilityLiveRegion="polite">
       <Pressable
@@ -37,7 +36,7 @@ export function VerdictLine({ verdict }: { verdict: SearchVerdict | undefined })
         accessibilityHint={t.result.verdict.hint}
         testID="verdict"
       >
-        <Text style={affirmed ? [styles.sentence, styles.affirmed] : styles.sentence}>
+        <Text style={styles.sentence}>
           {sentence} <Text style={styles.more}>ⓘ</Text>
         </Text>
       </Pressable>
@@ -73,9 +72,9 @@ function VerdictSheet({ onClose }: { onClose: () => void }) {
 // Mêmes mesures et mêmes couleurs que l'avis « aucun prix » et les feuilles des mentions (contrastes déjà vérifiés).
 // Aucune hauteur ni nombre de lignes imposés : la phrase passe à la ligne sur 320 points et en grand texte.
 const styles = themedStyles(() => ({
-  box: { backgroundColor: color.surface, borderColor: color.filet, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: space.md, paddingVertical: space.sm, marginBottom: space.md, minHeight: 44, justifyContent: "center" },
-  sentence: { fontSize: font.secondary, color: color.encre, lineHeight: 21, flexShrink: 1 },
-  affirmed: { fontWeight: "600" },
+  // Lot « fidélité aux maquettes » : la même phrase, mot pour mot, sans encadré, en 13 pt acier.
+  box: { minHeight: 44, justifyContent: "center", marginBottom: space.xs },
+  sentence: { fontSize: font.caption, lineHeight: 18, color: color.acier, flexShrink: 1 },
   more: { fontSize: font.caption, color: color.acier },
   backdrop: { flex: 1, backgroundColor: color.voile },
   sheet: {

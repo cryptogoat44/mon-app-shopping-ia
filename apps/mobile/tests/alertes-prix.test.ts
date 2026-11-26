@@ -434,8 +434,8 @@ describe("« Plus disponible », avec une confirmation", () => {
   it("retours du build 2 : la carte et la ligne n'ont plus « Plus disponible ? », mais gardent « Voir chez … » hors de la zone qui met en grand", () => {
     expect(card).not.toContain("StockReportLink");
     expect(card).not.toContain("onReportGone");
-    const row = card.slice(card.indexOf('if (variant === "row")'), card.indexOf("return (\n    <View style={styles.card}>"));
-    const grid = card.slice(card.indexOf("return (\n    <View style={styles.card}>"), card.indexOf("export function CheapestBadge"));
+    const row = card.slice(card.indexOf('if (variant === "row")'), card.indexOf("return (\n    <View style={column === undefined ? styles.card"));
+    const grid = card.slice(card.indexOf("return (\n    <View style={column === undefined ? styles.card"), card.indexOf("export function CheapestBadge"));
     for (const variant of [row, grid]) {
       expect(variant.indexOf("<ShopLink")).toBeGreaterThan(variant.indexOf("</Pressable>"));
     }
