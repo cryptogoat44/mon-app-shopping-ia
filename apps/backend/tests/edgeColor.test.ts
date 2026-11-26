@@ -361,6 +361,25 @@ describe("correctifs de la relecture : durée tenue, empreinte, redirections, r�
     }
   });
 
+  it("permis : une couleur encore là 2 min avant les 7 jours ; refusé : effacée par la MINUTERIE seule à 30 s des 7 jours (aucune visite entre-temps)", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
+    try {
+      switches.on = true;
+      const { log } = logger();
+      answerNext({ status: 200, headers: PNG, body: whiteSquare });
+      queueEdgeColors(log, [THUMB], PUBLIC);
+      await vi.waitFor(() => expect(edgeColorFor(THUMB)).toBe("#ffffff"));
+      vi.advanceTimersByTime(EDGE_COLOR_TTL_MS - 2 * 60_000);
+      expect(edgeColorFor(THUMB)).toBe("#ffffff");
+      // 90 s de plus, sans queueEdgeColors ni edgeColorFor : à cet âge la lecture
+      // la croirait encore fraîche, seul le balayage de la minuterie a pu l'effacer.
+      vi.advanceTimersByTime(90_000);
+      expect(edgeColorFor(THUMB)).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("le cache ne garde jamais l'adresse en clair : une empreinte SHA-256 seulement", () => {
     const source = readFileSync(join(__dirname, "../src/lib/edgeColor.ts"), "utf8");
     expect(source).toContain('createHash("sha256").update(imageUrl).digest("base64url")');
