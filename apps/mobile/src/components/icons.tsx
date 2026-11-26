@@ -164,11 +164,13 @@ export function MinusIcon({ size = 24, tint = color.encre, strokeWidth = 1.6 }: 
 }
 
 /** Chevron (retours du build 3, point 3) : vers le haut, « réduire » la carte
- * « Votre dernière vidéo » ; vers le bas, la rouvrir. */
-export function ChevronIcon({ size = 24, tint = color.encre, strokeWidth = 1.6, direction }: IconProps & { direction: "up" | "down" }) {
+ * « Votre dernière vidéo » ; vers le bas, la rouvrir (et la pastille de tri du
+ * Résultat, lot « fidélité aux maquettes ») ; vers la gauche, un retour. */
+export function ChevronIcon({ size = 24, tint = color.encre, strokeWidth = 1.6, direction }: IconProps & { direction: "up" | "down" | "left" }) {
+  const d = direction === "up" ? "M6 15l6-6 6 6" : direction === "left" ? "M14.5 6l-6 6 6 6" : "M6 9l6 6 6-6";
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path d={direction === "up" ? "M6 15l6-6 6 6" : "M6 9l6 6 6-6"} stroke={tint} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d={d} stroke={tint} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   );
 }
@@ -326,6 +328,27 @@ export function PinIcon({ size = 16, tint = color.surImage, strokeWidth = 1.6 }:
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M9 3.5h6l-1 5.5 3.5 3.5v1.5h-11V12.5L10 9 9 3.5z" stroke={tint} strokeWidth={strokeWidth} strokeLinejoin="round" />
       <Path d="M12 14v6.5" stroke={tint} strokeWidth={strokeWidth} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** Lien qui quitte l'app (lot « fidélité aux maquettes ») : « Voir chez … », un cadre et une flèche qui en sort. */
+export function ExternalLinkIcon({ size = 18, tint = color.blanc, strokeWidth = 1.6 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M10 5H5.5v13.5H19V14" stroke={tint} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M13.5 4.5H19.5V10.5M19 5l-8 8" stroke={tint} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+/** « Je l'ai achetée » (lot « fidélité aux maquettes ») : un sac et une coche. */
+export function BagCheckIcon({ size = 18, tint = color.encre, strokeWidth = 1.6 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M5.5 8.5h13l-1 11h-11z" stroke={tint} strokeWidth={strokeWidth} strokeLinejoin="round" />
+      <Path d="M9 8.5V7a3 3 0 0 1 6 0v1.5" stroke={tint} strokeWidth={strokeWidth} strokeLinecap="round" />
+      <Path d="M9.5 14l2 2 3.5-3.5" stroke={tint} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   );
 }

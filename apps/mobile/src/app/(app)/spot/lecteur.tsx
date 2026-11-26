@@ -132,10 +132,10 @@ function fallbackLead(reason: FallbackReason): string {
 function TopBar({ onBack, onClose }: { onBack: () => void; onClose: () => void }) {
   return (
     <View style={styles.nav}>
-      <Pressable onPress={onBack} hitSlop={12} style={styles.navSide} accessibilityRole="button" accessibilityLabel={t.common.back}>
+      <Pressable onPress={onBack} style={styles.navSide} accessibilityRole="button" accessibilityLabel={t.common.back}>
         <Text style={styles.back}>‹ {t.common.back}</Text>
       </Pressable>
-      <Pressable onPress={onClose} hitSlop={12} style={[styles.navSide, styles.navRight]} accessibilityRole="button">
+      <Pressable onPress={onClose} style={[styles.navSide, styles.navRight]} accessibilityRole="button">
         <Text style={styles.close}>{t.spotter.close}</Text>
       </Pressable>
     </View>
@@ -986,12 +986,12 @@ const styles = themedStyles(() => ({
   playerContent: { alignItems: "center", paddingHorizontal: space.md, gap: space.sm, maxWidth: 480, alignSelf: "center", width: "100%" },
   centered: { flex: 1, justifyContent: "center", paddingHorizontal: space.xl, gap: space.lg },
   center: { textAlign: "center" },
-  nav: { height: 47, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12 },
-  navSide: { minWidth: 44, height: 44, justifyContent: "center" },
+  nav: { height: 44, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 8 },
+  navSide: { minHeight: 44, minWidth: 44, paddingHorizontal: 8, justifyContent: "center" },
   navRight: { alignItems: "flex-end" },
   // « ‹ Retour » écrit en toutes lettres : sur cet écran, le geste « glisser pour revenir » est coupé.
-  back: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
-  close: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
+  back: { fontSize: font.body, fontWeight: "400", color: color.encre },
+  close: { fontSize: font.body, fontWeight: "400", color: color.encre },
   body: { fontSize: font.secondary, color: color.acier, lineHeight: 21 },
   box: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md, gap: space.sm, alignSelf: "stretch", marginTop: space.md },
   boxTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, lineHeight: serifLineHeight.body, color: color.encre },
