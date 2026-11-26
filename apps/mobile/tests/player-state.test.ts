@@ -305,10 +305,64 @@ describe("image floue (retours du build 3 : contrôle de netteté de l'instantan
     }
   });
 
-  it("la netteté ne dépend pas de la luminosité (rapport à la variance des gris)", () => {
+  it("la netteté ne dépend pas de la luminosité (bords jugés par rapport à leur gradient)", () => {
     const sharp = real("05-nette");
     expect(frameSharpness(darken(sharp, 0.25)) / frameSharpness(sharp)).toBeGreaterThan(0.8);
     expect(frameSharpness(real("06-floue"))).toBeLessThan(BLUR_LIMITS.minSharpness / 2);
+  });
+
+  // Gros plan d'un vêtement uni (le cas principal) : prise en 1080 × 1920,
+  // réduite à 96 px par moyenne de surface comme le fait l'app. Le bord tombe
+  // au milieu d'un pixel de la copie, comme après une vraie réduction.
+  const BIG_W = 1080;
+  const BIG_H = 1920;
+  const downscale = (pixel: (x: number, y: number) => number): FrameSample => {
+    const gray = new Uint8Array(W * H);
+    const sx = BIG_W / W;
+    const sy = BIG_H / H;
+    for (let y = 0; y < H; y += 1) {
+      for (let x = 0; x < W; x += 1) {
+        let sum = 0;
+        let count = 0;
+        for (let by = Math.floor(y * sy); by < Math.floor((y + 1) * sy); by += 2) {
+          for (let bx = Math.floor(x * sx); bx < Math.floor((x + 1) * sx); bx += 2) {
+            sum += pixel(bx, by);
+            count += 1;
+          }
+        }
+        gray[y * W + x] = Math.round(sum / count);
+      }
+    }
+    return { gray, width: W, height: H, colors: [] };
+  };
+  /** Manteau sombre sur la moitié gauche, mur clair à droite ; `blur` : demi-
+   * largeur (px de l'image d'origine) d'un bord adouci en rampe linéaire. */
+  const coatHalf = (blur: number) =>
+    downscale((x) => {
+      const edge = BIG_W * 0.47;
+      if (blur === 0) return x < edge ? 25 : 225;
+      const t = Math.max(0, Math.min(1, (x - edge + blur) / (2 * blur)));
+      return 25 + t * 200;
+    });
+  /** Gros plan : manteau sombre en buste, visage clair au-dessus. */
+  const coatCloseUp = (blur: number) =>
+    downscale((x, y) => {
+      const ramp = (d: number) => (blur === 0 ? (d < 0 ? 0 : 1) : Math.max(0, Math.min(1, (d + blur) / (2 * blur))));
+      const inCoat = Math.min(ramp(x - BIG_W * 0.153), ramp(BIG_W * 0.853 - x), ramp(y - BIG_H * 0.453));
+      return 225 - inCoat * 205;
+    });
+
+  it("permis : gros plan net d'un vêtement uni (manteau sombre sur la moitié de l'image, en buste), même assombri", () => {
+    for (const frame of [coatHalf(0), coatCloseUp(0)]) {
+      expect(isBlankFrame(frame)).toBe(false);
+      expect(isBlurryFrame(frame)).toBe(false);
+      expect(isBlurryFrame(darken(frame, 0.25))).toBe(false);
+    }
+  });
+
+  it("refusé : le même gros plan flou (bord étalé sur 40 px de l'image d'origine)", () => {
+    expect(isBlurryFrame(coatHalf(40))).toBe(true);
+    expect(isBlurryFrame(coatCloseUp(40))).toBe(true);
   });
 
   it("refusé : une zone unie (rien à juger)", () => {

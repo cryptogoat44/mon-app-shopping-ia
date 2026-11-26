@@ -4,7 +4,6 @@
 import type { FrameSample } from "./frame-sample";
 import { HOST_MESSAGE_SOURCE } from "./player-host-page";
 import { PLAYER_PLATFORM_LIST, type PlayerPlatform } from "./player-link";
-import { sharpness } from "./video-stage1";
 
 export const PLAYER_TIMINGS = {
   /** Sans nouvelles du lecteur : écran de secours. */
@@ -153,61 +152,78 @@ export function isBlankFrame(sample: FrameSample): boolean {
 // TikTok nets) est refusée au lieu d'être envoyée. Mesurée dans la zone de
 // isBlankFrame seulement : sans la colonne de boutons de TikTok, l'en-tête et
 // le bas (nets même quand la vidéo est floue), ni le bouton central.
-// Netteté RELATIVE : variance du laplacien (sharpness de video-stage1.ts,
-// inchangée) divisée par la variance des gris de la même zone. La variance du
-// laplacien seule croît comme le carré du contraste : un plan net mais sombre
-// (soirée, intérieur) mesurait moins que la capture floue 06 et était refusé.
-// Le rapport ne dépend pas de la luminosité.
+// Netteté des BORDS : sur les 5 % de pixels au plus fort gradient de la zone,
+// moyenne du carré du laplacien divisée par la moyenne du carré du gradient.
+// Un bord franc est étroit (laplacien fort pour son gradient) ; un bord flou
+// est large (laplacien faible). La mesure ne dépend ni de la luminosité (les
+// deux termes croissent comme le carré du contraste) ni de la QUANTITÉ de
+// bords : un gros plan net d'un manteau uni, qui n'a que quelques bords,
+// mesure autant qu'une rue chargée. (L'ancienne mesure, variance du laplacien
+// sur variance des gris, refusait ces gros plans nets : ≈ 0,07.)
 
 /** Seuil de départ, À CALIBRER sur l'iPhone (journal « [player] netteté » en
- * développement) ; repères mesurés sur des copies de 96 px des captures du
- * fondateur : 06 floue ≈ 0,04 (0,06 assombrie) ; 05 nette ≈ 0,35 à 0,62, et
- * autant assombrie à 25 % ou 15 %. */
-export const BLUR_LIMITS = { minSharpness: 0.1 } as const;
+ * développement) ; repères mesurés sur des copies de 96 px : capture 06 floue
+ * ≈ 0,1 ; 05 nette ≈ 2, et autant assombrie ; gros plans unis nets (manteau
+ * sombre sur la moitié de l'image, en buste, silhouette) ≈ 1,5 à 2, les mêmes
+ * floutés ≈ 0,2 à 0,4. */
+export const BLUR_LIMITS = { minSharpness: 0.5 } as const;
 
-/** Netteté relative de la zone examinée : les pixels du rectangle BLANK_ZONE
- * recopiés dans un nouvel échantillon, ceux de BLANK_HOLE remplacés par la
- * moyenne de la zone (pour ne pas créer de bords) ; variance du laplacien
- * divisée par la variance des gris. Zone unie : 0. Exportée pour le journal
- * de développement (calibrage). */
+/** Part des pixels au plus fort gradient sur laquelle on juge les bords. */
+const SHARPNESS_TOP_FRACTION = 0.05;
+/** Gradient minimal (niveaux de gris par pixel) des bords jugés ; repères :
+ * capture 05 assombrie à 15 % ≈ 10, 06 floue assombrie à 15 % ≈ 4,6. */
+const SHARPNESS_MIN_EDGE = 3;
+
+/** Netteté des bords de la zone examinée (rectangle BLANK_ZONE sans
+ * BLANK_HOLE) : seuls comptent les pixels dont le pixel et ses quatre voisins
+ * sont dans la zone et hors du trou (aucun bord inventé au bord du trou ni
+ * lu dans la colonne de TikTok). Zone unie : 0. Exportée pour le journal de
+ * développement (calibrage). */
 export function frameSharpness(sample: FrameSample): number {
-  if (sample.width < 3 || sample.height < 3) return 0;
-  const left = Math.floor(BLANK_ZONE.left * sample.width);
-  const right = Math.ceil(BLANK_ZONE.right * sample.width);
-  const top = Math.floor(BLANK_ZONE.top * sample.height);
-  const bottom = Math.ceil(BLANK_ZONE.bottom * sample.height);
-  const width = right - left;
-  const height = bottom - top;
+  const { width, height, gray } = sample;
   if (width < 3 || height < 3) return 0;
-  const isHole = (x: number, y: number) => inside((x + 0.5) / sample.width, (y + 0.5) / sample.height, BLANK_HOLE);
-  let sum = 0;
+  const left = Math.floor(BLANK_ZONE.left * width);
+  const right = Math.ceil(BLANK_ZONE.right * width);
+  const top = Math.floor(BLANK_ZONE.top * height);
+  const bottom = Math.ceil(BLANK_ZONE.bottom * height);
+  const isHole = (x: number, y: number) => inside((x + 0.5) / width, (y + 0.5) / height, BLANK_HOLE);
+  const gradients: number[] = [];
+  const laplacians: number[] = [];
+  for (let y = top + 1; y < bottom - 1; y += 1) {
+    for (let x = left + 1; x < right - 1; x += 1) {
+      if (isHole(x, y) || isHole(x - 1, y) || isHole(x + 1, y) || isHole(x, y - 1) || isHole(x, y + 1)) continue;
+      const i = y * width + x;
+      const center = gray[i] ?? 0;
+      const west = gray[i - 1] ?? 0;
+      const east = gray[i + 1] ?? 0;
+      const north = gray[i - width] ?? 0;
+      const south = gray[i + width] ?? 0;
+      const gx = (east - west) / 2;
+      const gy = (south - north) / 2;
+      const laplacian = 4 * center - west - east - north - south;
+      gradients.push(gx * gx + gy * gy);
+      laplacians.push(laplacian * laplacian);
+    }
+  }
+  if (gradients.length === 0) return 0;
+  const sorted = Float64Array.from(gradients).sort();
+  const threshold = Math.max(sorted[Math.min(sorted.length - 1, Math.floor((1 - SHARPNESS_TOP_FRACTION) * sorted.length))]!, Number.MIN_VALUE);
+  let gradientSum = 0;
+  let laplacianSum = 0;
   let count = 0;
-  for (let y = top; y < bottom; y += 1) {
-    for (let x = left; x < right; x += 1) {
-      if (isHole(x, y)) continue;
-      sum += sample.gray[y * sample.width + x] ?? 0;
-      count += 1;
-    }
+  for (let k = 0; k < gradients.length; k += 1) {
+    if (gradients[k]! < threshold) continue;
+    gradientSum += gradients[k]!;
+    laplacianSum += laplacians[k]!;
+    count += 1;
   }
-  const mean = count > 0 ? Math.round(sum / count) : 0;
-  const gray = new Uint8Array(width * height);
-  let graySum = 0;
-  let graySquares = 0;
-  for (let y = top; y < bottom; y += 1) {
-    for (let x = left; x < right; x += 1) {
-      const value = isHole(x, y) ? mean : (sample.gray[y * sample.width + x] ?? 0);
-      gray[(y - top) * width + (x - left)] = value;
-      graySum += value;
-      graySquares += value * value;
-    }
-  }
-  const grayMean = graySum / gray.length;
-  const grayVariance = graySquares / gray.length - grayMean * grayMean;
-  if (grayVariance < 1) return 0;
-  return sharpness({ gray, width, height, colors: [] }) / grayVariance;
+  // Bords les plus forts sous 3 niveaux de gris par pixel : aucun vrai bord,
+  // seulement les marches d'arrondi d'un dégradé (image floue ou unie).
+  if (count === 0 || gradientSum / count < SHARPNESS_MIN_EDGE ** 2) return 0;
+  return laplacianSum / gradientSum;
 }
 
-/** Image floue : netteté relative de la zone sous BLUR_LIMITS.minSharpness. */
+/** Image floue : netteté des bords de la zone sous BLUR_LIMITS.minSharpness. */
 export function isBlurryFrame(sample: FrameSample): boolean {
   return frameSharpness(sample) < BLUR_LIMITS.minSharpness;
 }
