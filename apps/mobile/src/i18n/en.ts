@@ -28,6 +28,7 @@ export const en: Catalog = {
       zoomIn: "Zoom in",
       zoomOut: "Zoom out",
     },
+    zoomHint: "Pinch to zoom",
   },
   tabs: {
     feed: "Feed",

@@ -63,9 +63,9 @@ describe("où l'image s'ouvre en grand (lecture du code)", () => {
   it("fiche d'une envie, pièce du Vault, grande carte d'un résultat", () => {
     expect(read("src/app/(app)/envie.tsx")).toMatch(/<ProductFrame [^>]*enlargeable \/>/);
     // Lot « vitrine » : la grande tuile de pièce porte le geste (enlargeable → EnlargeableImage).
-    expect(read("src/app/(app)/vault-item/[id].tsx")).toMatch(/<PieceTile variant="hero" enlargeable /);
-    expect(read("src/app/(app)/spot/result.tsx").match(/<PieceTile variant="hero" enlargeable /g)).toHaveLength(1);
-    expect(read("src/components/piece-tile.tsx")).toContain("<EnlargeableImage ");
+    expect(read("src/app/(app)/vault-item/[id].tsx")).toMatch(/<PieceTile\s+variant="hero"\s+enlargeable\s/);
+    expect(read("src/app/(app)/spot/result.tsx").match(/<PieceTile\s+variant="hero"\s+enlargeable\s/g)).toHaveLength(1);
+    expect(read("src/components/piece-tile.tsx")).toMatch(/<EnlargeableImage\s/);
     expect(read("src/components/piece-tile.tsx")).toContain("enlargeable = false");
   });
 
@@ -85,15 +85,31 @@ describe("où l'image s'ouvre en grand (lecture du code)", () => {
     expect(read("src/components/product-frame.tsx")).toContain("enlargeable = false");
   });
 
-  it("plein écran : image décodée en entier (zoom net) ; fiches et grilles : réduite comme avant", () => {
+  it("plein écran et les trois grandes images zoomables : décodées en entier (zoom net) ; grilles : réduites comme avant", () => {
     const viewer = read("src/components/image-viewer.tsx");
     expect(viewer).toMatch(/<SpotImage\s[^>]*\n\s*fullResolution\n/);
     const spotImage = read("src/components/spot-image.tsx");
     expect(spotImage).toContain("fullResolution = false");
     // Les trois images d'expo-image (deux temps et une seule) suivent la demande.
     expect(spotImage.match(/allowDownscaling=\{!fullResolution\}/g)).toHaveLength(3);
-    // Refusé : aucun autre écran ne décode en pleine taille.
-    for (const path of ["src/components/product-frame.tsx", "src/components/wishlist-panel.tsx", "src/components/proposal-card.tsx", "src/app/(app)/spot/result.tsx"]) {
+    // Retours du build 3 (zoom sur place) : permis pour l'unique grande image de l'envie, du Vault et de la grande carte.
+    expect(read("src/app/(app)/envie.tsx")).toMatch(/<ProductFrame [^>]*fullResolution[^>]*enlargeable \/>/);
+    for (const path of ["src/app/(app)/vault-item/[id].tsx", "src/app/(app)/spot/result.tsx"]) {
+      const source = read(path);
+      expect(source.match(/\bfullResolution\b/g), path).toHaveLength(1);
+      expect(source, path).toMatch(/<PieceTile\s+variant="hero"\s+enlargeable\s[^>]*fullResolution/);
+    }
+    // La tuile et le cadre ne décodent en entier que si on le leur demande.
+    expect(read("src/components/piece-tile.tsx")).toContain("fullResolution = false");
+    expect(read("src/components/product-frame.tsx")).toContain("fullResolution = false");
+    // Refusé : les grilles et les autres écrans ne décodent jamais en pleine taille.
+    for (const path of [
+      "src/components/wishlist-panel.tsx",
+      "src/components/proposal-card.tsx",
+      "src/app/(app)/(tabs)/profile/index.tsx",
+      "src/components/post-card.tsx",
+      "src/app/look.tsx",
+    ]) {
       expect(read(path), path).not.toContain("fullResolution");
     }
   });
@@ -113,7 +129,9 @@ describe("où l'image s'ouvre en grand (lecture du code)", () => {
     expect(source).toContain("accessibilityLabel={t.common.close}");
     expect(source).toContain("PanResponder.create");
     expect(source).toContain('accessibilityRole="adjustable"');
-    expect(source).toContain('accessibilityRole={Platform.OS === "web" ? "button" : "imagebutton"}');
+    // Site : « button » (react-native-web n'écrit aucun rôle « imagebutton ») ; iPhone : « imagebutton ».
+    expect(source).toContain('accessibilityRole="button"');
+    expect(source).toContain('accessibilityRole="imagebutton"');
     expect(source).toContain("accessibilityViewIsModal");
     // Aucune dépendance nouvelle : ni gesture-handler, ni reanimated, ni bibliothèque de zoom.
     expect(source).not.toMatch(/react-native-gesture-handler|react-native-reanimated|zoom-view|image-viewing/);

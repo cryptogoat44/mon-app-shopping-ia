@@ -2,7 +2,7 @@ import { useState } from "react";
 import { StyleSheet, View, type ImageStyle, type LayoutChangeEvent, type StyleProp, type ViewStyle } from "react-native";
 import { Image } from "expo-image";
 import { SpotImage, type ImageNaturalSize } from "@/components/spot-image";
-import { EnlargeableImage } from "@/components/image-viewer";
+import { EnlargeableImage, type ZoomState } from "@/components/image-viewer";
 import { edgeBackground, fillsTile, honestSize, type PieceImageSize, type PieceTileVariant } from "@/lib/piece-image";
 import { color, getActiveScheme, radius } from "@/theme/tokens";
 import { themedStyles } from "@/theme/themed-styles";
@@ -33,6 +33,8 @@ export function PieceTile({
   accessibilityLabel,
   recyclingKey,
   enlargeable = false,
+  onZoomStateChange,
+  fullResolution = false,
   edgeColor,
   style,
   onLayout,
@@ -46,8 +48,14 @@ export function PieceTile({
   /** Absent : l'image n'est pas lue séparément (cases qui portent déjà leur libellé). */
   accessibilityLabel?: string;
   recyclingKey?: string;
-  /** Toucher → plein écran (EnlargeableImage). */
+  /** Grandes images des fiches : zoom à deux doigts sur place (iPhone), plein écran au clic (site) ou par VoiceOver
+   * (EnlargeableImage, qui enveloppe alors la tuile entière). */
   enlargeable?: boolean;
+  /** Agrandissable seulement : l'écran bloque son défilement pendant « zooming ». */
+  onZoomStateChange?: (state: ZoomState) => void;
+  /** L'unique grande image zoomable de l'écran seulement (envie, Vault, grande carte) : décodée en entier, nette au zoom.
+   * Jamais dans les grilles (mémoire). */
+  fullResolution?: boolean;
   /** Couleur des bords mesurée par le serveur, « #RRGGBB » ; rien ne la fournit encore. */
   edgeColor?: string | null;
   /** Largeur, maxWidth, marges propres à l'écran. */
@@ -66,6 +74,11 @@ export function PieceTile({
     const { width, height } = event.nativeEvent.layout;
     setFrame((previous) => (previous.width === width && previous.height === height ? previous : { width, height }));
     onLayout?.(event);
+  };
+  // Agrandissable : la mesure de l'écran (onLayout) est celle de l'enveloppe, posée dans la page.
+  const handleTileLayout = (event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    setFrame((previous) => (previous.width === width && previous.height === height ? previous : { width, height }));
   };
 
   const background = edgeBackground(edgeColor);
@@ -90,6 +103,7 @@ export function PieceTile({
       hdUri={hdUri}
       fallbackUri={fallbackUri}
       size={size}
+      fullResolution={fullResolution}
       fit={foreground.fit}
       style={foreground.style}
       // Agrandissable : le libellé est porté par le bouton qui l'entoure (lu une seule fois).
@@ -99,8 +113,11 @@ export function PieceTile({
     />
   );
 
-  return (
-    <View style={[variant === "hero" ? styles.hero : styles.grid, style]} onLayout={handleLayout}>
+  const tileView = (
+    <View
+      style={[variant === "hero" ? styles.hero : styles.grid, enlargeable ? null : style]}
+      onLayout={enlargeable ? handleTileLayout : handleLayout}
+    >
       {background ? (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: background }]} accessible={false} importantForAccessibility="no-hide-descendants" />
       ) : (
@@ -114,15 +131,26 @@ export function PieceTile({
           style={styles.blur}
         />
       )}
-      {enlargeable ? (
-        // Toute la tuile se touche, fond compris.
-        <EnlargeableImage hdUri={hdUri} fallbackUri={fallbackUri} label={accessibilityLabel ?? ""} style={StyleSheet.absoluteFill}>
-          {image}
-        </EnlargeableImage>
-      ) : (
-        image
-      )}
+      {image}
     </View>
+  );
+
+  if (!enlargeable) return tileView;
+  // Retours du build 3 (zoom à deux doigts sur place) : l'enveloppe de zoom
+  // entoure la tuile ENTIÈRE (fond, coins et coupe compris) : toute la carte
+  // arrondie grandit sous les doigts. Le style de l'écran et sa mesure vont
+  // à l'enveloppe, qui est le cadre posé dans la page.
+  return (
+    <EnlargeableImage
+      hdUri={hdUri}
+      fallbackUri={fallbackUri}
+      label={accessibilityLabel ?? ""}
+      style={[styles.zoomFrame, style]}
+      onLayout={onLayout}
+      onZoomStateChange={onZoomStateChange}
+    >
+      {tileView}
+    </EnlargeableImage>
   );
 }
 
@@ -143,6 +171,8 @@ const tile = (rounded: number): ViewStyle => ({
 const styles = themedStyles(() => ({
   hero: tile(radius.piece),
   grid: tile(radius.pieceGrid),
+  // Enveloppe de zoom (agrandissable) : aussi large que la tuile le serait seule.
+  zoomFrame: { width: "100%" },
   // Agrandie pour cacher les bords transparents du flou.
   blur: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, transform: [{ scale: 1.2 }] },
 }));
