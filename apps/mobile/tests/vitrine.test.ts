@@ -192,16 +192,26 @@ describe("relecture des résultats pour les grandes images", () => {
     expect(screen).toContain("result && !shopsPending(result) && hdRereadDue(result) ? result.searchId : null");
   });
 
-  it("refusé : lib/api.ts n'est pas modifié par ce lot (fetchSearch existe déjà)", () => {
+  it("refusé : fetchSearch de lib/api.ts n'est pas modifié par ce lot (il existe déjà)", () => {
     const api = read("src/lib/api.ts");
     expect(api).toContain("export async function fetchSearch(searchId: string, signal?: AbortSignal): Promise<ProductSearch>");
-    let changed = "";
+    // Assemblage des retours du build 3 : d'autres lots (« lecteur ») ajoutent
+    // légitimement d'autres fonctions à api.ts ; la relecture de ce lot, elle,
+    // se sert de fetchSearch tel qu'il était sur la base (885956c), à l'identique.
+    const fetchSearchOf = (source: string) => {
+      const start = source.indexOf("export async function fetchSearch(");
+      return start < 0 ? null : source.slice(start, source.indexOf("\n}\n", start) + 3);
+    };
+    let before: string | null = null;
     try {
-      changed = execFileSync("git", ["diff", "--name-only", "885956c", "--", "src/lib/api.ts"], { cwd: MOBILE, encoding: "utf8" });
+      before = execFileSync("git", ["show", "885956c:./src/lib/api.ts"], { cwd: MOBILE, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
     } catch {
       // Hors d'un dépôt git complet : la lecture ci-dessus suffit.
     }
-    expect(changed.trim()).toBe("");
+    if (before !== null) {
+      expect(fetchSearchOf(before)).not.toBeNull();
+      expect(fetchSearchOf(api)).toBe(fetchSearchOf(before));
+    }
   });
 });
 
