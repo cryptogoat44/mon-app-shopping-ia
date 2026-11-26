@@ -30,7 +30,19 @@ import {
   type PieceZone,
   type TracePoint,
 } from "@/lib/piece-trace";
-import { FRAME_LINE, HEAD_GLOW_STOPS, INSIDE_VEIL, MASK, MESSAGE_PILL, OUTSIDE_VEIL, POWDER, powderTrail, type PowderPath } from "@/lib/powder-trace";
+import {
+  FRAME_LINE,
+  HEAD_GLOW_STOPS,
+  INSIDE_VEIL,
+  MASK,
+  MESSAGE_PILL,
+  OUTSIDE_VEIL,
+  POWDER,
+  SHAPE_EDGE,
+  maskGray,
+  powderTrail,
+  type PowderPath,
+} from "@/lib/powder-trace";
 import { useReduceMotion } from "@/lib/use-reduce-motion";
 import { currentDevice } from "@/components/link-notice";
 import { themedStyles } from "@/theme/themed-styles";
@@ -112,7 +124,8 @@ interface Props {
 // prend la forme de l'image (coins de 14 pt, plus de bandes) ; pendant le
 // geste, une traînée de poudre de lumière (épaisse, presque transparente,
 // lumineuse au bout du doigt, qui s'estompe derrière) ; au lâcher, la lumière
-// suit la forme tracée (masque), jamais le rectangle envoyé. Le dessin ne
+// suit la forme tracée (masque aux bords adoucis, dedans éclairé, bord
+// lumineux), jamais le rectangle envoyé, et la poudre retombe en souvenir. Le dessin ne
 // change rien à ce qui est envoyé : le tracé reste sur le téléphone.
 export function PieceTracer({ uri, zone, onChange, onImageSize, onDragChange, height }: Props) {
   const [container, setContainer] = useState<Size>({ width: 0, height });
@@ -125,6 +138,7 @@ export function PieceTracer({ uri, zone, onChange, onImageSize, onDragChange, he
   const reduceMotion = useReduceMotion();
   // Identifiant du masque, unique par instance ; sans « : » (url(#…) sur le site).
   const maskId = `voile${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const litId = `${maskId}dedans`;
   const glowId = `${maskId}tete`;
 
   // Le voile en forme (fondu au lâcher), la lueur du bout du doigt, la
@@ -263,8 +277,9 @@ export function PieceTracer({ uri, zone, onChange, onImageSize, onDragChange, he
   // La traînée : le geste en cours, sinon celle du tracé retenu (statique).
   const liveTrace = drawing ?? fading;
   const live = useMemo(() => (liveTrace && frame ? powderTrail(framePoints(liveTrace, frame)) : null), [liveTrace, frame]);
+  // Après le lâcher, la poudre retombe : il en reste un souvenir.
   const kept = useMemo(
-    () => (zoneTrace && !aiFrame && frame ? powderTrail(framePoints(zoneTrace, frame)) : null),
+    () => (zoneTrace && !aiFrame && frame ? powderTrail(framePoints(zoneTrace, frame), POWDER.settledShare) : null),
     [zoneTrace, aiFrame, frame]
   );
   // La lueur suit la tête du geste (ou du tracé refusé, pendant son fondu).
@@ -310,34 +325,57 @@ export function PieceTracer({ uri, zone, onChange, onImageSize, onDragChange, he
         {frame ? (
           // Dessin seulement : le doigt le traverse.
           <>
-            {/* 1. Le voile qui suit la forme : sombre dehors, à peine ivoire dedans. Pas pendant le geste. */}
+            {/* 1. Le voile qui suit la forme : sombre dehors, éclairé dedans, bords adoucis. Pas pendant le geste. */}
             {shapePath && !drawing ? (
               <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: veil }]}>
                 <Svg width={frame.width} height={frame.height} style={StyleSheet.absoluteFill}>
                   <Defs>
-                    {/* Un masque et non « evenodd » : un tour qui se croise reste clair partout. */}
+                    {/* Un masque et non « evenodd » : un tour qui se croise reste clair partout. Les anneaux,
+                        du plus large au plus fin, adoucissent le bord vers l'extérieur. */}
                     <Mask id={maskId} maskUnits="userSpaceOnUse" x={0} y={0} width={frame.width} height={frame.height}>
                       <Rect x={0} y={0} width={frame.width} height={frame.height} fill={MASK.veiled} />
-                      <Path d={shapePath} fill="none" stroke={MASK.softOuter} strokeWidth={MASK.softOuterWidth} strokeLinejoin="round" />
-                      <Path d={shapePath} fill="none" stroke={MASK.softInner} strokeWidth={MASK.softInnerWidth} strokeLinejoin="round" />
+                      {MASK.rings.map((ring) => (
+                        <Path key={ring.width} d={shapePath} fill="none" stroke={maskGray(ring.level)} strokeWidth={ring.width} strokeLinejoin="round" />
+                      ))}
                       <Path d={shapePath} fill={MASK.clear} />
+                    </Mask>
+                    {/* Le même, inversé : la lumière du dedans s'éteint en douceur au-delà du bord. */}
+                    <Mask id={litId} maskUnits="userSpaceOnUse" x={0} y={0} width={frame.width} height={frame.height}>
+                      <Rect x={0} y={0} width={frame.width} height={frame.height} fill={MASK.clear} />
+                      {MASK.rings.map((ring) => (
+                        <Path key={ring.width} d={shapePath} fill="none" stroke={maskGray(1 - ring.level)} strokeWidth={ring.width} strokeLinejoin="round" />
+                      ))}
+                      <Path d={shapePath} fill={MASK.veiled} />
                     </Mask>
                   </Defs>
                   <Rect x={0} y={0} width={frame.width} height={frame.height} fill={OUTSIDE_VEIL.color} opacity={OUTSIDE_VEIL.opacity} mask={`url(#${maskId})`} />
-                  <Path d={shapePath} fill={INSIDE_VEIL.color} opacity={INSIDE_VEIL.opacity} />
-                  {/* Cadre de l'IA : un filet ivoire aux coins arrondis (pas de poudre : il n'y a pas eu de geste). */}
-                  {aiFrame ? <Path d={shapePath} fill="none" stroke={FRAME_LINE.color} strokeWidth={FRAME_LINE.frameWidth} /> : null}
+                  <Rect x={0} y={0} width={frame.width} height={frame.height} fill={INSIDE_VEIL.color} opacity={INSIDE_VEIL.opacity} mask={`url(#${litId})`} />
+                  {/* Cadre de l'IA : un filet ivoire aux coins arrondis (pas de poudre : il n'y a pas eu de geste).
+                      Tracé retenu : un bord lumineux doux, quelques filets empilés. */}
+                  {aiFrame ? (
+                    <Path d={shapePath} fill="none" stroke={FRAME_LINE.color} strokeWidth={FRAME_LINE.frameWidth} />
+                  ) : (
+                    SHAPE_EDGE.lines.map((line) => (
+                      <Path
+                        key={line.width}
+                        d={shapePath}
+                        fill="none"
+                        stroke={SHAPE_EDGE.color}
+                        strokeOpacity={line.opacity}
+                        strokeWidth={line.width}
+                        strokeLinejoin="round"
+                      />
+                    ))
+                  )}
                 </Svg>
               </Animated.View>
             ) : null}
 
-            {/* 2. La traînée du tracé retenu, statique (comme la maquette). */}
+            {/* 2. La traînée du tracé retenu, retombée (un souvenir de la poudre), statique. */}
             {kept && !drawing ? (
               <View pointerEvents="none" style={StyleSheet.absoluteFill}>
                 <Svg width={frame.width} height={frame.height} style={StyleSheet.absoluteFill}>
-                  <PowderLayerPaths paths={kept.halo} />
-                  <PowderLayerPaths paths={kept.body} />
-                  <PowderLayerPaths paths={kept.core} />
+                  <PowderLayerPaths paths={kept.layers} />
                   <PowderLayerPaths paths={kept.grains} />
                 </Svg>
               </View>
@@ -347,9 +385,7 @@ export function PieceTracer({ uri, zone, onChange, onImageSize, onDragChange, he
             {live ? (
               <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: drawing ? 1 : trailFade }]}>
                 <Svg width={frame.width} height={frame.height} style={StyleSheet.absoluteFill}>
-                  <PowderLayerPaths paths={live.halo} />
-                  <PowderLayerPaths paths={live.body} />
-                  <PowderLayerPaths paths={live.core} />
+                  <PowderLayerPaths paths={live.layers} />
                   <PowderLayerPaths paths={live.grains} />
                 </Svg>
               </Animated.View>

@@ -641,6 +641,19 @@ describe("le dessin du tracé : poudre de lumière, la lumière suit la forme", 
     expect(views).not.toMatch(/wholeImage: \{ alignSelf: "flex-end"/);
   });
 
+  it("après le lâcher : la poudre retombe, le dedans s'éclaire en douceur, un bord lumineux suit la forme", () => {
+    // La poudre du tracé retenu retombe ; celle du geste en cours, jamais (refusé : un geste assombri).
+    expect(code).toContain("powderTrail(framePoints(zoneTrace, frame), POWDER.settledShare)");
+    expect(code).toContain("powderTrail(framePoints(liveTrace, frame))");
+    expect(code).not.toMatch(/powderTrail\(framePoints\(liveTrace, frame\), /);
+    // Les deux masques suivent les mêmes anneaux ; le voile ivoire passe par le second (refusé : un voile au bord net).
+    expect(code.match(/MASK\.rings\.map/g)).toHaveLength(2);
+    expect(code).toContain("fill={INSIDE_VEIL.color} opacity={INSIDE_VEIL.opacity} mask={`url(#${litId})`}");
+    expect(code).not.toContain("<Path d={shapePath} fill={INSIDE_VEIL.color}");
+    // Le bord lumineux : pour un tracé seulement ; le cadre de l'IA garde son filet.
+    expect(code).toMatch(/aiFrame \? \(\s*<Path d=\{shapePath\} fill="none" stroke=\{FRAME_LINE\.color\}[\s\S]*?\) : \(\s*SHAPE_EDGE\.lines\.map/);
+  });
+
   it("ce que le composant remonte ne change pas : la zone de zoneFromTrace et le tracé", () => {
     expect(code).toContain("zoneFromTrace(current.trace, box)");
     expect(code).toContain("latest.current.onChange({ crop, trace: current.trace })");
