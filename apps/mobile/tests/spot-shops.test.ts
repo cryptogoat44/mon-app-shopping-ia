@@ -91,6 +91,14 @@ describe("la ligne d'attente, puis les boutiques dessous", () => {
     expect(after.complement).toMatchObject({ status: "shown", query: "Exemplor veste Nuage 07", late: true });
   });
 
+  it("couleur des bords : permis, la réponse des boutiques a mis des vignettes en file → l'écran relira ; refusé, sans le champ → rien de plus", () => {
+    const before = toSpotResult(launched([59]));
+    const flagged = afterShops(before, "s1", shopsOutcomeOf({ ...withShopsReply([59], [45]), edgeColorsPending: true }));
+    expect(flagged.edgeColorsPending).toBe(true);
+    const plain = afterShops(before, "s1", shopsOutcomeOf(withShopsReply([59], [45])));
+    expect("edgeColorsPending" in plain).toBe(false);
+  });
+
   it("le tri par les mots et les pièces déjà gardées du résultat affiché restent", () => {
     const before = { ...toSpotResult(launched([59, null], { sortedByWords: true })), owned: { kept: ["l2"], bought: [] } };
     const after = afterShops(before, "s1", shopsOutcomeOf(withShopsReply([59, null], [45])));

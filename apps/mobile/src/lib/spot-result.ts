@@ -117,6 +117,8 @@ export function toSpotResult(search: ProductSearch): SpotResult {
     ...withComplement,
     ...(verdict ? { verdict } : {}),
     ...(luxuryResale ? { luxuryResale } : {}),
+    // Couleurs des bords en cours de mesure (lot « couleur des bords ») : seulement un vrai true du serveur.
+    ...(search.edgeColorsPending === true ? { edgeColorsPending: true as const } : {}),
   };
 }
 
@@ -144,9 +146,13 @@ export const HD_REREAD_POOL = 8;
 
 /** Relire la recherche pour ses grandes images ? Oui tant qu'au moins une des
  * HD_REREAD_POOL premières propositions « shopping » ou « words » n'a pas
- * d'image haute définition. */
+ * d'image haute définition. Oui aussi quand le serveur vient de mettre en
+ * file la mesure de couleurs des bords (edgeColorsPending, lot « couleur des
+ * bords ») : la relecture les apporte, même sans complément. */
 export function hdRereadDue(result: SpotResult | null): boolean {
-  if (!result || result.status !== "success" || !result.searchId || !result.complement) return false;
+  if (!result || result.status !== "success" || !result.searchId) return false;
+  if (result.edgeColorsPending === true) return true;
+  if (!result.complement) return false;
   const pool = [...result.complement.shopping, ...result.complement.words].slice(0, HD_REREAD_POOL);
   return pool.some((piece) => !piece.imageHdUrl);
 }

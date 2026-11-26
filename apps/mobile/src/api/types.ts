@@ -107,6 +107,10 @@ export interface SpotResult {
    * liens vers la recherche des sites de revente, décidés par le serveur
    * (lib/luxury-resale.ts). Absent : aucune entrée (dans le doute, ancien serveur). */
   luxuryResale?: LuxuryResale;
+  /** Couleur des bords (lot « couleur des bords ») : le serveur vient de
+   * mettre en file la mesure d'au moins une vignette ; l'écran relit la
+   * recherche (lib/spot-result.ts, hdRereadDue). Absent : rien à attendre. */
+  edgeColorsPending?: true;
 }
 
 /** Complément des propositions de la recherche visuelle (voie C, lot c) :

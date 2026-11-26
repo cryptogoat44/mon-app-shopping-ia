@@ -283,4 +283,21 @@ describe("couleur des bords (edgeColor)", () => {
     const next = withHdImages(before, search({ matches: [colored("s", "shopping", undefined, "https://shop.test/s.jpg")] }));
     expect(next.complement?.shopping[0]).toMatchObject({ imageHdUrl: "https://shop.test/s.jpg", edgeColor: "#ffffff" });
   });
+  it("permis : couleurs en cours de mesure (edgeColorsPending) → relecture, même Lens seul ou grandes images toutes là", () => {
+    const lensOnly = toSpotResult(search({ edgeColorsPending: true, matches: [colored("l", "lens")] }));
+    expect(lensOnly.edgeColorsPending).toBe(true);
+    expect(lensOnly.complement).toBeUndefined();
+    expect(hdRereadDue(lensOnly)).toBe(true);
+    const allHd = toSpotResult(search({ edgeColorsPending: true, matches: [colored("s", "shopping", undefined, "https://shop.test/s.jpg")] }));
+    expect(hdRereadDue(allHd)).toBe(true);
+  });
+
+  it("refusé : sans le champ (rien en file, fonction coupée, ancien serveur), ou une valeur autre que true → aucune relecture de plus", () => {
+    const plain = toSpotResult(search({ matches: [colored("l", "lens")] }));
+    expect("edgeColorsPending" in plain).toBe(false);
+    expect(hdRereadDue(plain)).toBe(false);
+    const odd = toSpotResult(search({ edgeColorsPending: "oui" as unknown as boolean, matches: [colored("l", "lens")] }));
+    expect(hdRereadDue(odd)).toBe(false);
+    expect(hdRereadDue(toSpotResult(search({ edgeColorsPending: true, matches: [] })))).toBe(false);
+  });
 });
