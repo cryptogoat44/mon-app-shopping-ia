@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, Text, View } from "react-native";
-import { color, font, radius, space } from "@/theme/tokens";
+import { color, font, radius, size, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import { fetchUserVault, fetchUserWishlist } from "@/lib/api";
 import { sharedItemImage, sharedItemPrice } from "@/lib/collections";
@@ -10,7 +10,7 @@ import { friendShelfDetails, shelfCellImageSize, shelfCellLabel, type ShelfItem,
 export type { ShelfItem } from "@/lib/friend-shelves";
 import { ImageUnavailable } from "@/components/image-unavailable";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
-import { SpotImage } from "@/components/spot-image";
+import { PieceTile } from "@/components/piece-tile";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Étagères des amis (lot « étagères des amis », migration 0058) : les Envies
@@ -19,6 +19,14 @@ import { themedStyles } from "@/theme/themed-styles";
 // Les images des envies sont toujours la copie faite par Spotto (jamais
 // l'adresse du marchand) ; celles du Vault, l'image que la pièce affiche
 // (en deux temps, comme la grille du Vault de son propriétaire).
+// Raccord avec la nouvelle interface : chaque pièce passe par la tuile
+// « Écrin » de toute l'app (components/piece-tile.tsx) — 4:5, coins doux,
+// filet en thème clair —, en grille dans les cases, en grand dans la feuille
+// (sans zoom ni pleine définition : ce n'est pas une fiche de pièce). Pas de
+// couleur des bords : la réponse d'une étagère ne la porte pas, et le serveur
+// ne lance pour un ami aucune mesure ni recherche de grande image (rien de
+// plus n'est téléchargé, aucune boutique n'apprend rien) ; le fond flou de la
+// tuile la remplace.
 
 
 export interface FriendShelfState {
@@ -114,16 +122,18 @@ export function useFriendShelf(userId: string, kind: ShelfKind, active: boolean,
   return { items, status, error, loadingMore, moreError, reload, loadMore, retryMore };
 }
 
-/** Une case de la grille (3 par rangée) : l'image seule ; le nom est dans le libellé. */
+/** Une case de la grille (3 par rangée) : la tuile de grille seule ; le nom est dans le libellé. */
 export function FriendShelfCell({ entry, onOpen }: { entry: ShelfItem; onOpen: (entry: ShelfItem) => void }) {
   const thumb = entry.kind === "wishes" ? sharedItemImage(entry.item) : entry.item.imageUrl;
   const hd = entry.kind === "wishes" ? entry.item.imageUrl : (entry.item.imageHdUrl ?? entry.item.imageUrl);
   return (
     <Pressable style={styles.cell} onPress={() => onOpen(entry)} accessibilityRole="button" accessibilityLabel={shelfCellLabel(entry)} testID={`etagere-${entry.kind}-${entry.item.id}`}>
       {thumb === null ? (
-        <ImageUnavailable variant="tile" accessible={false} />
+        <View style={styles.cellEmpty}>
+          <ImageUnavailable variant="tile" accessible={false} />
+        </View>
       ) : (
-        <SpotImage size={shelfCellImageSize(entry.kind)} hdUri={hd} fallbackUri={thumb} style={styles.fill} fit="cover" recyclingKey={`${entry.kind}-${entry.item.id}`} />
+        <PieceTile variant="grid" size={shelfCellImageSize(entry.kind)} hdUri={hd} fallbackUri={thumb} recyclingKey={`${entry.kind}-${entry.item.id}`} />
       )}
     </Pressable>
   );
@@ -148,13 +158,11 @@ export function FriendShelfSheet({ entry, onClose }: { entry: ShelfItem | null; 
         <View style={styles.sheet} testID="feuille-etagere">
           <View style={styles.handle} />
           <ScrollView contentContainerStyle={styles.sheetContent}>
-            <View style={styles.image}>
-              {small === null || large === null ? (
-                <ImageUnavailable variant="frame" />
-              ) : (
-                <SpotImage size="large" hdUri={large} fallbackUri={small} style={styles.fill} fit="contain" accessibilityLabel={entry.item.title} />
-              )}
-            </View>
+            {small === null || large === null ? (
+              <ImageUnavailable variant="frame" />
+            ) : (
+              <PieceTile variant="hero" size="large" hdUri={large} fallbackUri={small} accessibilityLabel={entry.item.title} style={styles.image} />
+            )}
             <Text style={styles.title} accessibilityRole="header">
               {entry.item.title}
             </Text>
@@ -179,8 +187,9 @@ export function FriendShelfSheet({ entry, onClose }: { entry: ShelfItem | null; 
 }
 
 const styles = themedStyles(() => ({
-  cell: { width: "32%", aspectRatio: 1, borderRadius: radius.sm, overflow: "hidden", backgroundColor: color.plinthe },
-  fill: { width: "100%", height: "100%" },
+  cell: { width: "32%" },
+  // Case sans image : la place de la tuile, « Image indisponible » sur le fond des pièces.
+  cellEmpty: { width: "100%", aspectRatio: 4 / 5, borderRadius: radius.pieceGrid, borderCurve: "continuous", overflow: "hidden" },
   avoider: { flex: 1, justifyContent: "flex-end" },
   backdrop: { flex: 1, backgroundColor: color.voile },
   sheet: {
@@ -195,9 +204,9 @@ const styles = themedStyles(() => ({
   },
   handle: { alignSelf: "center", width: 36, height: 4, borderRadius: radius.full, backgroundColor: color.filet, marginTop: space.sm },
   sheetContent: { padding: space.lg, gap: space.sm, paddingBottom: space.xxl },
-  image: { width: "100%", aspectRatio: 1, borderRadius: radius.md, overflow: "hidden", backgroundColor: color.plinthe },
+  image: { maxWidth: size.contentMaxWidth, alignSelf: "center" },
   title: { fontSize: font.body, fontWeight: "600", color: color.encre, marginTop: space.sm },
   meta: { fontSize: font.secondary, color: color.acier },
   closeButton: { minHeight: 44, alignItems: "center", justifyContent: "center", marginTop: space.sm },
-  closeLabel: { fontSize: font.body, color: color.vert, fontWeight: "600" },
+  closeLabel: { fontSize: font.body, color: color.encre, fontWeight: "600" },
 }));
