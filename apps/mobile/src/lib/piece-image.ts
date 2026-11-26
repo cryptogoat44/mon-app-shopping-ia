@@ -86,7 +86,7 @@ export function twoStepLayers(state: TwoStepState): { showThumb: boolean; showHd
 
 // Tuile de pièce « Écrin » (retours du build 3, 26 novembre 2026,
 // components/piece-tile.tsx) : la même tuile 4:5 partout. La photo entière
-// est posée sur une copie floue d'elle-même (ou sur la couleur unie de ses
+// est entourée des « bords prolongés » (ou de la couleur unie de ses
 // bords, quand le serveur l'a mesurée) ; quand son ratio est proche de celui
 // de la tuile, elle la remplit simplement (rognage léger accepté).
 // Grilles : la pièce remplit toujours sa tuile (la plus grande possible).
@@ -146,6 +146,94 @@ export function honestSize(natural: Dimensions | null, frame: Dimensions, varian
   return { width: natural.width * scale, height: natural.height * scale };
 }
 
+// Lot « finitions de l'œil » : les « bords prolongés ». Une photo qui ne
+// remplit pas sa tuile n'est plus posée sur une copie floue et agrandie
+// d'elle-même (couture nette et halo autour de la photo) : chaque bande libre
+// prolonge le bord même de la photo. Une copie de la photo, posée dans une
+// vue de la taille de la bande qui coupe ce qui dépasse, est retournée et
+// étirée dans un seul sens à partir du bord : seuls quelques points de la
+// photo, pris tout près du bord, couvrent la bande. Sur un fond uni (blanc,
+// gris, ivoire : la grande majorité des photos de boutique), la bande a
+// exactement la couleur du fond ; un léger flou fond l'étirement sur une
+// photo de mise en situation. Logique pure (les rectangles et l'étirement),
+// la tuile ne fait que les dessiner.
+
+/** Épaisseur (points) de la bande de photo étirée sur toute une bande libre. */
+export const EDGE_STRIP = 3;
+/** Flou (blurRadius d'expo-image) qui fond l'étirement : 3 % du petit côté de
+ * la photo affichée, entre EDGE_BLUR_MIN et EDGE_BLUR_MAX (une grille floute
+ * moins qu'une grande image, et prend sa bande plus près du bord). */
+export const EDGE_BLUR_SHARE = 0.03;
+export const EDGE_BLUR_MIN = 2;
+export const EDGE_BLUR_MAX = 10;
+/** Profondeur où la bande de photo est prise, en multiples du flou : sur le
+ * site, le flou (filtre CSS) rend transparents les tout premiers points du
+ * bord de la copie ; on les saute (3 écarts-types). */
+export const EDGE_INSET_PER_BLUR = 3;
+
+export type EdgeSide = "left" | "right" | "top" | "bottom";
+
+export type EdgeBand = {
+  side: EdgeSide;
+  /** La vue qui coupe : un point de plus sous la photo (aucun fil de plinthe à la jointure, la photo opaque la recouvre). */
+  box: { left: number; top: number; width: number; height: number };
+  /** La copie de la photo, dans la vue, avant l'étirement. */
+  copy: { left: number; top: number; width: number; height: number };
+  /** blurRadius de la copie. */
+  blur: number;
+  /** Étirement retourné à partir du bord (transform de React Native : centre de la copie pour origine). */
+  transform: [{ translateX: number }, { scaleX: number }] | [{ translateY: number }, { scaleY: number }];
+};
+
+/** Les bandes à dessiner autour d'une photo qui ne remplit pas sa tuile : une
+ * par côté libre (photo plus haute que le cadre : gauche et droite ; plus large :
+ * haut et bas ; petite image d'une grande tuile : les quatre). Aucune quand la
+ * photo remplit la tuile, ou que sa taille ou le cadre ne sont pas connus (la
+ * plinthe reste). */
+export function edgeBands(natural: Dimensions | null, frame: Dimensions, variant: PieceTileVariant): EdgeBand[] {
+  if (!known(natural) || !(frame.width > 0) || !(frame.height > 0) || fillsTile(natural, frame, variant)) return [];
+  const shown = honestSize(natural, frame, variant);
+  const photo = { left: (frame.width - shown.width) / 2, top: (frame.height - shown.height) / 2, width: shown.width, height: shown.height };
+  const bands: EdgeBand[] = [];
+  // u' = seam − s·(u − sample) : le point pris à `sample` (dans la photo) touche la jointure,
+  // EDGE_STRIP points plus loin touchent le bord de la tuile. Avec l'origine au centre c de la
+  // copie : translate(a) puis scale(−s), a = seam + s·sample − c·(1 + s).
+  const shift = (seam: number, sample: number, center: number, stretch: number) => seam + stretch * sample - center * (1 + stretch);
+  const blur = Math.round(Math.min(EDGE_BLUR_MAX, Math.max(EDGE_BLUR_MIN, Math.min(photo.width, photo.height) * EDGE_BLUR_SHARE)));
+  const inset = blur * EDGE_INSET_PER_BLUR;
+  const across = Math.min(inset, photo.width / 4);
+  const down = Math.min(inset, photo.height / 4);
+  const left = photo.left;
+  const right = frame.width - photo.left - photo.width;
+  // La copie dépasse la bande de `inset` le long du bord (étirée d'autant) : le bord transparent du
+  // flou, sur le site, tombe hors de la vue qui coupe (sinon les coins de la bande s'assombrissent).
+  const along = inset;
+  const top = photo.top;
+  const bottom = frame.height - photo.top - photo.height;
+  if (left >= 0.5) {
+    const stretch = left / EDGE_STRIP;
+    const copy = { left: photo.left, top: -along, width: photo.width, height: photo.height + 2 * along };
+    bands.push({ side: "left", box: { left: 0, top: photo.top, width: left + 1, height: photo.height }, copy, blur, transform: [{ translateX: shift(left, left + across, copy.left + copy.width / 2, stretch) }, { scaleX: -stretch }] });
+  }
+  if (right >= 0.5) {
+    const stretch = right / EDGE_STRIP;
+    const copy = { left: 1 - photo.width, top: -along, width: photo.width, height: photo.height + 2 * along };
+    bands.push({ side: "right", box: { left: photo.left + photo.width - 1, top: photo.top, width: right + 1, height: photo.height }, copy, blur, transform: [{ translateX: shift(1, 1 - across, copy.left + copy.width / 2, stretch) }, { scaleX: -stretch }] });
+  }
+  // Haut et bas : toute la largeur de la tuile (la copie y est aussi étirée en largeur quand la photo ne touche pas les côtés).
+  if (top >= 0.5) {
+    const stretch = top / EDGE_STRIP;
+    const copy = { left: -along, top: photo.top, width: frame.width + 2 * along, height: photo.height };
+    bands.push({ side: "top", box: { left: 0, top: 0, width: frame.width, height: top + 1 }, copy, blur, transform: [{ translateY: shift(top, top + down, copy.top + copy.height / 2, stretch) }, { scaleY: -stretch }] });
+  }
+  if (bottom >= 0.5) {
+    const stretch = bottom / EDGE_STRIP;
+    const copy = { left: -along, top: 1 - photo.height, width: frame.width + 2 * along, height: photo.height };
+    bands.push({ side: "bottom", box: { left: 0, top: photo.top + photo.height - 1, width: frame.width, height: bottom + 1 }, copy, blur, transform: [{ translateY: shift(1, 1 - down, copy.top + copy.height / 2, stretch) }, { scaleY: -stretch }] });
+  }
+  return bands;
+}
+
 /** Couleur de fond donnée par le serveur (lot 9) : "#RRGGBB" seulement, sinon null. */
 export function edgeBackground(value: string | null | undefined): string | null {
   return typeof value === "string" && /^#[0-9A-Fa-f]{6}$/.test(value) ? value : null;
@@ -156,7 +244,7 @@ export function edgeBackground(value: string | null | undefined): string | null 
  * touche les deux autres côtés. Le fond uni ne vaut donc que si la photo
  * affichée touche le cadre sur un axe : toujours en grille, et en grande
  * image seulement quand la règle d'un point par pixel ne la réduit pas en
- * une petite boîte centrée (bandes sur les quatre côtés : copie floue).
+ * une petite boîte centrée (bandes sur les quatre côtés : bords prolongés).
  * Taille ou cadre encore inconnus : oui. */
 export function edgeColorApplies(natural: Dimensions | null, frame: Dimensions, variant: PieceTileVariant): boolean {
   if (variant === "grid" || !known(natural) || !(frame.width > 0) || !(frame.height > 0)) return true;

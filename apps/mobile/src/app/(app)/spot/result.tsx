@@ -936,7 +936,7 @@ export default function ResultScreen() {
         {/* Tri par prix : pas de grande carte, sauf une carte touchée dans la liste ; « Avec prix seulement » : pas sans prix. */}
         {showBigCard ? (
           <>
-            {/* La grande tuile « Écrin » (components/piece-tile.tsx) : coins doux, la photo entière sur une copie floue d'elle-même. */}
+            {/* La grande tuile « Écrin » (components/piece-tile.tsx) : coins doux, la photo entière, entourée de ses bords prolongés. */}
             <PieceTile
               variant="hero"
               enlargeable

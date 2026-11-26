@@ -13,7 +13,7 @@ export interface Piece {
   /** Couleur unie des bords de la vignette (« #rrggbb »), mesurée par le
    * serveur (lot « couleur des bords ») : fond de la tuile derrière une photo
    * qui ne la remplit pas (components/piece-tile.tsx). Absente ou null :
-   * la copie floue. */
+   * les bords prolongés de la photo. */
   edgeColor?: string | null;
   priceFrom: number | null;
   currency: string | null;

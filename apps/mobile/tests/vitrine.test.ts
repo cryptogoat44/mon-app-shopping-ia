@@ -112,10 +112,11 @@ describe("une seule vitrine", () => {
 describe("la tuile de pièce (components/piece-tile.tsx)", () => {
   const tile = read("src/components/piece-tile.tsx");
 
-  it("fond : la copie floue de la vignette, jamais lue par VoiceOver ; ou la couleur des bords donnée", () => {
-    expect(tile).toContain("blurRadius={24}");
-    expect(tile).toMatch(/blurRadius=\{24\}\s+cachePolicy="memory-disk"\s+recyclingKey=\{recyclingKey\}\s+accessible=\{false\}/);
-    expect(tile).toContain("transform: [{ scale: 1.2 }]");
+  it("fond : les bords prolongés (lot « finitions de l'œil »), jamais lus par VoiceOver ; ou la couleur des bords donnée", () => {
+    // Refusé : la copie floue et agrandie d'avant (couture et halo). Permis : une bande par côté libre (tests/finitions-oeil.test.ts).
+    expect(tile).not.toContain("blurRadius={24}");
+    expect(tile).not.toContain("transform: [{ scale: 1.2 }]");
+    expect(tile).toMatch(/blurRadius=\{band\.blur\}\s+cachePolicy="memory-disk"\s+recyclingKey=\{recyclingKey\}\s+accessible=\{false\}/);
     expect(tile).toContain("const background = edgeColorApplies(naturalSize, frame, variant) ? edgeBackground(edgeColor) : null;");
     expect(tile).toContain("{ backgroundColor: background }");
   });
@@ -145,7 +146,7 @@ describe("la tuile de pièce (components/piece-tile.tsx)", () => {
     expect(tile).not.toMatch(/background \?[^;\n]*TOLERANCE/);
     expect(tile).not.toMatch(/!background[^;\n]*TOLERANCE/);
     expect(tile).toContain("honestSize(naturalSize, frame, variant)");
-    expect(tile).toContain("onImageSize={(measured) => setNatural({ uri: imageKey, size: measured })}");
+    expect(tile).toContain("onImageSize={(measured, shown) => setNatural({ uri: imageKey, size: measured, shown })}");
     // Agrandissable : le libellé est porté une seule fois, par le bouton.
     expect(tile).toContain("accessibilityLabel={enlargeable ? undefined : accessibilityLabel}");
   });
@@ -157,14 +158,14 @@ describe("la tuile de pièce (components/piece-tile.tsx)", () => {
     expect(tile).toContain("const naturalSize = natural?.uri === imageKey ? natural.size : null;");
   });
 
-  it("refusé : le flou visible à travers un détourage transparent ; permis : le flou dans les bandes", () => {
+  it("refusé : les bandes visibles à travers un détourage transparent ; permis : les bandes autour de la photo", () => {
     // Taille connue : les deux boîtes du premier plan sont opaques.
     expect(tile).toContain('foreground = { style: [StyleSheet.absoluteFill, { backgroundColor: color.plinthe }], fit: "cover" };');
     expect(tile).toMatch(/top: \(frame\.height - shown\.height\) \/ 2, backgroundColor: color\.plinthe \}/);
-    // Taille inconnue : pas de fond, pour ne pas cacher le flou pendant le chargement.
+    // Taille inconnue : pas de fond (la plinthe de la tuile, aucune bande tant que la taille n'est pas connue).
     expect(tile).toContain('let foreground: { style: StyleProp<ImageStyle>; fit: "contain" | "cover" } = { style: StyleSheet.absoluteFill, fit: "contain" };');
-    // Le flou reste sous toute la tuile.
-    expect(tile).toContain("style={styles.blur}");
+    // Les bandes sont sous la photo (dessinées avant elle).
+    expect(tile.indexOf("bands.map(")).toBeLessThan(tile.indexOf("      {image}"));
   });
 
   it("aucune couleur en dur, aucune dépendance nouvelle", () => {
@@ -173,10 +174,12 @@ describe("la tuile de pièce (components/piece-tile.tsx)", () => {
     expect(imports.filter((name) => !name.startsWith("@/"))).toEqual(["react", "react-native", "expo-image"]);
   });
 
-  it("SpotImage rapporte la taille de l'image réellement affichée, sans changer le reste", () => {
+  it("SpotImage rapporte la taille (et l'adresse) de l'image réellement affichée, sans changer le reste", () => {
     const image = read("src/components/spot-image.tsx");
-    expect(image).toContain("onImageSize?: (size: ImageNaturalSize) => void;");
-    expect(image).toContain('useReportSize(showHd && current.hd === "loaded" ? current.hdSize : showThumb ? current.thumbSize : null, onImageSize);');
+    // Lot « finitions de l'œil » : l'adresse en plus, copiée dans les bords prolongés de la tuile.
+    expect(image).toContain("onImageSize?: (size: ImageNaturalSize, uri: string) => void;");
+    expect(image).toContain('const hdOnTop = showHd && current.hd === "loaded";');
+    expect(image).toContain("useReportSize(hdOnTop ? current.hdSize : showThumb ? current.thumbSize : null, hdOnTop ? hd : showThumb ? thumb : null, onImageSize);");
     // Les cases qui ne demandent rien ne se redessinent pas au chargement.
     expect(image).toContain("onLoad={onImageSize ? (event) => setLoaded({ uri, size: naturalSize(event.source) }) : undefined}");
   });

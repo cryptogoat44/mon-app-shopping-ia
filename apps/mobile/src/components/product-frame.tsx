@@ -6,7 +6,7 @@ import { themedStyles } from "@/theme/themed-styles";
 // Cadre de l'image d'une pièce (décision du fondateur, lot 5 : « image
 // entière, cadre 4:5 ») : depuis les retours du build 3 (« Écrin »), une
 // simple grande tuile de pièce (components/piece-tile.tsx : coins doux,
-// photo entière sur une copie floue d'elle-même, plus aucune bande), aussi
+// photo entière entourée de ses bords prolongés, plus aucune bande), aussi
 // large que le texte (size.contentMaxWidth). Partagé par l'écran d'une envie
 // et les publications qui montrent une pièce (envie republiée, « achat »
 // venu du Spotter : lib/post-media.ts), pour qu'ils restent identiques.
