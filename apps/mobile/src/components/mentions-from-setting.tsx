@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 import { DEFAULT_MENTIONS_FROM, type MentionsFrom } from "@monapp/shared-types";
-import { color, font, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { updateMentionsFrom } from "@/lib/api";
 import { SegmentedChoice } from "@/components/segmented-choice";
 import { ErrorMessage } from "@/components/error-message";
+import { settingsGroup, settingsGroupValues } from "@/components/settings-group";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Réglages, bloc « Confidentialité du compte » (lot « vie sociale »,
@@ -41,24 +41,28 @@ export function MentionsFromSetting() {
   return (
     <View style={styles.section}>
       <Text style={styles.label}>{t.commentThreads.settingTitle}</Text>
-      <SegmentedChoice
-        label={t.commentThreads.settingTitle}
-        options={[
-          { value: "everyone", label: t.commentThreads.everyone },
-          { value: "following", label: t.commentThreads.following },
-          { value: "nobody", label: t.commentThreads.nobody },
-        ]}
-        value={value}
-        onChange={(next) => void choose(next)}
-      />
-      <Text style={styles.hint}>{t.commentThreads.settingHelp}</Text>
-      {error ? <ErrorMessage style={styles.hint}>{t.commentThreads.settingError}</ErrorMessage> : null}
+      <View style={settingsGroup.card}>
+        <View style={styles.choice}>
+          <SegmentedChoice
+            label={t.commentThreads.settingTitle}
+            options={[
+              { value: "everyone", label: t.commentThreads.everyone },
+              { value: "following", label: t.commentThreads.following },
+              { value: "nobody", label: t.commentThreads.nobody },
+            ]}
+            value={value}
+            onChange={(next) => void choose(next)}
+          />
+        </View>
+        <Text style={styles.hint}>{t.commentThreads.settingHelp}</Text>
+        {error ? <ErrorMessage style={styles.hint}>{t.commentThreads.settingError}</ErrorMessage> : null}
+      </View>
     </View>
   );
 }
 
-const styles = themedStyles(() => ({
-  section: { marginBottom: space.lg },
-  label: { fontSize: font.caption, fontWeight: "600", color: color.acier, marginBottom: space.sm },
-  hint: { fontSize: font.secondary, color: color.acier, marginTop: space.sm, lineHeight: 19 },
-}));
+// Bloc groupé de Réglages (components/settings-group.tsx) : surtitre, puis une carte.
+const styles = themedStyles(() => {
+  const g = settingsGroupValues();
+  return { section: g.section, label: g.label, choice: g.choice, hint: g.hint };
+});

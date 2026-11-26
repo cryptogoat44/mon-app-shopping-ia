@@ -411,3 +411,84 @@ describe("Fiche d'une envie (maquette 6)", () => {
     expect(styleOf(code("components/merchant-link-button.tsx"), "primary")).toContain("minHeight: 52");
   });
 });
+
+describe("Réglages (maquette 7)", () => {
+  const settings = code("app/(app)/settings.tsx");
+  const group = code("components/settings-group.tsx");
+
+  it("barre « ‹ Retour » 17/400 ; refusé : le « ‹ » seul, un hitSlop ; titre « Réglages » en grand Bodoni", () => {
+    expect(settings).toContain("<Text style={styles.back}>‹ {t.common.back}</Text>");
+    expect(settings).not.toContain(">‹</Text>");
+    expect(settings).not.toContain("hitSlop");
+    expect(styleOf(settings, "back")).toContain('fontSize: font.body, fontWeight: "400"');
+    expect(styleOf(settings, "title")).toContain("fontSize: font.display, lineHeight: serifLineHeight.display");
+    expect(styleOf(settings, "content")).toContain("paddingHorizontal: space.md");
+  });
+
+  it("le kit des blocs : surtitre commun, carte en surface, lignes de 44 (jamais une hauteur fixe), lien souligné en 400", () => {
+    expect(styleOf(group, "label")).toContain("...surtitre");
+    expect(group).toContain("backgroundColor: color.surface");
+    expect(styleOf(group, "row")).toContain("minHeight: 44");
+    expect(styleOf(group, "row")).not.toMatch(/[{ ]height: /);
+    expect(styleOf(group, "link")).toContain("...lienSouligne");
+    expect(styleOf(group, "link")).toContain('fontWeight: "400"');
+  });
+
+  it("ligne « Nom d'utilisateur » : un texte, pas un bouton ; refusé : un rôle", () => {
+    expect(fr.settings.usernameLabel).toBe("Nom d'utilisateur");
+    expect(en.settings.usernameLabel).toBe("Username");
+    const row = settings.slice(settings.indexOf("{profile?.username ? ("), settings.indexOf("<View style={group.divider} />"));
+    expect(row).toContain("{t.settings.usernameLabel}");
+    expect(row).toContain("@{profile.username}");
+    expect(row).not.toContain("accessibilityRole");
+  });
+
+  it("les phrases nécessaires restent rendues, mot pour mot (consentements, statistiques, compte privé, analyse vidéo)", () => {
+    for (const phrase of ["t.settings.analyticsOn", "t.settings.analyticsOff", 'consentLine("terms")', 'consentLine("privacy_policy")']) expect(settings, phrase).toContain(phrase);
+    expect(code("components/private-account-setting.tsx")).toContain("<Text style={styles.hint}>{t.privateAccount.settingHelp}</Text>");
+    expect(code("components/video-ai-setting.tsx")).toContain("t.settings.videoAiOn : t.settings.videoAiOff");
+  });
+
+  it.each(["components/video-ai-setting.tsx", "components/latest-video-setting.tsx", "components/player-consent-setting.tsx", "components/extra-data-settings.web.tsx"])(
+    "%s : dans la carte « Vos données », un filet en tête ; refusé : une carte à lui (carte dans la carte)",
+    (path) => {
+      const source = code(path);
+      expect(source).toContain("<View style={settingsGroup.divider} />");
+      expect(source).not.toContain("settingsGroup.card");
+      expect(source).not.toContain("g.card");
+    }
+  );
+
+  it.each(["components/discoverable-setting.tsx", "components/read-receipts-setting.tsx", "components/message-push-setting.tsx", "components/wish-alerts-setting.tsx"])(
+    "%s : la vue extérieure est la carte ; refusé : la marge du bas de 24 (40 pt entre deux cartes)",
+    (path) => {
+      const source = code(path);
+      expect(source).toMatch(/section: \{ \.\.\.g\.card, marginTop: space\.(sm|md) \}/);
+      expect(source).not.toContain("marginBottom: space.lg");
+    }
+  );
+
+  it("ordre : Compte, confidentialité, notifications, Langue, Apparence, Vos données, Documents, Aide ; refusé : un surtitre « Notifications » commun", () => {
+    const order = [
+      "{t.settings.account}",
+      "<PrivateAccountSetting />",
+      "<ReadReceiptsSetting />",
+      "<MessagePushSetting />",
+      "<ActivityPushSetting />",
+      "{t.preferences.language}",
+      "{t.preferences.appearance}",
+      "{t.settings.dataSection}",
+      "{t.settings.documents}",
+      "{t.contact.settingsSection}",
+      "{t.settings.signOut}",
+      "<DeleteAccountSection",
+    ];
+    let from = 0;
+    for (const marker of order) {
+      const at = settings.indexOf(marker, from);
+      expect(at, marker).toBeGreaterThan(from);
+      from = at;
+    }
+    expect(settings).not.toMatch(/t\.push\.title|t\.settings\.notifications\b|>Notifications</);
+  });
+});

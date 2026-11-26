@@ -119,7 +119,10 @@ describe("liens : soulignés, puisque l'accent a la couleur du texte", () => {
   const tous = sources.flatMap(({ fichier, code }) => textesEnAccent(code).map(({ cle, definition }) => ({ id: `${fichier}:${cle}`, definition })));
 
   it("chaque texte en accent est soit souligné (lien), soit une action de barre, soit un libellé de bouton ou un texte d'état listé ici", () => {
-    expect(tous.length).toBeGreaterThanOrEqual(80);
+    // Lot « fidélité aux maquettes » : les liens de Réglages passent par le style commun de components/settings-group.tsx
+    // (une définition au lieu de huit) ; ce lien commun est lui-même souligné.
+    expect(tous.length).toBeGreaterThanOrEqual(75);
+    expect(souligne(tous.find(({ id }) => id === "components/settings-group.tsx:link")?.definition ?? "")).toBe(true);
     const nonClasses = tous.filter(({ id, definition }) => !souligne(definition) && !(id in PAS_DES_LIENS) && !(id in ACTIONS_DE_BARRE)).map(({ id }) => id);
     expect(nonClasses).toEqual([]);
     // Un texte listé comme « pas un lien » n'est pas souligné, et la liste ne garde rien de périmé.
@@ -129,7 +132,8 @@ describe("liens : soulignés, puisque l'accent a la couleur du texte", () => {
     // Les quatre groupes ne se recoupent pas.
     expect(Object.keys(ACTIONS_DE_BARRE).filter((id) => id in PAS_DES_LIENS)).toEqual([]);
     // Au moins les liens des réglages, des documents et de l'inscription.
-    expect(tous.filter(({ definition }) => souligne(definition)).length).toBeGreaterThanOrEqual(50);
+    // (Lot « fidélité aux maquettes » : huit liens de Réglages réunis en un seul style commun, vérifié ci-dessus.)
+    expect(tous.filter(({ definition }) => souligne(definition)).length).toBeGreaterThanOrEqual(45);
   });
 
   it("actions de barre (« Publier », « Fermer » de la feuille d'essayage) : à leur place, sans soulignement, en demi-gras", () => {

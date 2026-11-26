@@ -1480,6 +1480,8 @@ export const fr = {
     deleteError: "La suppression a échoué. Vérifiez votre connexion, puis réessayez.",
     deleteTypeWord: (word: string) => `Pour confirmer, tapez ${word} ci-dessous.`,
     deleteWordLabel: (word: string) => `Mot de confirmation : ${word}`,
+    // Lot « fidélité aux maquettes » : la ligne du nom d'utilisateur, en tête de la carte « Compte ».
+    usernameLabel: "Nom d'utilisateur",
   },
   // « Nous contacter » (Réglages, écran d'accueil) : adresse de l'éditeur,
   // lue à la construction (lib/contact.ts). Sans adresse réelle, rien ne

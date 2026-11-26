@@ -1354,6 +1354,8 @@ export const en: Catalog = {
     deleteError: "The account couldn't be deleted. Check your connection, then try again.",
     deleteTypeWord: (word: string) => `To confirm, type ${word} below.`,
     deleteWordLabel: (word: string) => `Confirmation word: ${word}`,
+    // "Matching the mockups" batch: the username row, at the top of the "Account" card.
+    usernameLabel: "Username",
   },
   contact: {
     settingsSection: "Help",

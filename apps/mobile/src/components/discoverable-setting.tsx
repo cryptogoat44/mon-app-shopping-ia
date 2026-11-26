@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { Switch, Text, View } from "react-native";
-import { color, font, space } from "@/theme/tokens";
+import { space } from "@/theme/tokens";
 import { couleursInterrupteur } from "@/theme/accent";
 import { t } from "@/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { updateDiscoverable } from "@/lib/api";
 import { discoverableSettingShown } from "@/lib/for-you";
 import { ErrorMessage } from "@/components/error-message";
+import { settingsGroupValues } from "@/components/settings-group";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Réglages, bloc « Confidentialité du compte » (lot « découverte », migration
@@ -64,9 +65,9 @@ export function DiscoverableSetting() {
   );
 }
 
-const styles = themedStyles(() => ({
-  section: { marginBottom: space.lg },
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.md, minHeight: 44 },
-  title: { flex: 1, fontSize: font.secondary, color: color.encre, fontWeight: "600" },
-  hint: { fontSize: font.secondary, color: color.acier, marginTop: space.sm, lineHeight: 19 },
-}));
+// Carte de Réglages sans surtitre (components/settings-group.tsx) : la vue extérieure EST la carte
+// (marge du haut : suite du groupe au-dessus) ; jamais de marge du bas (40 pt entre deux cartes sinon).
+const styles = themedStyles(() => {
+  const g = settingsGroupValues();
+  return { section: { ...g.card, marginTop: space.sm }, row: g.row, title: g.rowTitle, hint: g.hint };
+});

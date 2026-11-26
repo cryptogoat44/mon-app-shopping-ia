@@ -7,7 +7,7 @@
 import { useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { color, font, space } from "@/theme/tokens";
-import { lienSouligne } from "@/theme/accent";
+import { settingsGroup, settingsGroupValues } from "@/components/settings-group";
 import { themedStyles } from "@/theme/themed-styles";
 import { tryonText } from "@/i18n/tryon.web";
 import { withdrawTryonConsent } from "@/lib/tryon-api.web";
@@ -58,6 +58,8 @@ export function ExtraDataSettings() {
   const busy = phase === "withdrawing";
   return (
     <>
+      {/* Lignes posées dans la carte « Vos données » de Réglages (components/settings-group.tsx) : un filet, jamais une carte à elles. */}
+      <View style={settingsGroup.divider} />
       <Text style={styles.title}>{tryonText.settings.title}</Text>
       <Text style={styles.body}>{tryonText.settings.body}</Text>
       {phase === "idle" ? (
@@ -83,13 +85,17 @@ export function ExtraDataSettings() {
 }
 
 // Même présentation que les autres lignes de « Vos données » (components/player-consent-setting.tsx).
-const styles = themedStyles(() => ({
-  title: { fontSize: font.secondary, color: color.encre, fontWeight: "600", minHeight: 44, textAlignVertical: "center", paddingTop: space.sm },
-  body: { fontSize: font.secondary, color: color.acier, marginBottom: space.sm, lineHeight: 19 },
-  link: { minHeight: 44, justifyContent: "center", marginBottom: space.sm },
-  linkLabel: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
-  confirm: { marginBottom: space.sm },
-  buttons: { flexDirection: "row", gap: space.lg },
-  cancelLabel: { fontSize: font.secondary, color: color.acier, fontWeight: "600" },
-  dangerLabel: { fontSize: font.secondary, color: color.danger, fontWeight: "600" },
-}));
+const styles = themedStyles(() => {
+  const g = settingsGroupValues();
+  return {
+    // Un titre seul, sans interrupteur : 44 pt par son propre air (le site ignore textAlignVertical).
+    title: { fontSize: font.secondary, lineHeight: 20, color: color.encre, fontWeight: "400", paddingVertical: 12 },
+    body: g.hint,
+    link: g.linkRow,
+    linkLabel: g.link,
+    confirm: { marginBottom: space.sm },
+    buttons: { flexDirection: "row", gap: space.lg },
+    cancelLabel: { fontSize: font.secondary, color: color.acier, fontWeight: "600" },
+    dangerLabel: { fontSize: font.secondary, color: color.danger, fontWeight: "600" },
+  };
+});

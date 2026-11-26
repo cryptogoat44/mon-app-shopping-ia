@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
 import { Linking, Platform, Pressable, Switch, Text, View } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { color, font, space } from "@/theme/tokens";
-import { couleursInterrupteur, lienSouligne } from "@/theme/accent";
+import { space } from "@/theme/tokens";
+import { couleursInterrupteur } from "@/theme/accent";
 import { t } from "@/i18n";
 import { fetchWishAlertsStatus, updateWishAlertsSettings } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -12,6 +12,7 @@ import { useWishAlertsStatus } from "@/lib/use-wish-alerts-status";
 import { isAlertsUnavailable, pushNote, pushNoteText } from "@/lib/wish-alerts";
 import { PushOfferSheet } from "@/components/push-offer-sheet";
 import { ErrorMessage } from "@/components/error-message";
+import { settingsGroupValues } from "@/components/settings-group";
 import { themedStyles } from "@/theme/themed-styles";
 
 type Device = { supported: boolean; decisions: PushDecisions; permission: PushPermission };
@@ -165,12 +166,9 @@ export function WishAlertsSetting() {
   );
 }
 
-const styles = themedStyles(() => ({
-  section: { marginBottom: space.lg },
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44, gap: space.sm },
-  helpRow: { marginTop: space.sm },
-  title: { flex: 1, fontSize: font.secondary, color: color.encre, fontWeight: "600" },
-  body: { fontSize: font.secondary, color: color.acier, marginBottom: space.sm, lineHeight: 19 },
-  link: { minHeight: 44, justifyContent: "center", marginBottom: space.sm },
-  linkLabel: { ...lienSouligne, fontSize: font.secondary, color: color.vert, fontWeight: "600" },
-}));
+// Carte de Réglages sans surtitre (components/settings-group.tsx) : la vue extérieure EST la carte
+// (marge du haut : suite du groupe au-dessus) ; jamais de marge du bas (40 pt entre deux cartes sinon).
+const styles = themedStyles(() => {
+  const g = settingsGroupValues();
+  return { section: { ...g.card, marginTop: space.sm }, row: g.row, helpRow: {}, title: g.rowTitle, body: g.hint, link: g.linkRow, linkLabel: g.link };
+});
