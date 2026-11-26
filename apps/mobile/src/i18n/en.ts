@@ -233,6 +233,8 @@ export const en: Catalog = {
     yourVideo: "Your video",
     waitingVideo: `${BRAND} is finding the piece…`,
     usualVideo: "This usually takes 15 to 30 seconds.",
+    // "Matching the mockups" batch: the "Circle the piece" button, for a photo (a video keeps "Search").
+    searchPiece: "Search for this piece",
   },
   // Website (lot 4 ter): a tab left open offers the version now online.
   siteVersion: {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Keyboard, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { VIDEO_AI, type CropRect } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
@@ -82,6 +82,16 @@ function useLaunchPreview({ video, draft }: Media) {
 
 /** Vue de chaque état, hors attente (plein écran). Le choix manuel n'apparaît
  * qu'en repli : pièce non repérée ou panne. */
+/** Hauteur fixe de l'écran « Entourez la pièce » autour de la photo (lot « fidélité aux maquettes ») :
+ * barre 44 + titre 34 + écart 2 + consigne 18 + écart 12 (la photo) + écart 4 et « Utiliser toute l'image » 44
+ * + écart 8 et champ 44 + écart 12 et bouton 52 + 9 de réserve = 283. S'y ajoutent, mesurées, la pastille de la
+ * vidéo associée et la note des mots (toujours au-dessus du bouton). */
+const PHOTO_FIXED_HEIGHT = 283;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
 function PhaseContent({ phase, flow, ask }: { phase: LaunchPhase; flow: ReturnType<typeof useSpotLaunch>; ask: AskProps }) {
   const router = useRouter();
   const manual: Action = { label: t.videoAuto.chooseMyself, onPress: flow.chooseMyself };
@@ -175,7 +185,8 @@ function useAsk(
       setMessage(null);
     },
     onLaunch: flow.launch,
-    launchLabel: isVideo && flow.declined ? t.launch.chooseImage : t.launch.launch,
+    // Photo : « Chercher cette pièce » (maquette « Écrin » 3) ; vidéo : « Lancer », ou « Choisir l'image » sans l'IA.
+    launchLabel: photoWords ? t.launch.searchPiece : isVideo && flow.declined ? t.launch.chooseImage : t.launch.launch,
     // Photo : « Lancer » attend la zone, dont le résultat dépend (lot entourer la pièce).
     canLaunch: enoughWords && !linkInQuery && (!photoWords || zoneReady(zone)),
     declined: isVideo && flow.declined,
@@ -195,6 +206,13 @@ export default function LaunchScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ source?: string; query?: string; auto?: string }>();
   const { height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  // Photo : hauteurs mesurées de la pastille de la vidéo associée et de la note des mots, sous la photo.
+  const [contextHeights, setContextHeights] = useState({ context: 0, note: 0 });
+  const contextHeight = contextHeights.context + contextHeights.note;
+  const measureAsk = useCallback((part: "context" | "note", height: number) => {
+    setContextHeights((previous) => (Math.abs(previous[part] - height) < 1 ? previous : { ...previous, [part]: height }));
+  }, []);
   const [media, setMedia] = useState(() => initialMedia(params.source));
   const [query, setQuery] = useState(() => initialQuery(params.query, media));
   // Photo : la zone entourée (rien tant que la pièce n'est pas entourée) ; le
@@ -286,15 +304,14 @@ export default function LaunchScreen() {
       </View>
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content} scrollEnabled={!dragging} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         {flow.phase.kind === "ask" && blocked ? <SearchLimitsNotice notice={limits.notice} style={styles.limits} /> : null}
-        {/* Mission « liens vidéo » : recherche associée à une vidéo (lecteur, ou lien en attente), avec sa croix. */}
-        {flow.phase.kind === "ask" && photoUri ? <VideoContextLabel /> : null}
         {flow.phase.kind === "ask" && photoUri ? (
           <PhotoFrame
             uri={photoUri}
             zone={zone}
             onChange={changeZone}
             onDragChange={setDragging}
-            height={Math.min(Math.max(windowHeight * 0.42, 220), 400)}
+            // Lot « fidélité aux maquettes » : la photo la plus grande possible, champ et bouton visibles sans défiler.
+            height={clamp(windowHeight - insets.top - insets.bottom - PHOTO_FIXED_HEIGHT - contextHeight, 220, 480)}
             caption={zoneFromAi ? t.targeting.aiCaption : t.targeting.caption}
           />
         ) : flow.phase.kind === "ask" ? (
@@ -305,7 +322,12 @@ export default function LaunchScreen() {
             height={Math.min(Math.max(windowHeight - 640, 110), 300)}
           />
         ) : null}
-        <PhaseContent phase={flow.phase} flow={flow} ask={blocked ? { ...ask, canLaunch: false } : ask} />
+        {/* Mission « liens vidéo » : recherche associée à une vidéo (lecteur, ou lien en attente), avec sa croix — sous la photo, avant le bouton. */}
+        <PhaseContent
+          phase={flow.phase}
+          flow={flow}
+          ask={{ ...(blocked ? { ...ask, canLaunch: false } : ask), context: photoUri ? <VideoContextLabel /> : undefined, onMeasure: measureAsk }}
+        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -320,7 +342,7 @@ const styles = themedStyles(() => ({
   close: { fontSize: font.body, fontWeight: "400", color: color.encre },
   // « ‹ Retour » écrit en toutes lettres : sur cet écran, le geste « glisser pour revenir » est coupé.
   back: { fontSize: font.body, fontWeight: "400", color: color.encre },
-  content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
+  content: { paddingHorizontal: space.md, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   limits: { marginTop: 0, marginBottom: space.md },
   lead: { fontSize: font.secondary, color: color.acier, lineHeight: 21 },
   primary: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 52, alignItems: "center", justifyContent: "center" },

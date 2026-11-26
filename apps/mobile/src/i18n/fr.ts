@@ -244,6 +244,8 @@ export const fr = {
     yourVideo: "Votre vidéo",
     waitingVideo: `${BRAND} repère la pièce…`,
     usualVideo: "Cela prend en général 15 à 30 secondes.",
+    // Lot « fidélité aux maquettes » : le bouton de l'écran « Entourez la pièce », pour une photo (la vidéo garde « Lancer »).
+    searchPiece: "Chercher cette pièce",
   },
   // Site (lot 4 ter) : un onglet resté ouvert propose la version en ligne.
   siteVersion: {

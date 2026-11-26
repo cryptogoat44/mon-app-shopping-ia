@@ -492,3 +492,69 @@ describe("Réglages (maquette 7)", () => {
     expect(settings).not.toMatch(/t\.push\.title|t\.settings\.notifications\b|>Notifications</);
   });
 });
+
+describe("« Entourez la pièce » (maquette 3-entourer-poudre)", () => {
+  const launch = code("app/(app)/spot/lancer.tsx");
+  const views = code("components/spot-launch-views.tsx");
+  const ask = views.slice(views.indexOf("export function AskView("), views.indexOf("export function ConsentView("));
+
+  it("gouttière de 16 pt ; refusé : 24", () => {
+    expect(styleOf(launch, "content")).toContain("paddingHorizontal: space.md");
+  });
+
+  it("photo : la note des mots AVANT le bouton, le conseil de cadrage après ; refusé : la note des mots après le bouton", () => {
+    const note = ask.indexOf("{p.linkWords ? t.launch.linkWordsNote : t.launch.photoWordsNote}");
+    const button = ask.indexOf("<Pressable\n        style={[styles.primary");
+    const hint = ask.indexOf("{t.launch.frameHint}");
+    expect(note).toBeGreaterThan(-1);
+    expect(note).toBeLessThan(button);
+    expect(hint).toBeGreaterThan(button);
+    expect(ask.slice(button)).not.toContain("photoWordsNote");
+    expect(ask.slice(button)).not.toContain("linkWordsNote");
+  });
+
+  it("la vidéo associée sous la photo, avant le bouton ; refusé : au-dessus du titre", () => {
+    expect(ask.indexOf("{p.context ?")).toBeGreaterThan(-1);
+    expect(ask.indexOf("{p.context ?")).toBeLessThan(ask.indexOf("<Pressable\n        style={[styles.primary"));
+    expect(launch).not.toContain('flow.phase.kind === "ask" && photoUri ? <VideoContextLabel /> : null');
+    expect(launch).toContain("context: photoUri ? <VideoContextLabel /> : undefined");
+  });
+
+  it("un seul champ, en bloc, 16 sur le site ; refusé : le libellé visible au-dessus pour une photo", () => {
+    expect(ask).not.toContain("styles.fieldLabel");
+    expect(ask).toContain("placeholder={`${t.launch.photoLabel} · ${t.launch.photoPlaceholder}`}");
+    expect(ask).toContain("label={t.launch.photoLabel}");
+    expect(styleOf(views, "inputBoxed")).toContain('fontSize: Platform.OS === "web" ? 16 : font.secondary');
+    // La question des vidéos garde son champ souligné.
+    expect(styleOf(views, "input")).toContain("borderBottomWidth: 1");
+  });
+
+  it("« Chercher cette pièce » pour une photo ; la vidéo garde « Lancer »", () => {
+    expect(fr.launch.searchPiece).toBe("Chercher cette pièce");
+    expect(en.launch.searchPiece).toBe("Search for this piece");
+    expect(launch).toContain("launchLabel: photoWords ? t.launch.searchPiece : isVideo && flow.declined ? t.launch.chooseImage : t.launch.launch,");
+  });
+
+  it("la photo grandit avec l'écran (zones sûres comprises), entre 220 et 480 ; ce qui part au serveur ne change pas", () => {
+    expect(launch).toContain("const insets = useSafeAreaInsets();");
+    expect(launch).toContain("clamp(windowHeight - insets.top - insets.bottom - PHOTO_FIXED_HEIGHT - contextHeight, 220, 480)");
+    expect(launch).toContain("const PHOTO_FIXED_HEIGHT = 283;");
+    // Aucune occurrence nouvelle du calcul de la zone (piece-tracer.tsx, lot E, n'est pas touché).
+    expect(launch.match(/zoneFromCrop/g)).toHaveLength(2);
+    expect(launch).not.toContain("zoneFromTrace");
+    expect(launch).toContain("crop: media.source === \"photo\" ? (zone?.crop ?? null) : null");
+  });
+
+  it("« Utiliser toute l'image » : le lien commun ; refusé : un trait écrit à la main", () => {
+    expect(styleOf(views, "wholeImageLabel")).toContain("...lienSouligne");
+    expect(styleOf(views, "wholeImageLabel")).not.toContain("textDecorationLine");
+  });
+});
+
+describe("Lecteur, deux lignes (maquettes 2-lecteur)", () => {
+  const player = code("app/(app)/spot/lecteur.tsx");
+  it("le fond de la première fois se détache du fond de l'écran ; « Ouvrir dans TikTok » sans demi-gras", () => {
+    expect(styleOf(player, "poster")).toContain("backgroundColor: color.nuitCadre");
+    expect(styleOf(player, "linkLabel")).not.toContain('fontWeight: "600"');
+  });
+});
