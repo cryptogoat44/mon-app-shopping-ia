@@ -296,9 +296,10 @@ describe("la lumière qui reste après le lâcher", () => {
     expect(maskGray(2)).toBe("#FFFFFF");
   });
 
-  /** Bord sans marche visible : au moins 6 anneaux, du plus large au plus fin, et jamais plus de 12 % de voile d'un anneau à l'autre (ni depuis le voile plein). */
+  /** Bord sans marche visible : au moins 6 anneaux, du plus large au plus fin, et jamais plus de 12 % de voile d'un anneau à l'autre (ni depuis le voile plein, ni du dernier anneau au clair du dedans). */
   const feathered = (rings: readonly { width: number; level: number }[]) =>
     rings.length >= 6 &&
+    rings[rings.length - 1].level <= 0.12 &&
     rings.every((ring, index) => {
       const previous = index === 0 ? { width: Infinity, level: 1 } : rings[index - 1];
       return ring.width < previous.width && ring.level < previous.level && previous.level - ring.level <= 0.12 && ring.level > 0;
@@ -310,6 +311,10 @@ describe("la lumière qui reste après le lâcher", () => {
 
   it("refusé : les deux anneaux d'avant (marches de 30 % de voile)", () => {
     expect(feathered([{ width: 14, level: 0.7 }, { width: 7, level: 0.4 }])).toBe(false);
+  });
+
+  it("refusé : des anneaux à pas fin qui s'arrêtent à 30 % de voile (marche au bord même de la forme)", () => {
+    expect(feathered(MASK.rings.slice(0, -2))).toBe(false);
   });
 
   /** Un bord lumineux doux et fin : des filets du plus large et pâle au plus fin, aucun au-delà de 20 % ni plus large que 16 pt. */
