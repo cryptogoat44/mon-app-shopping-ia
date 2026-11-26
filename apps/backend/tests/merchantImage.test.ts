@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Readable } from "node:stream";
 import sharp from "sharp";
-import type { FastifyBaseLogger, FastifyInstance } from "fastify";
+import Fastify, { type FastifyBaseLogger, type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
+import multipart from "@fastify/multipart";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Retours du build 2 (« la qualité des images quand elles sont grossies est
@@ -13,6 +14,12 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 // en mémoire.
 const { httpsRequest, switches } = vi.hoisted(() => ({ httpsRequest: vi.fn(), switches: { on: false } }));
 vi.mock("node:https", () => ({ default: { request: httpsRequest } }));
+// Les routes n'injectent pas de résolveur : la résolution de noms est simulée
+// (adresse publique), pour qu'aucune ne parte vraiment.
+vi.mock("node:dns/promises", () => {
+  const lookup = async () => [{ address: "93.184.215.14", family: 4 }];
+  return { lookup, default: { lookup } };
+});
 vi.mock("../src/env.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../src/env.js")>();
   return {
@@ -30,11 +37,17 @@ import {
   fetchMerchantPage,
   isMerchantPage,
   isUsableLargeImage,
+  MERCHANT_QUEUE_MAX,
+  queueMerchantImages,
   resetMerchantImageMemory,
   upgradeMerchantImage,
   upgradeMerchantImageLater,
 } from "../src/lib/merchantImage.js";
 import { fakeSupabase } from "./fakeSupabase.js";
+import rateLimitPlugin from "../src/plugins/rateLimit.js";
+import moderationPlugin from "../src/plugins/moderation.js";
+import wishlistRoutes from "../src/routes/wishlist.js";
+import vaultRoutes from "../src/routes/vault.js";
 
 const PAGE = "https://boutique.example/veste";
 const PUBLIC: Resolver = async () => [{ address: "93.184.215.14", family: 4 }];
@@ -302,14 +315,20 @@ describe("l'écriture de la grande image", () => {
     expect(JSON.stringify(vi.mocked(log.info).mock.calls)).not.toContain("boutique.example");
   });
 
-  it("une lecture à la fois : une seconde demande simultanée est laissée pour plus tard", async () => {
+  it("une lecture à la fois : une seconde demande simultanée est GARDÉE en file, puis lue après la première (retours du build 3)", async () => {
     switches.on = true;
-    const { fastify } = store();
+    const { fake, fastify } = store();
     const other = "f0000000-0000-4000-8000-000000000008";
+    fake.table("product_matches").push({ id: other, image_url: THUMB, image_hd_url: null, merchant_url: "https://autre.example/pull" });
+    shopAnswers();
     shopAnswers();
     const first = upgradeMerchantImage(fastify, log, piece, null, PUBLIC);
-    expect(await upgradeMerchantImage(fastify, log, { product_match_id: other, image_url: THUMB }, null, PUBLIC)).toBe("busy");
+    expect(await upgradeMerchantImage(fastify, log, { product_match_id: other, image_url: THUMB }, null, PUBLIC)).toBe("queued");
+    // Pendant la première lecture, une seule page est demandée.
+    expect(httpsRequest).toHaveBeenCalledTimes(0);
     expect(await first).toBe("written");
+    await vi.waitFor(() => expect(fake.table("product_matches")[1]!.image_hd_url).toBe(FOUND));
+    expect(httpsRequest).toHaveBeenCalledTimes(4);
   });
 
   it("une base en échec ne fait jamais échouer l'appelant", async () => {
@@ -334,6 +353,225 @@ describe("l'écriture de la grande image", () => {
   });
 });
 
+// La file (retours du build 3) : rien n'est plus abandonné quand le serveur
+// est occupé. Les résultats absents de la base sont lus vite (« skipped »)
+// et prennent quand même leur créneau de la minute : ils servent à compter.
+describe("la file des pièces gardées ou achetées", () => {
+  const id = (n: number) => `f0000000-0000-4000-8000-${String(1000 + n).padStart(12, "0")}`;
+  const flush = async () => {
+    for (let i = 0; i < 20; i++) await new Promise((done) => setImmediate(done));
+  };
+  function counting() {
+    const fake = fakeSupabase();
+    const from = vi.fn((table: string) => fake.db.from(table));
+    return { fake, from, fastify: { supabaseAdmin: { from } } as unknown as FastifyInstance };
+  }
+  // Une lecture qui ne répond pas tout de suite : la page de la boutique est retenue.
+  function holdPage(): () => void {
+    let release: () => void = () => undefined;
+    httpsRequest.mockImplementationOnce((_url: URL, _options: unknown, callback: (response: Readable) => void) => {
+      const req = Object.assign(new EventEmitter(), {
+        end: () => {
+          release = () => callback(Object.assign(Readable.from([]), { statusCode: 404, headers: {} }));
+        },
+      });
+      return req;
+    });
+    return () => release();
+  }
+
+  it("refusé : pas de doublon — un résultat déjà en file ou en cours de lecture est ignoré", async () => {
+    switches.on = true;
+    const { fastify } = store();
+    const release = holdPage();
+    const first = upgradeMerchantImage(fastify, log, piece, null, PUBLIC);
+    await vi.waitFor(() => expect(httpsRequest).toHaveBeenCalledTimes(1));
+    expect(await upgradeMerchantImage(fastify, log, piece, null, PUBLIC)).toBe("skipped");
+    expect(await upgradeMerchantImage(fastify, log, { product_match_id: id(1), image_url: THUMB }, null, PUBLIC)).toBe("queued");
+    expect(await upgradeMerchantImage(fastify, log, { product_match_id: id(1), image_url: THUMB }, null, PUBLIC)).toBe("skipped");
+    switches.on = false;
+    release();
+    expect(await first).toBe("none");
+  });
+
+  it(`refusé : au-delà de ${MERCHANT_QUEUE_MAX} demandes en attente, la suivante est ignorée`, async () => {
+    switches.on = true;
+    const { fastify } = store();
+    const release = holdPage();
+    const first = upgradeMerchantImage(fastify, log, piece, null, PUBLIC);
+    await vi.waitFor(() => expect(httpsRequest).toHaveBeenCalledTimes(1));
+    for (let n = 1; n <= MERCHANT_QUEUE_MAX; n++) {
+      expect(await upgradeMerchantImage(fastify, log, { product_match_id: id(n), image_url: THUMB }, null, PUBLIC)).toBe("queued");
+    }
+    expect(await upgradeMerchantImage(fastify, log, { product_match_id: id(MERCHANT_QUEUE_MAX + 1), image_url: THUMB }, null, PUBLIC)).toBe("skipped");
+    // Interrupteur coupé pendant l'attente : la file est vidée sans rien lire.
+    switches.on = false;
+    release();
+    await first;
+    await flush();
+    expect(httpsRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("12 lectures par minute au plus : la 13ᵉ attend la minute suivante, puis est lue (rien n'est perdu)", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    try {
+      switches.on = true;
+      const { from, fastify } = counting();
+      const results = await Promise.all(Array.from({ length: 13 }, (_, n) => upgradeMerchantImage(fastify, log, { product_match_id: id(n), image_url: THUMB }, null, PUBLIC)));
+      expect(results.filter((r) => r === "queued")).toHaveLength(12);
+      await flush();
+      expect(from).toHaveBeenCalledTimes(12);
+      await vi.advanceTimersByTimeAsync(59_000);
+      await flush();
+      expect(from).toHaveBeenCalledTimes(12);
+      await vi.advanceTimersByTimeAsync(1_000);
+      await flush();
+      expect(from).toHaveBeenCalledTimes(13);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("listes des Envies et du Vault : mise en file", () => {
+  const OTHER = "f0000000-0000-4000-8000-000000000009";
+  const PERSONAL = "f0000000-0000-4000-8000-000000000010";
+
+  it("permis : seule la pièce sans grande image, rattachée à un résultat et montrant son image, est lue et rangée", async () => {
+    switches.on = true;
+    const { fake } = store();
+    fake.table("product_matches").push(
+      { id: OTHER, image_url: THUMB, image_hd_url: "https://cdn.example/deja-hd.jpg", merchant_url: "https://autre.example/a" },
+      { id: PERSONAL, image_url: THUMB, image_hd_url: null, merchant_url: "https://perso.example/b" }
+    );
+    // Chaque requête à la base est comptée : la photo personnelle ne doit même
+    // pas entrer dans la file (aucune lecture à elle seule).
+    const from = vi.fn((table: string) => fake.db.from(table));
+    const fastify = { supabaseAdmin: { from } } as unknown as FastifyInstance;
+    shopAnswers();
+    queueMerchantImages(
+      fastify,
+      log,
+      [
+        piece,
+        // Déjà servie en HD : jamais mise en file.
+        { product_match_id: OTHER, image_url: THUMB },
+        // Photo personnelle (« Changer la photo ») : jamais mise en file.
+        { product_match_id: PERSONAL, image_url: "https://x.supabase.co/vault-media/a/photo.jpg" },
+        // Ajout à la main, sans résultat.
+        { product_match_id: null, image_url: "https://x.supabase.co/vault-media/a/main.jpg" },
+      ],
+      [null, "https://cdn.example/deja-hd.jpg", null, null],
+      PUBLIC
+    );
+    // Rien avant la réponse : tout part après.
+    expect(httpsRequest).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(fake.table("product_matches")[0]!.image_hd_url).toBe(FOUND));
+    await new Promise((done) => setTimeout(done, 20));
+    expect(httpsRequest).toHaveBeenCalledTimes(2);
+    expect(String(httpsRequest.mock.calls[0]![0])).toBe(PAGE);
+    expect(fake.table("product_matches")[2]!.image_hd_url).toBeNull();
+    // Une lecture groupée de la page, puis la pièce retenue : relue et écrite.
+    expect(from).toHaveBeenCalledTimes(3);
+  });
+
+  it("refusé : éteint, rien n'est lu (ni la base ni la boutique)", async () => {
+    const from = vi.fn();
+    queueMerchantImages({ supabaseAdmin: { from } } as unknown as FastifyInstance, log, [piece], [null], PUBLIC);
+    await new Promise((done) => setTimeout(done, 20));
+    expect(from).not.toHaveBeenCalled();
+    expect(httpsRequest).not.toHaveBeenCalled();
+  });
+
+  it("une base en échec ou des lignes illisibles ne font jamais échouer la liste", async () => {
+    switches.on = true;
+    const broken = { supabaseAdmin: { from: () => { throw new Error("base injoignable"); } } } as unknown as FastifyInstance;
+    expect(() => queueMerchantImages(broken, log, [piece], [null], PUBLIC)).not.toThrow();
+    const hostile = new Proxy([], { get: () => { throw new Error("illisible"); } }) as unknown as typeof piece[];
+    expect(() => queueMerchantImages(broken, log, hostile, [], PUBLIC)).not.toThrow();
+    await new Promise((done) => setTimeout(done, 20));
+    expect(httpsRequest).not.toHaveBeenCalled();
+  });
+});
+
+// Les vraies routes GET /api/wishlist et GET /api/vault sur une fausse base.
+describe("GET /api/wishlist et GET /api/vault : la liste met en file, après la réponse", () => {
+  const ALICE = "a0000000-0000-4000-8000-000000000001";
+  const PERSONAL = "f0000000-0000-4000-8000-000000000011";
+  const HD_MATCH = "f0000000-0000-4000-8000-000000000012";
+
+  async function listApp(db: unknown): Promise<FastifyInstance> {
+    const app = Fastify({ logger: false });
+    await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
+    app.decorate("supabaseAdmin", db as FastifyInstance["supabaseAdmin"]);
+    app.decorateRequest("user", null);
+    app.decorate("requireAuth", async (request: FastifyRequest, reply: FastifyReply) => {
+      const user = request.headers["x-test-user"];
+      if (typeof user !== "string") return reply.code(401).send({ error: "unauthorized", message: "Jeton manquant." });
+      request.user = { id: user, email: null };
+    });
+    await app.register(rateLimitPlugin);
+    await app.register(moderationPlugin);
+    await app.register(wishlistRoutes);
+    await app.register(vaultRoutes);
+    await app.ready();
+    return app;
+  }
+
+  function seeded(table: "wishlist_items" | "vault_items") {
+    const { fake } = store();
+    fake.table("profiles").push({ id: ALICE, username: "alice", locale: "fr" });
+    fake.table("product_matches").push(
+      { id: PERSONAL, image_url: THUMB, image_hd_url: null, merchant_url: "https://perso.example/a" },
+      { id: HD_MATCH, image_url: THUMB, image_hd_url: "https://cdn.example/deja-hd.jpg", merchant_url: "https://hd.example/b" }
+    );
+    const base = { user_id: ALICE, title: "Veste", brand: null, price: null, currency: null, merchant_url: PAGE, merchant_name: "Boutique" };
+    fake.table(table).push(
+      { ...base, id: "b0000000-0000-4000-8000-000000000001", image_url: THUMB, product_match_id: MATCH, created_at: "2026-11-20T10:00:03+00:00" },
+      { ...base, id: "b0000000-0000-4000-8000-000000000002", image_url: "https://x.supabase.co/vault-media/a/photo.jpg", product_match_id: PERSONAL, created_at: "2026-11-20T10:00:02+00:00" },
+      { ...base, id: "b0000000-0000-4000-8000-000000000003", image_url: THUMB, product_match_id: HD_MATCH, created_at: "2026-11-20T10:00:01+00:00" },
+      { ...base, id: "b0000000-0000-4000-8000-000000000004", image_url: "https://x.supabase.co/vault-media/a/main.jpg", product_match_id: null, created_at: "2026-11-20T10:00:00+00:00" }
+    );
+    return fake;
+  }
+
+  for (const [url, table] of [
+    ["/api/wishlist", "wishlist_items"],
+    ["/api/vault", "vault_items"],
+  ] as const) {
+    it(`permis : ${url} répond sans attendre, puis seule la pièce sans grande image d'un résultat est lue ; refusé : photo personnelle, pièce déjà HD, ajout à la main`, async () => {
+      switches.on = true;
+      const fake = seeded(table);
+      // La page ne répond pas avant la réponse de la liste.
+      answerNext({ status: 403 });
+      const app = await listApp(fake.db);
+      try {
+        const res = await app.inject({ method: "GET", url, headers: { "x-test-user": ALICE } });
+        expect(res.statusCode).toBe(200);
+        expect(res.json().items).toHaveLength(4);
+        await vi.waitFor(() => expect(httpsRequest).toHaveBeenCalledTimes(1));
+        await new Promise((done) => setTimeout(done, 20));
+        expect(httpsRequest).toHaveBeenCalledTimes(1);
+        expect(String(httpsRequest.mock.calls[0]![0])).toBe(PAGE);
+      } finally {
+        await app.close();
+      }
+    });
+
+    it(`refusé : ${url} avec l'interrupteur éteint ne lit aucune page`, async () => {
+      const app = await listApp(seeded(table).db);
+      try {
+        const res = await app.inject({ method: "GET", url, headers: { "x-test-user": ALICE } });
+        expect(res.statusCode).toBe(200);
+        await new Promise((done) => setTimeout(done, 20));
+        expect(httpsRequest).not.toHaveBeenCalled();
+      } finally {
+        await app.close();
+      }
+    });
+  }
+});
+
 describe("branchement dans les routes (lecture du code)", () => {
   const read = (file: string) => readFileSync(join(__dirname, "..", "src", file), "utf8");
   it("« Garder », la fiche d'une envie, « Je l'ai achetée » et la fiche du Vault la lancent, sans l'attendre", () => {
@@ -344,9 +582,24 @@ describe("branchement dans les routes (lecture du code)", () => {
     expect(wishlist + vault).not.toMatch(/await upgradeMerchantImage/);
   });
 
-  it("la liste des Envies et du Vault ne lit jamais de page de boutique", () => {
+  // Remplace « la liste … ne lit jamais de page de boutique » (retours du
+  // build 3) : la liste MET EN FILE, une fois, après avoir préparé la réponse,
+  // sans l'attendre, et ne lance jamais une lecture elle-même.
+  it("les listes des Envies et du Vault mettent en file une fois, après avoir préparé la réponse, sans attendre ni lire elles-mêmes", () => {
     const wishlist = read("routes/wishlist.ts");
-    const list = wishlist.slice(wishlist.indexOf('fastify.get("/api/wishlist"'), wishlist.indexOf('fastify.post("/api/wishlist"'));
-    expect(list).not.toContain("upgradeMerchantImage");
+    const vault = read("routes/vault.ts");
+    const lists = [
+      wishlist.slice(wishlist.indexOf('fastify.get("/api/wishlist"'), wishlist.indexOf('fastify.post("/api/wishlist"')),
+      vault.slice(vault.indexOf('fastify.get("/api/vault"'), vault.indexOf('fastify.get("/api/vault/:id"')),
+    ];
+    for (const list of lists) {
+      expect(list).not.toContain("upgradeMerchantImage");
+      expect(list.match(/queueMerchantImages\(fastify, request\.log, pageRows, hdUrls\);/g)).toHaveLength(1);
+      expect(list).not.toMatch(/await queueMerchantImages/);
+      const queued = list.indexOf("queueMerchantImages(");
+      expect(list.indexOf("const items = pageRows.map(")).toBeGreaterThan(-1);
+      expect(list.indexOf("const items = pageRows.map(")).toBeLessThan(queued);
+      expect(queued).toBeLessThan(list.indexOf("return reply.send({ items"));
+    }
   });
 });
