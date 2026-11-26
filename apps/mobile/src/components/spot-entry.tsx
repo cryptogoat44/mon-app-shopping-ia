@@ -216,7 +216,7 @@ const styles = themedStyles(() => ({
   card: { marginTop: space.lg, borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md },
   cardHead: { flexDirection: "row", alignItems: "center", gap: space.sm },
   cardRow: { flex: 1, flexDirection: "row", alignItems: "center", gap: space.md, minHeight: 64 },
-  thumb: { width: 48, height: 64, borderRadius: radius.sm, backgroundColor: color.plinthe },
+  thumb: { width: 48, height: 64, borderRadius: radius.pieceThumb, borderCurve: "continuous", backgroundColor: color.plinthe, overflow: "hidden" },
   dismiss: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   dismissLabel: { fontSize: 24, lineHeight: 26, color: color.acier },
   dismissedNote: { marginTop: space.lg },

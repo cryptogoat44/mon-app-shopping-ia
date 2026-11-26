@@ -100,7 +100,7 @@ export function VideoScrubber({
 }
 
 const styles = themedStyles(() => ({
-  strip: { height: STRIP_HEIGHT, borderRadius: radius.sm, overflow: "hidden", backgroundColor: color.plinthe },
+  strip: { height: STRIP_HEIGHT, borderRadius: radius.piece, borderCurve: "continuous", overflow: "hidden", backgroundColor: color.plinthe },
   thumbnails: { flex: 1, flexDirection: "row" },
   thumbnail: { flex: 1, height: STRIP_HEIGHT },
   placeholder: { backgroundColor: color.plinthe, borderRightWidth: 1, borderRightColor: color.porcelaine },

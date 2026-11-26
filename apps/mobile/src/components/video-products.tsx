@@ -81,7 +81,7 @@ const styles = themedStyles(() => ({
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, lineHeight: serifLineHeight.body, color: color.encre },
   card: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md, gap: space.sm },
   row: { flexDirection: "row", gap: space.md, alignItems: "center" },
-  thumb: { width: 72, height: 72, borderRadius: radius.sm, backgroundColor: color.plinthe, overflow: "hidden" },
+  thumb: { width: 72, height: 72, borderRadius: radius.pieceThumb, borderCurve: "continuous", backgroundColor: color.plinthe, overflow: "hidden" },
   fill: { width: "100%", height: "100%" },
   text: { flex: 1, gap: 4 },
   name: { fontSize: font.secondary, color: color.encre, fontWeight: "600", lineHeight: 19 },

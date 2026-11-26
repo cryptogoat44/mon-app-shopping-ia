@@ -475,7 +475,7 @@ const styles = themedStyles(() => ({
   authorName: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
   postRow: { flexDirection: "row", gap: space.sm },
   morePhotos: { flexDirection: "row", flexWrap: "wrap", gap: space.xs },
-  postImage: { width: 72, height: 72, borderRadius: radius.sm, backgroundColor: color.plinthe },
+  postImage: { width: 72, height: 72, borderRadius: radius.pieceThumb, borderCurve: "continuous", backgroundColor: color.plinthe, overflow: "hidden" },
   postText: { flex: 1, gap: space.xs },
   body: { fontSize: font.secondary, color: color.encre, lineHeight: 20 },
   profileLink: { marginTop: 6 },
@@ -491,7 +491,7 @@ const styles = themedStyles(() => ({
   extractReported: { borderColor: color.danger },
   collectionName: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
   collectionItem: { flexDirection: "row", gap: space.sm, paddingVertical: space.xs, borderTopWidth: 1, borderTopColor: color.filet },
-  itemImage: { width: 56, height: 56, borderRadius: radius.sm, backgroundColor: color.plinthe, overflow: "hidden" },
+  itemImage: { width: 56, height: 56, borderRadius: radius.pieceThumb, borderCurve: "continuous", backgroundColor: color.plinthe, overflow: "hidden" },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginTop: space.md },
   fullWidth: { width: "100%" },
   action: {

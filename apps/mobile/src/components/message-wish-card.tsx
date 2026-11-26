@@ -41,7 +41,7 @@ export function MessageWishCard({ card, mine }: { card: WishCard; mine: boolean 
 
 const styles = themedStyles(() => ({
   card: { width: 220, borderRadius: radius.md, backgroundColor: color.surface, borderWidth: 1, borderColor: color.filet, overflow: "hidden" },
-  image: { width: "100%", aspectRatio: 1, backgroundColor: color.plinthe },
+  image: { width: "100%", aspectRatio: 1, backgroundColor: color.plinthe, borderRadius: radius.pieceGrid, borderCurve: "continuous", overflow: "hidden" },
   fill: { width: "100%", height: "100%" },
   body: { padding: space.sm, gap: 4 },
   title: { fontSize: font.secondary, fontWeight: "600", color: color.encre },

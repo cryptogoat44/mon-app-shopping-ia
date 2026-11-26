@@ -126,7 +126,7 @@ const styles = themedStyles(() => ({
     alignItems: "center",
     justifyContent: "center",
   },
-  cover: { width: 120, height: 120, borderRadius: radius.sm, overflow: "hidden", backgroundColor: color.plinthe },
+  cover: { width: 120, height: 120, borderRadius: radius.pieceGrid, borderCurve: "continuous", overflow: "hidden", backgroundColor: color.plinthe },
   fill: { width: "100%", height: "100%" },
   name: { fontSize: font.caption, fontWeight: "600", color: color.encre, marginTop: space.xs },
   count: { fontSize: 11.5, color: color.acier },

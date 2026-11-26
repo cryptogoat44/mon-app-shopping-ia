@@ -1,7 +1,7 @@
 import { Text, View } from "react-native";
 import { t } from "@/i18n";
 import { ImageOffIcon } from "@/components/icons";
-import { color, font, radius, space } from "@/theme/tokens";
+import { color, font, radius, size, space } from "@/theme/tokens";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Image retirée par la modération (lot 5, partie B, décision du fondateur) :
@@ -34,7 +34,7 @@ export function ImageUnavailable({ variant, accessible = true }: { variant: "fra
 const styles = themedStyles(() => ({
   base: { backgroundColor: color.plinthe, alignItems: "center", justifyContent: "center", gap: space.sm, overflow: "hidden" },
   // Mêmes dimensions que le cadre d'une pièce (components/product-frame.tsx).
-  frame: { width: "100%", maxWidth: 360, aspectRatio: 4 / 5, alignSelf: "center", borderRadius: radius.sm },
+  frame: { width: "100%", maxWidth: size.contentMaxWidth, aspectRatio: 4 / 5, alignSelf: "center", borderRadius: radius.piece, borderCurve: "continuous" },
   tile: { width: "100%", height: "100%", padding: space.xs, gap: space.xs },
   thumb: { width: "100%", height: "100%" },
   // Texte exceptionnel sur le fond des pièces : la teinte prévue pour lui (AA).

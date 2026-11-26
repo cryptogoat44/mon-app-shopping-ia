@@ -201,7 +201,7 @@ const styles = themedStyles(() => ({
   list: { paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.xxl, maxWidth: 640, alignSelf: "center", width: "100%" },
   empty: { fontSize: font.secondary, color: color.acier, textAlign: "center", lineHeight: 20, marginTop: space.xl, paddingHorizontal: space.lg },
   row: { flexDirection: "row", gap: space.md, paddingVertical: space.md, borderBottomWidth: 1, borderBottomColor: color.filet },
-  thumb: { width: 76, height: 76, borderRadius: radius.sm, backgroundColor: color.plinthe, overflow: "hidden" },
+  thumb: { width: 76, height: 76, borderRadius: radius.pieceThumb, borderCurve: "continuous", backgroundColor: color.plinthe, overflow: "hidden" },
   fill: { width: "100%", height: "100%" },
   rowText: { flex: 1, gap: 2 },
   title: { fontSize: font.secondary, fontWeight: "600", color: color.encre },

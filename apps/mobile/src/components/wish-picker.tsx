@@ -114,7 +114,7 @@ const styles = themedStyles(() => ({
   error: { fontSize: font.secondary, marginBottom: space.sm },
   empty: { fontSize: font.secondary, color: color.acier, lineHeight: 20 },
   row: { flexDirection: "row", alignItems: "center", gap: space.sm, paddingVertical: space.xs, minHeight: 56 },
-  thumb: { width: 52, height: 52, borderRadius: radius.sm, overflow: "hidden", backgroundColor: color.plinthe },
+  thumb: { width: 52, height: 52, borderRadius: radius.pieceThumb, borderCurve: "continuous", overflow: "hidden", backgroundColor: color.plinthe },
   fill: { width: "100%", height: "100%" },
   rowTitle: { flex: 1, fontSize: font.secondary, color: color.encre },
   more: { minHeight: 44, alignItems: "center", justifyContent: "center" },
