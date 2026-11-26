@@ -365,6 +365,60 @@ describe("image floue (retours du build 3 : contrôle de netteté de l'instantan
     expect(isBlurryFrame(coatCloseUp(40))).toBe(true);
   });
 
+  // Quelques bords nets ne suffisent pas : la zone est jugée par tuiles (3 × 3,
+  // tuile médiane) et sans les bandes noires du haut et du bas.
+  /** Une ligne de sous-titre incrustée (nette même quand la caméra bouge), à
+   * 30 % de la hauteur : traits blancs de 1 px sur fond sombre. */
+  const withCaption = (frame: FrameSample): FrameSample => {
+    const gray = Uint8Array.from(frame.gray);
+    const top = Math.floor(0.3 * frame.height);
+    for (let y = top; y < top + 3; y += 1) {
+      for (let x = Math.floor(0.1 * frame.width); x < Math.floor(0.75 * frame.width); x += 1) {
+        gray[y * frame.width + x] = x % 3 === 0 || (y === top + 1 && x % 5 < 2) ? 255 : 20;
+      }
+    }
+    return { ...frame, gray };
+  };
+  /** Vidéo en paysage (bande 16:9) entre deux bandes noires, dans la boîte 9:16. */
+  const letterboxed = (frame: FrameSample, band: number): FrameSample => {
+    const bandHeight = Math.round((frame.width * 9) / 16);
+    const top = Math.floor((frame.height - bandHeight) / 2);
+    const gray = frame.gray.map((value, i) => {
+      const y = Math.floor(i / frame.width);
+      return y >= top && y < top + bandHeight ? value : band;
+    });
+    return { ...frame, gray };
+  };
+
+  it("refusé : la vraie image floue (capture 06) avec une ligne de sous-titre nette", () => {
+    const frame = withCaption(real("06-floue"));
+    expect(isBlankFrame(frame)).toBe(false);
+    expect(isBlurryFrame(frame)).toBe(true);
+  });
+
+  it("permis : la vraie image nette (capture 05) avec la même ligne de sous-titre", () => {
+    expect(isBlurryFrame(withCaption(real("05-nette")))).toBe(false);
+  });
+
+  it("refusé : la vraie image floue (capture 06) entre deux bandes noires (vidéo en paysage), noir pur ou presque noir", () => {
+    for (const band of [0, 12]) {
+      const frame = letterboxed(real("06-floue"), band);
+      expect(isBlankFrame(frame)).toBe(false);
+      expect(isBlurryFrame(frame)).toBe(true);
+    }
+  });
+
+  it("permis : la vraie image nette (capture 05) entre deux bandes noires", () => {
+    for (const band of [0, 12]) expect(isBlurryFrame(letterboxed(real("05-nette"), band))).toBe(false);
+  });
+
+  it("le code juge la tuile médiane, sans les bandes noires du haut et du bas", () => {
+    const source = readFileSync(fileURLToPath(new URL("../src/lib/player-state.ts", import.meta.url)), "utf8");
+    expect(source).toContain("const SHARPNESS_TILES = 3;");
+    expect(source).toContain("return tileScores[Math.floor((tileScores.length - 1) / 2)]!;");
+    expect(source).toContain("while (top < bottom && rowBlack(top)) top += 1;");
+  });
+
   it("refusé : une zone unie (rien à juger)", () => {
     expect(frameSharpness(sample(() => 120))).toBe(0);
     expect(isBlurryFrame(sample(() => 120))).toBe(true);

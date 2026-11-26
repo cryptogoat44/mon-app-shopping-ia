@@ -174,53 +174,99 @@ const SHARPNESS_TOP_FRACTION = 0.05;
  * capture 05 assombrie à 15 % ≈ 10, 06 floue assombrie à 15 % ≈ 4,6. */
 const SHARPNESS_MIN_EDGE = 3;
 
+/** Bandes noires retirées des bords de la zone (vidéo en paysage dans la
+ * boîte 9:16, fond noir de la page TikTok) : lignes du haut et du bas dont
+ * tous les gris sont ≤ BLANK_LIMITS.blackP99Max, plus cette marge (px), pour
+ * que le bord franc de la bande ne soit pas jugé comme un bord de la vidéo.
+ * Les lignes seulement, pas les colonnes : un vêtement sombre sur le côté
+ * d'un plan sombre (net) n'est pas une bande. */
+const SHARPNESS_BAND_MARGIN = 2;
+/** La zone (sans les bandes noires) est coupée en 3 × 3 tuiles : l'image est
+ * jugée sur la tuile MÉDIANE (la plus basse des deux du milieu) parmi celles
+ * qui ont des bords. Quelques bords nets (une ligne de sous-titre incrustée,
+ * nette même quand la caméra bouge) ne suffisent plus à faire passer une
+ * vidéo floue. */
+const SHARPNESS_TILES = 3;
+
 /** Netteté des bords de la zone examinée (rectangle BLANK_ZONE sans
- * BLANK_HOLE) : seuls comptent les pixels dont le pixel et ses quatre voisins
+ * BLANK_HOLE, sans les bandes noires du bord) : médiane des tuiles qui ont
+ * des bords. Seuls comptent les pixels dont le pixel et ses quatre voisins
  * sont dans la zone et hors du trou (aucun bord inventé au bord du trou ni
  * lu dans la colonne de TikTok). Zone unie : 0. Exportée pour le journal de
  * développement (calibrage). */
 export function frameSharpness(sample: FrameSample): number {
   const { width, height, gray } = sample;
   if (width < 3 || height < 3) return 0;
-  const left = Math.floor(BLANK_ZONE.left * width);
-  const right = Math.ceil(BLANK_ZONE.right * width);
-  const top = Math.floor(BLANK_ZONE.top * height);
-  const bottom = Math.ceil(BLANK_ZONE.bottom * height);
+  let left = Math.floor(BLANK_ZONE.left * width);
+  let right = Math.ceil(BLANK_ZONE.right * width);
+  let top = Math.floor(BLANK_ZONE.top * height);
+  let bottom = Math.ceil(BLANK_ZONE.bottom * height);
+  const value = (x: number, y: number) => gray[y * width + x] ?? 0;
+  const black = BLANK_LIMITS.blackP99Max;
+  const rowBlack = (y: number) => {
+    for (let x = left; x < right; x += 1) if (value(x, y) > black) return false;
+    return true;
+  };
+  const zoneTop = top;
+  const zoneBottom = bottom;
+  while (top < bottom && rowBlack(top)) top += 1;
+  while (top < bottom && rowBlack(bottom - 1)) bottom -= 1;
+  if (top > zoneTop) top += SHARPNESS_BAND_MARGIN;
+  if (bottom < zoneBottom) bottom -= SHARPNESS_BAND_MARGIN;
+  if (right - left < 3 || bottom - top < 3) return 0;
   const isHole = (x: number, y: number) => inside((x + 0.5) / width, (y + 0.5) / height, BLANK_HOLE);
-  const gradients: number[] = [];
-  const laplacians: number[] = [];
-  for (let y = top + 1; y < bottom - 1; y += 1) {
-    for (let x = left + 1; x < right - 1; x += 1) {
-      if (isHole(x, y) || isHole(x - 1, y) || isHole(x + 1, y) || isHole(x, y - 1) || isHole(x, y + 1)) continue;
-      const i = y * width + x;
-      const center = gray[i] ?? 0;
-      const west = gray[i - 1] ?? 0;
-      const east = gray[i + 1] ?? 0;
-      const north = gray[i - width] ?? 0;
-      const south = gray[i + width] ?? 0;
-      const gx = (east - west) / 2;
-      const gy = (south - north) / 2;
-      const laplacian = 4 * center - west - east - north - south;
-      gradients.push(gx * gx + gy * gy);
-      laplacians.push(laplacian * laplacian);
+  const tileScores: number[] = [];
+  for (let ty = 0; ty < SHARPNESS_TILES; ty += 1) {
+    for (let tx = 0; tx < SHARPNESS_TILES; tx += 1) {
+      const tileLeft = left + Math.floor(((right - left) * tx) / SHARPNESS_TILES);
+      const tileRight = left + Math.floor(((right - left) * (tx + 1)) / SHARPNESS_TILES);
+      const tileTop = top + Math.floor(((bottom - top) * ty) / SHARPNESS_TILES);
+      const tileBottom = top + Math.floor(((bottom - top) * (ty + 1)) / SHARPNESS_TILES);
+      const score = edgeScore(tileLeft, tileRight, tileTop, tileBottom);
+      if (score !== null) tileScores.push(score);
     }
   }
-  if (gradients.length === 0) return 0;
-  const sorted = Float64Array.from(gradients).sort();
-  const threshold = Math.max(sorted[Math.min(sorted.length - 1, Math.floor((1 - SHARPNESS_TOP_FRACTION) * sorted.length))]!, Number.MIN_VALUE);
-  let gradientSum = 0;
-  let laplacianSum = 0;
-  let count = 0;
-  for (let k = 0; k < gradients.length; k += 1) {
-    if (gradients[k]! < threshold) continue;
-    gradientSum += gradients[k]!;
-    laplacianSum += laplacians[k]!;
-    count += 1;
+  if (tileScores.length === 0) return 0;
+  tileScores.sort((a, b) => a - b);
+  return tileScores[Math.floor((tileScores.length - 1) / 2)]!;
+
+  /** Score des bords d'une tuile, ou null si la tuile n'a aucun vrai bord. Les
+   * voisins restent dans la zone (sans bandes) : x de left+1 à right-2. */
+  function edgeScore(x0: number, x1: number, y0: number, y1: number): number | null {
+    const gradients: number[] = [];
+    const laplacians: number[] = [];
+    for (let y = Math.max(y0, top + 1); y < Math.min(y1, bottom - 1); y += 1) {
+      for (let x = Math.max(x0, left + 1); x < Math.min(x1, right - 1); x += 1) {
+        if (isHole(x, y) || isHole(x - 1, y) || isHole(x + 1, y) || isHole(x, y - 1) || isHole(x, y + 1)) continue;
+        const center = value(x, y);
+        const west = value(x - 1, y);
+        const east = value(x + 1, y);
+        const north = value(x, y - 1);
+        const south = value(x, y + 1);
+        const gx = (east - west) / 2;
+        const gy = (south - north) / 2;
+        const laplacian = 4 * center - west - east - north - south;
+        gradients.push(gx * gx + gy * gy);
+        laplacians.push(laplacian * laplacian);
+      }
+    }
+    if (gradients.length === 0) return null;
+    const sorted = Float64Array.from(gradients).sort();
+    const threshold = Math.max(sorted[Math.min(sorted.length - 1, Math.floor((1 - SHARPNESS_TOP_FRACTION) * sorted.length))]!, Number.MIN_VALUE);
+    let gradientSum = 0;
+    let laplacianSum = 0;
+    let count = 0;
+    for (let k = 0; k < gradients.length; k += 1) {
+      if (gradients[k]! < threshold) continue;
+      gradientSum += gradients[k]!;
+      laplacianSum += laplacians[k]!;
+      count += 1;
+    }
+    // Bords les plus forts sous 3 niveaux de gris par pixel : aucun vrai bord,
+    // seulement les marches d'arrondi d'un dégradé (tuile floue ou unie).
+    if (count === 0 || gradientSum / count < SHARPNESS_MIN_EDGE ** 2) return null;
+    return laplacianSum / gradientSum;
   }
-  // Bords les plus forts sous 3 niveaux de gris par pixel : aucun vrai bord,
-  // seulement les marches d'arrondi d'un dégradé (image floue ou unie).
-  if (count === 0 || gradientSum / count < SHARPNESS_MIN_EDGE ** 2) return 0;
-  return laplacianSum / gradientSum;
 }
 
 /** Image floue : netteté des bords de la zone sous BLUR_LIMITS.minSharpness. */
