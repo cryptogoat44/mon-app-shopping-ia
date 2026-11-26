@@ -3,7 +3,7 @@ import { StyleSheet, View, type ImageStyle, type LayoutChangeEvent, type StylePr
 import { Image } from "expo-image";
 import { SpotImage, type ImageNaturalSize } from "@/components/spot-image";
 import { EnlargeableImage, type ZoomState } from "@/components/image-viewer";
-import { edgeBackground, edgeColorApplies, FILL_TOLERANCE, fillsTile, GRID_FILL_TOLERANCE, honestSize, type PieceImageSize, type PieceTileVariant } from "@/lib/piece-image";
+import { edgeBackground, edgeColorApplies, fillsTile, honestSize, type PieceImageSize, type PieceTileVariant } from "@/lib/piece-image";
 import { color, getActiveScheme, radius } from "@/theme/tokens";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -94,9 +94,9 @@ export function PieceTile({
   // copie floue (le flou ne reste que dans les bandes autour).
   let foreground: { style: StyleProp<ImageStyle>; fit: "contain" | "cover" } = { style: StyleSheet.absoluteFill, fit: "contain" };
   if (naturalSize && frame.width > 0 && frame.height > 0) {
-    // Grille sans couleur de fond connue : une photo carrée remplit aussi la tuile (règle « recadrée » des maquettes).
-    const tolerance = variant === "grid" && !background ? GRID_FILL_TOLERANCE : FILL_TOLERANCE;
-    if (fillsTile(naturalSize, frame, variant, tolerance)) foreground = { style: [StyleSheet.absoluteFill, { backgroundColor: color.plinthe }], fit: "cover" };
+    // Remplir ou non dépend du ratio seul (grille : une photo carrée remplit, une photo en pied reste
+    // entière) ; la couleur de fond, même arrivée plus tard, ne peint que le fond d'une photo qui ne remplit pas.
+    if (fillsTile(naturalSize, frame, variant)) foreground = { style: [StyleSheet.absoluteFill, { backgroundColor: color.plinthe }], fit: "cover" };
     else {
       const shown = honestSize(naturalSize, frame, variant);
       foreground = {

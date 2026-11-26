@@ -86,20 +86,27 @@ export function twoStepLayers(state: TwoStepState): { showThumb: boolean; showHd
 
 // Tuile de pièce « Écrin » (retours du build 3, 26 novembre 2026,
 // components/piece-tile.tsx) : la même tuile 4:5 partout. La photo entière
-// est posée sur une copie floue d'elle-même ; quand son ratio est proche de
-// celui de la tuile, elle la remplit simplement (rognage léger accepté).
+// est posée sur une copie floue d'elle-même (ou sur la couleur unie de ses
+// bords, quand le serveur l'a mesurée) ; quand son ratio est proche de celui
+// de la tuile, elle la remplit simplement (rognage léger accepté).
 // Grilles : la pièce remplit toujours sa tuile (la plus grande possible).
 // Grandes images : une petite image n'est jamais étirée au-delà d'un point
 // d'écran par pixel de l'image (sinon elle devient floue en grand).
 
 /** Ratio largeur / hauteur de toute tuile de pièce. */
 export const TILE_RATIO = 4 / 5;
-/** Écart de ratio en dessous duquel la photo remplit la tuile (12 %). */
+/** Écart de ratio en dessous duquel la photo remplit la tuile (12 %), dans les
+ * deux sens : grandes images (jamais recadrées au-delà). */
 export const FILL_TOLERANCE = 0.12;
-/** Grilles sans couleur de fond connue : une photo carrée (écart 25 %) remplit
- * la tuile, rognée de 10 % au plus de chaque côté — règle « recadrée » des
- * maquettes Écrin (lot « fidélité aux maquettes ») ; jamais pour une grande image. */
-export const GRID_FILL_TOLERANCE = 0.26;
+/** Grilles, photo PLUS LARGE que la tuile : jusqu'à un carré (écart 25 %), elle
+ * remplit la tuile, rognée de 10 % au plus de chaque côté (les pièces sont
+ * centrées, les côtés sont du fond) — règle « recadrée » des maquettes Écrin
+ * (lot « fidélité aux maquettes ») ; jamais pour une grande image. */
+export const GRID_WIDE_FILL_TOLERANCE = 0.26;
+/** Grilles, photo PLUS HAUTE que la tuile : 12 % seulement (une photo 3:4
+ * remplit ; une photo en pied 2:3, écart 17 %, reste entière) : ni la tête
+ * ni les pieds ne sont coupés. */
+export const GRID_TALL_FILL_TOLERANCE = FILL_TOLERANCE;
 /** Grandes images seulement : au plus ce nombre de points d'écran par pixel de l'image (1 = une vignette de 260 px ne dépasse pas 260 pt). */
 export const HERO_MAX_POINTS_PER_PIXEL = 1;
 
@@ -113,15 +120,19 @@ function known(natural: Dimensions | null | undefined): natural is Dimensions {
 
 /** La photo remplit-elle la tuile ? L'écart se mesure au ratio du cadre réel
  * (4:5 tant que le cadre n'est pas mesuré ; carré pour la grande image du
- * Résultat). Grille : dès que l'écart est sous `tolerance` (12 % ; 26 % pour
- * une grille sans couleur de fond, GRID_FILL_TOLERANCE). Grande image : en
- * plus, seulement si remplir ne dépasse pas HERO_MAX_POINTS_PER_PIXEL. */
-export function fillsTile(natural: Dimensions | null, frame: Dimensions, variant: PieceTileVariant, tolerance: number = FILL_TOLERANCE): boolean {
+ * Résultat). Grille : selon le ratio SEUL (jamais selon une couleur de fond
+ * connue ou non, pour que le cadrage d'une tuile ne change pas après son
+ * affichage) — GRID_WIDE_FILL_TOLERANCE (26 %) pour une photo plus large que
+ * le cadre, GRID_TALL_FILL_TOLERANCE (12 %) pour une photo plus haute.
+ * Grande image : FILL_TOLERANCE (12 %) dans les deux sens et, en plus,
+ * seulement si remplir ne dépasse pas HERO_MAX_POINTS_PER_PIXEL. */
+export function fillsTile(natural: Dimensions | null, frame: Dimensions, variant: PieceTileVariant): boolean {
   if (!known(natural)) return false;
   const frameRatio = frame.width > 0 && frame.height > 0 ? frame.width / frame.height : TILE_RATIO;
-  const gap = Math.abs(natural.width / natural.height / frameRatio - 1);
-  if (gap > tolerance) return false;
-  if (variant === "grid") return true;
+  const relative = natural.width / natural.height / frameRatio;
+  const gap = Math.abs(relative - 1);
+  if (variant === "grid") return gap <= (relative >= 1 ? GRID_WIDE_FILL_TOLERANCE : GRID_TALL_FILL_TOLERANCE);
+  if (gap > FILL_TOLERANCE) return false;
   // Remplir (comme cover) agrandit l'image du plus grand des deux rapports.
   const scale = Math.max(frame.width / natural.width, frame.height / natural.height);
   return scale <= HERO_MAX_POINTS_PER_PIXEL;

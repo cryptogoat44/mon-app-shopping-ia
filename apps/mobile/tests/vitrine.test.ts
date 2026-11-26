@@ -138,10 +138,12 @@ describe("la tuile de pièce (components/piece-tile.tsx)", () => {
   });
 
   it("premier plan : remplie quand fillsTile, sinon la taille honnête, centrée", () => {
-    // Lot « fidélité aux maquettes » : la tolérance des grilles (26 %) seulement en grille et sans couleur de fond ; jamais en grand.
-    expect(tile).toContain('const tolerance = variant === "grid" && !background ? GRID_FILL_TOLERANCE : FILL_TOLERANCE;');
-    expect(tile).toContain("fillsTile(naturalSize, frame, variant, tolerance)");
-    expect(tile).not.toMatch(/variant === "hero"[^;\n]*GRID_FILL_TOLERANCE/);
+    // Lot « fidélité aux maquettes », corrigé à la relecture : remplir dépend du ratio seul (lib/piece-image.ts) ;
+    // refusé : un cadrage qui dépend de la couleur de fond (il changerait quand la couleur arrive à la relecture).
+    expect(tile).toContain("if (fillsTile(naturalSize, frame, variant)) foreground");
+    expect(tile).not.toMatch(/fillsTile\([^)]*background/);
+    expect(tile).not.toMatch(/background \?[^;\n]*TOLERANCE/);
+    expect(tile).not.toMatch(/!background[^;\n]*TOLERANCE/);
     expect(tile).toContain("honestSize(naturalSize, frame, variant)");
     expect(tile).toContain("onImageSize={(measured) => setNatural({ uri: imageKey, size: measured })}");
     // Agrandissable : le libellé est porté une seule fois, par le bouton.
